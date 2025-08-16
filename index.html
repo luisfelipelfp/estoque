@@ -2,66 +2,69 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Estoque Web</title>
-    <link rel="stylesheet" href="css/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Estoque</title>
+    <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-    <header>
-        <h1>📦 Sistema de Estoque</h1>
-    </header>
 
-    <main>
-        <!-- Cadastro de Produtos -->
-        <section class="card">
-            <h2>Cadastro de Produto</h2>
-            <input type="text" id="produtoNome" placeholder="Nome do Produto">
-            <button onclick="cadastrarProduto()">Cadastrar</button>
-        </section>
+    <div class="container">
+        <h1>Sistema de Estoque</h1>
 
-        <!-- Lista de Produtos -->
-        <section class="card">
-            <h2>Produtos</h2>
-            <table id="tabelaProdutos">
-                <thead>
-                    <tr><th>ID</th><th>Produto</th><th>Quantidade</th><th>Ações</th></tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </section>
+        <!-- Cards de Ação -->
+        <div class="card">
+            <span>Cadastrar Produto</span>
+            <button onclick="abrirModal('cadastrar')">Cadastrar</button>
+        </div>
 
-        <!-- Movimentações -->
-        <section class="card">
-            <h2>Entrada / Saída</h2>
-            <select id="movProduto"></select>
-            <input type="number" id="movQuantidade" placeholder="Quantidade">
-            <select id="movTipo">
-                <option value="entrada">Entrada</option>
-                <option value="saida">Saída</option>
-            </select>
-            <button onclick="registrarMovimentacao()">Registrar</button>
-        </section>
+        <div class="card">
+            <span>Entrada de Produto</span>
+            <button onclick="abrirModal('entrada')">Registrar Entrada</button>
+        </div>
 
-        <!-- Relatório -->
-        <section class="card">
-            <h2>Relatório</h2>
-            <label>Data Inicial: <input type="date" id="relDataInicio"></label>
-            <label>Data Final: <input type="date" id="relDataFim"></label>
-            <label>Produto:
-                <select id="relProduto"><option value="">Todos</option></select>
-            </label>
-            <button onclick="gerarRelatorio()">Gerar</button>
+        <div class="card">
+            <span>Saída de Produto</span>
+            <button onclick="abrirModal('saida')">Registrar Saída</button>
+        </div>
 
-            <table id="tabelaRelatorio">
-                <thead>
-                    <tr><th>ID</th><th>Produto</th><th>Tipo</th><th>Quantidade</th><th>Data</th></tr>
-                </thead>
-                <tbody></tbody>
-            </table>
+        <div class="card">
+            <span>Relatório de Movimentações</span>
+            <button onclick="abrirModal('relatorio')">Ver Relatório</button>
+        </div>
 
-            <canvas id="graficoMov" height="150"></canvas>
-        </section>
-    </main>
+        <!-- Lista de produtos -->
+        <h2>Produtos Cadastrados</h2>
+        <table id="tabelaProdutos">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nome</th>
+                    <th>Quantidade</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Produtos preenchidos via JS -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- =========================
+         Modal Único Dinâmico
+    ========================= -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="fecharModal()">&times;</span>
+            <h2 id="modalTitulo">Modal</h2>
+
+            <!-- Inputs dinâmicos -->
+            <div id="modalBody">
+                <!-- Preenchido via JS -->
+            </div>
+
+            <button id="modalBtn">Executar</button>
+        </div>
+    </div>
 
     <script src="js/script.js"></script>
 </body>

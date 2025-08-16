@@ -1,124 +1,114 @@
 <?php
-header('Content-Type: application/json; charset=utf-8');
+header('Content-Type: application/json');
 
-// Configurações do banco
-$host = "192.168.15.100"; // IP do seu MariaDB
-$db   = "estoque";     // Nome do banco
-$user = "root";
-$pass = "#Shakka01";
-$charset = "utf8mb4";
+// ==========================
+// Configuração do banco
+// ==========================
+$host = "192.168.15.100";   // IP do servidor MariaDB
+$user = "root";      // seu usuário do MariaDB
+$pass = "#Shakka01";        // sua senha
+$db   = "estoque";
 
-$dsn = "mysql:host=$host;dbname=$db;charset=$charset";
-$options = [
-    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
-];
-
-try {
-    $pdo = new PDO($dsn, $user, $pass, $options);
-} catch (Exception $e) {
-    echo json_encode(['error' => 'Erro na conexão: '.$e->getMessage()]);
-    exit;
+$conn = new mysqli($host, $user, $pass, $db);
+if ($conn->connect_error) {
+    die(json_encode(['erro' => "Falha na conexão: " . $conn->connect_error]));
 }
 
-// Ação recebida
-$acao = $_GET['acao'] ?? '';
+// ==========================
+// Função para ler parâmetro POST ou GET
+// ==========================
+function getParam($name) {
+    if(isset($_POST[$name])) return $_POST[$name];
+    if(isset($_GET[$name])) return $_GET[$name];
+    return null;
+}
 
-switch($acao){
+// ==========================
+// Ação
+// ==========================
+$acao = getParam('acao');
 
-    // LISTAR PRODUTOS
+switch($acao) {
+
+    // ======================
     case 'listar_produtos':
-        $stmt = $pdo->query("SELECT id, nome, quantidade FROM produtos ORDER BY id DESC");
-        echo json_encode($stmt->fetchAll());
+        $res = $conn->query("SELECT * FROM produtos ORDER BY id DESC");
+        $produtos = [];
+        while($row = $res->fetch_assoc()){
+            $produtos[] = $row;
+        }
+        echo json_encode($produtos);
         break;
 
-    // CADASTRAR PRODUTO
+    // ======================
     case 'cadastrar_produto':
-        $nome = trim($_GET['nome'] ?? '');
-        if(!$nome) { echo json_encode(['error'=>'Nome obrigatório']); exit; }
+        $nome = $conn->real_escape_string(getParam('nome'));
+        $qtd = (int)getParam('quantidade');
 
-        // Verifica duplicidade
-        $stmt = $pdo->prepare("SELECT id FROM produtos WHERE nome=?");
-        $stmt->execute([$nome]);
-        if($stmt->fetch()) {
-            echo json_encode(['error'=>'Produto já existe']); exit;
-        }
-
-        $stmt = $pdo->prepare("INSERT INTO produtos (nome, quantidade) VALUES (?,0)");
-        $stmt->execute([$nome]);
-        echo json_encode(['success'=>true]);
-        break;
-
-    // EXCLUIR PRODUTO
-    case 'excluir_produto':
-        $id = intval($_GET['id'] ?? 0);
-        if($id>0){
-            $stmt = $pdo->prepare("DELETE FROM produtos WHERE id=?");
-            $stmt->execute([$id]);
-        }
-        echo json_encode(['success'=>true]);
-        break;
-
-    // REGISTRAR MOVIMENTAÇÃO
-    case 'movimentacao':
-        $produto_id = intval($_GET['produto_id'] ?? 0);
-        $tipo = $_GET['tipo'] ?? '';
-        $quantidade = intval($_GET['quantidade'] ?? 0);
-        if($produto_id<=0 || !in_array($tipo,['entrada','saida']) || $quantidade<=0){
-            echo json_encode(['error'=>'Dados inválidos']); exit;
-        }
-
-        // Atualiza estoque
-        if($tipo=='entrada'){
-            $stmt = $pdo->prepare("UPDATE produtos SET quantidade = quantidade + ? WHERE id=?");
-            $stmt->execute([$quantidade,$produto_id]);
-        } else {
-            // Verifica estoque suficiente
-            $stmt = $pdo->prepare("SELECT quantidade FROM produtos WHERE id=?");
-            $stmt->execute([$produto_id]);
-            $qtdAtual = $stmt->fetchColumn();
-            if($qtdAtual < $quantidade) {
-                echo json_encode(['error'=>'Estoque insuficiente']); exit;
-            }
-            $stmt = $pdo->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id=?");
-            $stmt->execute([$quantidade,$produto_id]);
-        }
-
-        // Registra movimentação
-        $stmt = $pdo->prepare("INSERT INTO movimentacoes (produto_id,tipo,quantidade,data) VALUES (?,?,?,NOW())");
-        $stmt->execute([$produto_id,$tipo,$quantidade]);
-        echo json_encode(['success'=>true]);
-        break;
-
-    // RELATÓRIO POR INTERVALO DE DATAS
-    case 'relatorio_intervalo':
-        $data_inicio = $_GET['data_inicio'] ?? '';
-        $data_fim    = $_GET['data_fim'] ?? '';
-        $produto_id  = intval($_GET['produto_id'] ?? 0);
-
-        if(!$data_inicio || !$data_fim){
-            echo json_encode([]);
+        // Verifica se produto já existe
+        $check = $conn->query("SELECT id FROM produtos WHERE nome='$nome'");
+        if($check->num_rows > 0){
+            echo json_encode(['mensagem' => 'Produto já cadastrado!']);
             exit;
         }
 
-        $sql = "SELECT m.id, p.nome, m.tipo, m.quantidade, m.data 
-                FROM movimentacoes m
-                INNER JOIN produtos p ON p.id = m.produto_id
-                WHERE DATE(m.data) BETWEEN ? AND ?";
-        $params = [$data_inicio, $data_fim];
+        $conn->query("INSERT INTO produtos(nome,quantidade) VALUES('$nome',$qtd)");
+        echo json_encode(['mensagem' => 'Produto cadastrado com sucesso!']);
+        break;
 
-        if($produto_id>0){
-            $sql .= " AND m.produto_id = ?";
-            $params[] = $produto_id;
+    // ======================
+    case 'excluir_produto':
+        $id = (int)getParam('id');
+        $conn->query("DELETE FROM produtos WHERE id=$id");
+        echo json_encode(['mensagem' => 'Produto excluído!']);
+        break;
+
+    // ======================
+    case 'movimentacao':
+        $produto_id = (int)getParam('produto_id');
+        $tipo = getParam('tipo'); // 'entrada' ou 'saida'
+        $qtd = (int)getParam('quantidade');
+
+        // Atualiza estoque
+        if($tipo == 'entrada'){
+            $conn->query("UPDATE produtos SET quantidade = quantidade + $qtd WHERE id=$produto_id");
+        } elseif($tipo == 'saida'){
+            $conn->query("UPDATE produtos SET quantidade = quantidade - $qtd WHERE id=$produto_id");
+        } else {
+            echo json_encode(['mensagem'=>'Tipo inválido']);
+            exit;
         }
 
-        $sql .= " ORDER BY m.data ASC";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        echo json_encode($stmt->fetchAll());
+        // Registra movimentação
+        $conn->query("INSERT INTO movimentacoes(produto_id,tipo,quantidade) VALUES($produto_id,'$tipo',$qtd)");
+
+        echo json_encode(['mensagem'=>"Movimentação registrada ($tipo)!"]);
         break;
 
+    // ======================
+    case 'relatorio_intervalo':
+        $inicio = getParam('inicio');
+        $fim = getParam('fim');
+
+        $res = $conn->query("
+            SELECT m.*, p.nome 
+            FROM movimentacoes m
+            JOIN produtos p ON m.produto_id = p.id
+            WHERE DATE(m.data) BETWEEN '$inicio' AND '$fim'
+            ORDER BY m.data DESC
+        ");
+
+        $movs = [];
+        while($row = $res->fetch_assoc()){
+            $movs[] = $row;
+        }
+        echo json_encode($movs);
+        break;
+
+    // ======================
     default:
-        echo json_encode(['error'=>'Ação inválida']);
+        echo json_encode(['mensagem'=>'Ação inválida']);
         break;
 }
+
+$conn->close();

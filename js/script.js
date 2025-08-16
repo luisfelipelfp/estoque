@@ -1,106 +1,233 @@
-let graficoMov = null;
+// ==========================
+// Variáveis globais
+// ==========================
+const modal = document.getElementById('modal');
+const modalTitulo = document.getElementById('modalTitulo');
+const modalBody = document.getElementById('modalBody');
+const modalBtn = document.getElementById('modalBtn');
+const tabelaProdutos = document.getElementById('tabelaProdutos').getElementsByTagName('tbody')[0];
 
-async function listarProdutos() {
-    const res = await fetch('api/actions.php?acao=listar_produtos');
-    const dados = await res.json();
-    const tbody = document.querySelector("#tabelaProdutos tbody");
-    const movSelect = document.getElementById("movProduto");
-    const relSelect = document.getElementById("relProduto");
+let acaoAtual = '';
 
-    tbody.innerHTML = '';
-    movSelect.innerHTML = '';
-    relSelect.innerHTML = '<option value="">Todos</option>';
+// ==========================
+// Abrir modal
+// ==========================
+function abrirModal(acao) {
+    acaoAtual = acao;
+    modal.style.display = 'block';
+    modalBody.innerHTML = '';
 
-    dados.forEach(p => {
-        tbody.innerHTML += `<tr>
-            <td>${p.id}</td>
-            <td>${p.nome}</td>
-            <td>${p.quantidade}</td>
-            <td><button onclick="excluirProduto(${p.id})">Excluir</button></td>
-        </tr>`;
-        movSelect.innerHTML += `<option value="${p.id}">${p.nome}</option>`;
-        relSelect.innerHTML += `<option value="${p.id}">${p.nome}</option>`;
-    });
-}
+    switch(acao) {
+        case 'cadastrar':
+            modalTitulo.innerText = 'Cadastrar Produto';
+            modalBody.innerHTML = `
+                <input type="text" id="produtoNome" placeholder="Nome do Produto">
+                <input type="number" id="produtoQtd" placeholder="Quantidade Inicial">
+            `;
+            modalBtn.innerText = 'Cadastrar';
+            break;
 
-async function cadastrarProduto() {
-    const nome = document.getElementById('produtoNome').value.trim();
-    if(!nome) return alert("Informe o nome do produto");
-    await fetch(`api/actions.php?acao=cadastrar_produto&nome=${encodeURIComponent(nome)}`);
-    document.getElementById('produtoNome').value = '';
-    listarProdutos();
-}
+        case 'entrada':
+            modalTitulo.innerText = 'Registrar Entrada';
+            modalBody.innerHTML = `
+                <select id="produtoSelectEntrada"></select>
+                <input type="number" id="produtoQtdEntrada" placeholder="Quantidade">
+            `;
+            preencherProdutosSelect('produtoSelectEntrada');
+            modalBtn.innerText = 'Registrar Entrada';
+            break;
 
-async function excluirProduto(id) {
-    if(confirm("Deseja realmente excluir?")){
-        await fetch(`api/actions.php?acao=excluir_produto&id=${id}`);
-        listarProdutos();
+        case 'saida':
+            modalTitulo.innerText = 'Registrar Saída';
+            modalBody.innerHTML = `
+                <select id="produtoSelectSaida"></select>
+                <input type="number" id="produtoQtdSaida" placeholder="Quantidade">
+            `;
+            preencherProdutosSelect('produtoSelectSaida');
+            modalBtn.innerText = 'Registrar Saída';
+            break;
+
+        case 'relatorio':
+            modalTitulo.innerText = 'Relatório de Movimentações';
+            modalBody.innerHTML = `
+                <input type="date" id="dataInicio">
+                <input type="date" id="dataFim">
+                <div id="relatorioResultado" style="margin-top:10px;"></div>
+            `;
+            modalBtn.innerText = 'Gerar Relatório';
+            break;
     }
 }
 
-async function registrarMovimentacao() {
-    const produto_id = document.getElementById('movProduto').value;
-    const tipo = document.getElementById('movTipo').value;
-    const quantidade = document.getElementById('movQuantidade').value;
-    if(!produto_id || !quantidade) return alert("Preencha todos os campos");
-    await fetch(`api/actions.php?acao=movimentacao&produto_id=${produto_id}&tipo=${tipo}&quantidade=${quantidade}`);
-    document.getElementById('movQuantidade').value = '';
-    listarProdutos();
+// ==========================
+// Fechar modal
+// ==========================
+function fecharModal() {
+    modal.style.display = 'none';
 }
 
-async function gerarRelatorio() {
-    const dataInicio = document.getElementById('relDataInicio').value;
-    const dataFim = document.getElementById('relDataFim').value;
-    const produtoId = document.getElementById('relProduto').value;
+// Fechar modal clicando fora
+window.onclick = function(event) {
+    if (event.target === modal) {
+        fecharModal();
+    }
+}
 
-    if(!dataInicio || !dataFim) return alert("Escolha o intervalo de datas");
+// ==========================
+// Botão do modal
+// ==========================
+modalBtn.onclick = function() {
+    switch(acaoAtual) {
+        case 'cadastrar':
+            cadastrarProduto();
+            break;
+        case 'entrada':
+            registrarEntrada();
+            break;
+        case 'saida':
+            registrarSaida();
+            break;
+        case 'relatorio':
+            gerarRelatorio();
+            break;
+    }
+}
 
-    let url = `api/actions.php?acao=relatorio_intervalo&data_inicio=${dataInicio}&data_fim=${dataFim}`;
-    if(produtoId) url += `&produto_id=${produtoId}`;
+// ==========================
+// Funções da API
+// ==========================
+function atualizarTabela() {
+    fetch('api/actions.php?acao=listar_produtos')
+        .then(res => res.json())
+        .then(data => {
+            tabelaProdutos.innerHTML = '';
+            data.forEach(produto => {
+                const row = tabelaProdutos.insertRow();
+                row.insertCell(0).innerText = produto.id;
+                row.insertCell(1).innerText = produto.nome;
+                row.insertCell(2).innerText = produto.quantidade;
+                const cellAcoes = row.insertCell(3);
+                const btnExcluir = document.createElement('button');
+                btnExcluir.innerText = 'Excluir';
+                btnExcluir.onclick = () => excluirProduto(produto.id);
+                cellAcoes.appendChild(btnExcluir);
+            });
+        });
+}
 
-    const res = await fetch(url);
-    const dados = await res.json();
+// Preencher select com produtos
+function preencherProdutosSelect(selectId) {
+    const select = document.getElementById(selectId);
+    fetch('api/actions.php?acao=listar_produtos')
+        .then(res => res.json())
+        .then(data => {
+            select.innerHTML = '';
+            data.forEach(prod => {
+                const option = document.createElement('option');
+                option.value = prod.id;
+                option.text = prod.nome;
+                select.add(option);
+            });
+        });
+}
 
-    // Atualiza tabela
-    const tbody = document.querySelector("#tabelaRelatorio tbody");
-    tbody.innerHTML = "";
-    let labels = [];
-    let entradas = [];
-    let saidas = [];
-    dados.forEach(r => {
-        tbody.innerHTML += `<tr class="${r.tipo}">
-            <td>${r.id}</td>
-            <td>${r.nome}</td>
-            <td>${r.tipo}</td>
-            <td>${r.quantidade}</td>
-            <td>${r.data}</td>
-        </tr>`;
+// ==========================
+// Funções CRUD
+// ==========================
+function cadastrarProduto() {
+    const nome = document.getElementById('produtoNome').value;
+    const qtd = document.getElementById('produtoQtd').value;
 
-        const dataFormat = r.data.split(' ')[0];
-        if(!labels.includes(dataFormat)) labels.push(dataFormat);
-
-        if(r.tipo === 'entrada') entradas.push({data: dataFormat, quantidade: r.quantidade});
-        else saidas.push({data: dataFormat, quantidade: r.quantidade});
-    });
-
-    const entradasPorDia = labels.map(l => entradas.filter(e=>e.data===l).reduce((s,v)=>s+v.quantidade,0));
-    const saidasPorDia = labels.map(l => saidas.filter(s=>s.data===l).reduce((s,v)=>s+v.quantidade,0));
-
-    const ctx = document.getElementById('graficoMov').getContext('2d');
-    if(graficoMov) graficoMov.destroy();
-    graficoMov = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [
-                { label: 'Entradas', data: entradasPorDia, backgroundColor: '#28a745' },
-                { label: 'Saídas', data: saidasPorDia, backgroundColor: '#dc3545' }
-            ]
-        },
-        options: { responsive: true }
+    fetch('api/actions.php', {
+        method: 'POST',
+        headers: {'Content-Type':'application/x-www-form-urlencoded'},
+        body: `acao=cadastrar_produto&nome=${encodeURIComponent(nome)}&quantidade=${encodeURIComponent(qtd)}`
+    })
+    .then(res => res.json())
+    .then(resp => {
+        alert(resp.mensagem);
+        fecharModal();
+        atualizarTabela();
     });
 }
 
-// Inicializa
-listarProdutos();
+function registrarEntrada() {
+    const produtoId = document.getElementById('produtoSelectEntrada').value;
+    const qtd = document.getElementById('produtoQtdEntrada').value;
 
+    fetch('api/actions.php', {
+        method: 'POST',
+        headers: {'Content-Type':'application/x-www-form-urlencoded'},
+        body: `acao=movimentacao&tipo=entrada&produto_id=${produtoId}&quantidade=${qtd}`
+    })
+    .then(res => res.json())
+    .then(resp => {
+        alert(resp.mensagem);
+        fecharModal();
+        atualizarTabela();
+    });
+}
+
+function registrarSaida() {
+    const produtoId = document.getElementById('produtoSelectSaida').value;
+    const qtd = document.getElementById('produtoQtdSaida').value;
+
+    fetch('api/actions.php', {
+        method: 'POST',
+        headers: {'Content-Type':'application/x-www-form-urlencoded'},
+        body: `acao=movimentacao&tipo=saida&produto_id=${produtoId}&quantidade=${qtd}`
+    })
+    .then(res => res.json())
+    .then(resp => {
+        alert(resp.mensagem);
+        fecharModal();
+        atualizarTabela();
+    });
+}
+
+function excluirProduto(id) {
+    if (!confirm('Deseja realmente excluir este produto?')) return;
+
+    fetch('api/actions.php', {
+        method: 'POST',
+        headers: {'Content-Type':'application/x-www-form-urlencoded'},
+        body: `acao=excluir_produto&id=${id}`
+    })
+    .then(res => res.json())
+    .then(resp => {
+        alert(resp.mensagem);
+        atualizarTabela();
+    });
+}
+
+function gerarRelatorio() {
+    const inicio = document.getElementById('dataInicio').value;
+    const fim = document.getElementById('dataFim').value;
+    const resultadoDiv = document.getElementById('relatorioResultado');
+
+    fetch(`api/actions.php?acao=relatorio_intervalo&inicio=${inicio}&fim=${fim}`)
+        .then(res => res.json())
+        .then(data => {
+            if(data.length === 0) {
+                resultadoDiv.innerHTML = '<p>Nenhuma movimentação encontrada.</p>';
+                return;
+            }
+
+            let html = '<table><thead><tr><th>Produto</th><th>Tipo</th><th>Quantidade</th><th>Data</th></tr></thead><tbody>';
+            data.forEach(mov => {
+                html += `<tr>
+                            <td>${mov.nome}</td>
+                            <td>${mov.tipo}</td>
+                            <td>${mov.quantidade}</td>
+                            <td>${mov.data}</td>
+                         </tr>`;
+            });
+            html += '</tbody></table>';
+            resultadoDiv.innerHTML = html;
+        });
+}
+
+// ==========================
+// Inicialização
+// ==========================
+window.onload = atualizarTabela;
