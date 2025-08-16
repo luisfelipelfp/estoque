@@ -3,8 +3,8 @@ header('Content-Type: application/json');
 
 $host = '192.168.15.100';
 $db = 'estoque';
-$user = 'SEU_USUARIO';
-$pass = 'SUA_SENHA';
+$user = 'root';
+$pass = '#Shakka01';
 
 $conn = new mysqli($host, $user, $pass, $db);
 if ($conn->connect_error) die(json_encode(['sucesso'=>false,'mensagem'=>'Erro de conexão']));
