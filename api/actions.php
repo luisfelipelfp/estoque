@@ -5,8 +5,8 @@ header('Content-Type: application/json; charset=utf-8');
 
 // Configurações do banco
 $host = '192.168.15.100'; // IP do servidor MariaDB
-$user = 'SEU_USUARIO';
-$pass = 'SUA_SENHA';
+$user = 'root';
+$pass = '#Shakka01';
 $db   = 'estoque';
 
 // Conexão
