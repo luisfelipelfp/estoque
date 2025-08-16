@@ -1,136 +1,98 @@
-// js/script.js
-document.addEventListener("DOMContentLoaded", () => {
-  const modalEl = document.getElementById("modalForm");
-  const modal = new bootstrap.Modal(modalEl);
-  const modalTitle = document.getElementById("modalTitle");
-  const modalBody = document.getElementById("modalBody");
-  const modalConfirm = document.getElementById("modalConfirm");
+let graficoMov = null;
 
-  const tabelaBody = document.querySelector("#tabelaProdutos tbody");
+document.addEventListener("DOMContentLoaded", ()=>{ listarProdutos(); });
 
-  async function fetchProdutos() {
-    try {
-      const res = await fetch(`${API_BASE}/getProdutos.php`);
-      const data = await res.json();
-      tabelaBody.innerHTML = "";
-      data.forEach(p => {
-        tabelaBody.insertAdjacentHTML("beforeend",
-          `<tr><td>${p.id}</td><td>${escapeHtml(p.nome)}</td><td>${p.quantidade}</td></tr>`);
-      });
-    } catch (err) {
-      alert("Erro ao buscar produtos: " + err);
-    }
-  }
+async function listarProdutos(){
+    const res = await fetch("api/actions.php?acao=listar_produtos");
+    const dados = await res.json();
+    const tbody = document.querySelector("#tabelaProdutos tbody");
+    tbody.innerHTML = "";
+    const movSelect = document.getElementById("movProduto");
+    const relSelect = document.getElementById("relProduto");
+    movSelect.innerHTML = "<option value=''>Selecione</option>";
+    relSelect.innerHTML = "<option value=''>Todos</option>";
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[m]));
-  }
+    dados.forEach(p=>{
+        tbody.innerHTML += `<tr>
+            <td>${p.id}</td><td>${p.nome}</td><td>${p.quantidade}</td>
+            <td><button onclick="excluirProduto(${p.id})">Excluir</button></td>
+        </tr>`;
+        movSelect.innerHTML += `<option value="${p.id}">${p.nome}</option>`;
+        relSelect.innerHTML += `<option value="${p.id}">${p.nome}</option>`;
+    });
+}
 
-  // Reuso do modal
-  function abrirModal(titulo, html, onConfirm) {
-    modalTitle.innerText = titulo;
-    modalBody.innerHTML = html;
-    modalConfirm.onclick = async () => {
-      await onConfirm();
-    };
-    modal.show();
-  }
+async function cadastrarProduto(){
+    const nome = document.getElementById("produtoNome").value.trim();
+    if(!nome) return alert("Digite o nome do produto");
+    await fetch(`api/actions.php?acao=cadastrar_produto&nome=${encodeURIComponent(nome)}`);
+    document.getElementById("produtoNome").value = "";
+    listarProdutos();
+}
 
-  // Ações
-  document.getElementById("btnAdd").addEventListener("click", () => {
-    abrirModal("Adicionar Produto",
-      `<label>Nome</label><input id="nome" class="form-control mb-2" />
-       <label>Quantidade</label><input id="quant" type="number" class="form-control" value="0" />`,
-      async () => {
-        const nome = document.getElementById("nome").value.trim();
-        const quantidade = parseInt(document.getElementById("quant").value) || 0;
-        const res = await fetch(`${API_BASE}/add.php`, {
-          method: "POST",
-          headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({nome, quantidade})
-        });
-        const data = await res.json();
-        if (!res.ok) alert(data.error || "Erro");
-        else { modal.hide(); fetchProdutos(); }
-      });
-  });
+async function excluirProduto(id){
+    if(!confirm("Deseja realmente excluir?")) return;
+    await fetch(`api/actions.php?acao=excluir_produto&id=${id}`);
+    listarProdutos();
+}
 
-  document.getElementById("btnBuscar").addEventListener("click", () => {
-    abrirModal("Buscar Produto",
-      `<label>Nome ou ID</label><input id="q" class="form-control" />`,
-      async () => {
-        const q = document.getElementById("q").value.trim();
-        if (!q) { alert("Informe Nome ou ID"); return; }
-        const res = await fetch(`${API_BASE}/buscar.php?q=${encodeURIComponent(q)}`);
-        const data = await res.json();
-        modal.hide();
-        if (!data) alert("Produto não encontrado");
-        else alert(`ID: ${data.id}\nNome: ${data.nome}\nQuantidade: ${data.quantidade}`);
-      });
-  });
+async function registrarMovimentacao(){
+    const produto = document.getElementById("movProduto").value;
+    const tipo = document.getElementById("movTipo").value;
+    const quantidade = document.getElementById("movQuantidade").value;
+    if(!produto || !quantidade) return alert("Selecione produto e quantidade");
+    await fetch(`api/actions.php?acao=movimentacao&produto_id=${produto}&tipo=${tipo}&quantidade=${quantidade}`);
+    document.getElementById("movQuantidade").value = "";
+    listarProdutos();
+}
 
-  document.getElementById("btnEntrada").addEventListener("click", () => {
-    abrirModal("Entrada (adicionar quantidade)",
-      `<label>ID</label><input id="id" type="number" class="form-control mb-2" />
-       <label>Quantidade</label><input id="qtd" type="number" class="form-control" value="1" />`,
-      async () => {
-        const id = parseInt(document.getElementById("id").value);
-        const quantidade = parseInt(document.getElementById("qtd").value);
-        const res = await fetch(`${API_BASE}/entrada.php`, {
-          method: "POST",
-          headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({id, quantidade})
-        });
-        const data = await res.json();
-        if (!res.ok) alert(data.error || "Erro");
-        else { modal.hide(); fetchProdutos(); }
-      });
-  });
+async function gerarRelatorio(){
+    const dataInicio = document.getElementById("relDataInicio").value;
+    const dataFim = document.getElementById("relDataFim").value;
+    const produtoId = document.getElementById("relProduto").value;
+    if(!dataInicio || !dataFim) return alert("Escolha o intervalo de datas");
 
-  document.getElementById("btnSaida").addEventListener("click", () => {
-    abrirModal("Saída (remover quantidade)",
-      `<label>ID</label><input id="id" type="number" class="form-control mb-2" />
-       <label>Quantidade</label><input id="qtd" type="number" class="form-control" value="1" />`,
-      async () => {
-        const id = parseInt(document.getElementById("id").value);
-        const quantidade = parseInt(document.getElementById("qtd").value);
-        const res = await fetch(`${API_BASE}/saida.php`, {
-          method: "POST",
-          headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({id, quantidade})
-        });
-        const data = await res.json();
-        if (!res.ok) alert(data.error || "Erro");
-        else { modal.hide(); fetchProdutos(); }
-      });
-  });
+    let url = `api/actions.php?acao=relatorio_intervalo&data_inicio=${dataInicio}&data_fim=${dataFim}`;
+    if(produtoId) url += `&produto_id=${produtoId}`;
+    const res = await fetch(url);
+    const dados = await res.json();
 
-  document.getElementById("btnExcluir").addEventListener("click", () => {
-    abrirModal("Excluir produto",
-      `<label>ID</label><input id="id" type="number" class="form-control" />`,
-      async () => {
-        const id = parseInt(document.getElementById("id").value);
-        if (!confirm("Confirma exclusão do produto ID " + id + " ?")) return;
-        const res = await fetch(`${API_BASE}/excluir.php`, {
-          method: "POST",
-          headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({id})
-        });
-        const data = await res.json();
-        if (!res.ok) alert(data.error || "Erro");
-        else { modal.hide(); fetchProdutos(); }
-      });
-  });
+    // Atualiza tabela
+    const tbody = document.querySelector("#tabelaRelatorio tbody");
+    tbody.innerHTML = "";
 
-  document.getElementById("btnRefresh").addEventListener("click", fetchProdutos);
+    let labels = [], entradas = [], saidas = [];
+    dados.forEach(r=>{
+        tbody.innerHTML += `<tr class="${r.tipo}">
+            <td>${r.id}</td><td>${r.nome}</td><td>${r.tipo}</td><td>${r.quantidade}</td><td>${r.data}</td>
+        </tr>`;
+        const dataFormat = r.data.split(" ")[0];
+        if(!labels.includes(dataFormat)) labels.push(dataFormat);
+        if(r.tipo==='entrada') entradas.push({data:dataFormat,quantidade:r.quantidade});
+        else saidas.push({data:dataFormat,quantidade:r.quantidade});
+    });
 
-  // inicial
-  fetchProdutos();
-});
-window.onload = () => {
-  // Carrega inicialmente
-  fetchProdutos();
+    const entradasPorDia = labels.map(l=>entradas.filter(e=>e.data===l).reduce((s,v)=>s+v.quantidade,0));
+    const saidasPorDia = labels.map(l=>saidas.filter(s=>s.data===l).reduce((s,v)=>s+v.quantidade,0));
 
-  // Atualiza automaticamente a cada 5 segundos
-  setInterval(fetchProdutos, 5000);
-};
+    const ctx = document.getElementById("graficoMov").getContext("2d");
+    if(graficoMov) graficoMov.destroy();
+    graficoMov = new Chart(ctx,{
+        type:'bar',
+        data:{
+            labels: labels,
+            datasets:[
+                { label:'Entradas', data:entradasPorDia, backgroundColor:'#28a745' },
+                { label:'Saídas', data:saidasPorDia, backgroundColor:'#dc3545' }
+            ]
+        },
+        options:{
+            responsive:true,
+            plugins:{
+                legend:{position:'top'},
+                title:{display:true,text:'Movimentações por Dia'}
+            },
+            scales:{y:{beginAtZero:true}}
+        }
+    });
+}
