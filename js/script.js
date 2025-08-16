@@ -1,233 +1,128 @@
-// ==========================
-// Variáveis globais
-// ==========================
-const modal = document.getElementById('modal');
-const modalTitulo = document.getElementById('modalTitulo');
-const modalBody = document.getElementById('modalBody');
-const modalBtn = document.getElementById('modalBtn');
-const tabelaProdutos = document.getElementById('tabelaProdutos').getElementsByTagName('tbody')[0];
+const modal = document.getElementById("modal");
+const modalBody = document.getElementById("modal-body");
 
-let acaoAtual = '';
-
-// ==========================
-// Abrir modal
-// ==========================
 function abrirModal(acao) {
-    acaoAtual = acao;
-    modal.style.display = 'block';
-    modalBody.innerHTML = '';
+    modal.style.display = "flex";
+    modalBody.innerHTML = "";
 
-    switch(acao) {
-        case 'cadastrar':
-            modalTitulo.innerText = 'Cadastrar Produto';
-            modalBody.innerHTML = `
-                <input type="text" id="produtoNome" placeholder="Nome do Produto">
-                <input type="number" id="produtoQtd" placeholder="Quantidade Inicial">
-            `;
-            modalBtn.innerText = 'Cadastrar';
-            break;
-
-        case 'entrada':
-            modalTitulo.innerText = 'Registrar Entrada';
-            modalBody.innerHTML = `
-                <select id="produtoSelectEntrada"></select>
-                <input type="number" id="produtoQtdEntrada" placeholder="Quantidade">
-            `;
-            preencherProdutosSelect('produtoSelectEntrada');
-            modalBtn.innerText = 'Registrar Entrada';
-            break;
-
-        case 'saida':
-            modalTitulo.innerText = 'Registrar Saída';
-            modalBody.innerHTML = `
-                <select id="produtoSelectSaida"></select>
-                <input type="number" id="produtoQtdSaida" placeholder="Quantidade">
-            `;
-            preencherProdutosSelect('produtoSelectSaida');
-            modalBtn.innerText = 'Registrar Saída';
-            break;
-
-        case 'relatorio':
-            modalTitulo.innerText = 'Relatório de Movimentações';
-            modalBody.innerHTML = `
-                <input type="date" id="dataInicio">
-                <input type="date" id="dataFim">
-                <div id="relatorioResultado" style="margin-top:10px;"></div>
-            `;
-            modalBtn.innerText = 'Gerar Relatório';
-            break;
+    if (acao === "cadastrar") {
+        modalBody.innerHTML = `
+            <h2>Cadastrar Produto</h2>
+            <input type="text" id="nomeProduto" placeholder="Nome do produto">
+            <input type="number" id="quantidadeProduto" placeholder="Quantidade inicial">
+            <button onclick="cadastrarProduto()">Cadastrar</button>
+        `;
+    } else if (acao === "entrada") {
+        carregarProdutos("entrada");
+    } else if (acao === "saida") {
+        carregarProdutos("saida");
+    } else if (acao === "relatorio") {
+        modalBody.innerHTML = `
+            <h2>Relatório por Data</h2>
+            <label>Data Inicial:</label>
+            <input type="date" id="dataInicio">
+            <label>Data Final:</label>
+            <input type="date" id="dataFim">
+            <button onclick="gerarRelatorio()">Gerar</button>
+            <div id="resultadoRelatorio"></div>
+        `;
     }
 }
 
-// ==========================
-// Fechar modal
-// ==========================
 function fecharModal() {
-    modal.style.display = 'none';
+    modal.style.display = "none";
 }
 
-// Fechar modal clicando fora
-window.onclick = function(event) {
-    if (event.target === modal) {
-        fecharModal();
-    }
-}
-
-// ==========================
-// Botão do modal
-// ==========================
-modalBtn.onclick = function() {
-    switch(acaoAtual) {
-        case 'cadastrar':
-            cadastrarProduto();
-            break;
-        case 'entrada':
-            registrarEntrada();
-            break;
-        case 'saida':
-            registrarSaida();
-            break;
-        case 'relatorio':
-            gerarRelatorio();
-            break;
-    }
-}
-
-// ==========================
-// Funções da API
-// ==========================
-function atualizarTabela() {
-    fetch('api/actions.php?acao=listar_produtos')
-        .then(res => res.json())
-        .then(data => {
-            tabelaProdutos.innerHTML = '';
-            data.forEach(produto => {
-                const row = tabelaProdutos.insertRow();
-                row.insertCell(0).innerText = produto.id;
-                row.insertCell(1).innerText = produto.nome;
-                row.insertCell(2).innerText = produto.quantidade;
-                const cellAcoes = row.insertCell(3);
-                const btnExcluir = document.createElement('button');
-                btnExcluir.innerText = 'Excluir';
-                btnExcluir.onclick = () => excluirProduto(produto.id);
-                cellAcoes.appendChild(btnExcluir);
-            });
-        });
-}
-
-// Preencher select com produtos
-function preencherProdutosSelect(selectId) {
-    const select = document.getElementById(selectId);
-    fetch('api/actions.php?acao=listar_produtos')
-        .then(res => res.json())
-        .then(data => {
-            select.innerHTML = '';
-            data.forEach(prod => {
-                const option = document.createElement('option');
-                option.value = prod.id;
-                option.text = prod.nome;
-                select.add(option);
-            });
-        });
-}
-
-// ==========================
-// Funções CRUD
-// ==========================
+// Função para cadastrar produto
 function cadastrarProduto() {
-    const nome = document.getElementById('produtoNome').value;
-    const qtd = document.getElementById('produtoQtd').value;
+    const nome = document.getElementById("nomeProduto").value;
+    const quantidade = parseInt(document.getElementById("quantidadeProduto").value);
+
+    if (!nome || isNaN(quantidade)) {
+        alert("Preencha todos os campos corretamente!");
+        return;
+    }
 
     fetch('api/actions.php', {
         method: 'POST',
         headers: {'Content-Type':'application/x-www-form-urlencoded'},
-        body: `acao=cadastrar_produto&nome=${encodeURIComponent(nome)}&quantidade=${encodeURIComponent(qtd)}`
+        body: `acao=cadastrar_produto&nome=${encodeURIComponent(nome)}&quantidade=${quantidade}`
     })
     .then(res => res.json())
-    .then(resp => {
-        alert(resp.mensagem);
-        fecharModal();
-        atualizarTabela();
+    .then(data => {
+        alert(data.mensagem);
+        if (data.sucesso) fecharModal();
     });
 }
 
-function registrarEntrada() {
-    const produtoId = document.getElementById('produtoSelectEntrada').value;
-    const qtd = document.getElementById('produtoQtdEntrada').value;
-
-    fetch('api/actions.php', {
-        method: 'POST',
-        headers: {'Content-Type':'application/x-www-form-urlencoded'},
-        body: `acao=movimentacao&tipo=entrada&produto_id=${produtoId}&quantidade=${qtd}`
-    })
-    .then(res => res.json())
-    .then(resp => {
-        alert(resp.mensagem);
-        fecharModal();
-        atualizarTabela();
-    });
-}
-
-function registrarSaida() {
-    const produtoId = document.getElementById('produtoSelectSaida').value;
-    const qtd = document.getElementById('produtoQtdSaida').value;
-
-    fetch('api/actions.php', {
-        method: 'POST',
-        headers: {'Content-Type':'application/x-www-form-urlencoded'},
-        body: `acao=movimentacao&tipo=saida&produto_id=${produtoId}&quantidade=${qtd}`
-    })
-    .then(res => res.json())
-    .then(resp => {
-        alert(resp.mensagem);
-        fecharModal();
-        atualizarTabela();
-    });
-}
-
-function excluirProduto(id) {
-    if (!confirm('Deseja realmente excluir este produto?')) return;
-
-    fetch('api/actions.php', {
-        method: 'POST',
-        headers: {'Content-Type':'application/x-www-form-urlencoded'},
-        body: `acao=excluir_produto&id=${id}`
-    })
-    .then(res => res.json())
-    .then(resp => {
-        alert(resp.mensagem);
-        atualizarTabela();
-    });
-}
-
-function gerarRelatorio() {
-    const inicio = document.getElementById('dataInicio').value;
-    const fim = document.getElementById('dataFim').value;
-    const resultadoDiv = document.getElementById('relatorioResultado');
-
-    fetch(`api/actions.php?acao=relatorio_intervalo&inicio=${inicio}&fim=${fim}`)
+// Carregar produtos para entrada ou saída
+function carregarProdutos(tipo) {
+    fetch('api/actions.php?acao=listar_produtos')
         .then(res => res.json())
-        .then(data => {
-            if(data.length === 0) {
-                resultadoDiv.innerHTML = '<p>Nenhuma movimentação encontrada.</p>';
-                return;
-            }
-
-            let html = '<table><thead><tr><th>Produto</th><th>Tipo</th><th>Quantidade</th><th>Data</th></tr></thead><tbody>';
-            data.forEach(mov => {
-                html += `<tr>
-                            <td>${mov.nome}</td>
-                            <td>${mov.tipo}</td>
-                            <td>${mov.quantidade}</td>
-                            <td>${mov.data}</td>
-                         </tr>`;
-            });
-            html += '</tbody></table>';
-            resultadoDiv.innerHTML = html;
+        .then(produtos => {
+            let html = `<h2>${tipo === 'entrada' ? 'Entrada' : 'Saída'} de Produto</h2>`;
+            html += `<select id="produtoSelect">`;
+            produtos.forEach(p => html += `<option value="${p.id}">${p.nome} (Qtd: ${p.quantidade})</option>`);
+            html += `</select>`;
+            html += `<input type="number" id="quantidadeMov" placeholder="Quantidade">`;
+            html += `<button onclick="registrarMovimentacao('${tipo}')">Confirmar</button>`;
+            modalBody.innerHTML = html;
         });
 }
 
-// ==========================
-// Inicialização
-// ==========================
-window.onload = atualizarTabela;
+// Registrar entrada ou saída
+function registrarMovimentacao(tipo) {
+    const produtoId = document.getElementById("produtoSelect").value;
+    const quantidade = parseInt(document.getElementById("quantidadeMov").value);
+
+    if (!produtoId || isNaN(quantidade) || quantidade <= 0) {
+        alert("Quantidade inválida!");
+        return;
+    }
+
+    fetch('api/actions.php', {
+        method: 'POST',
+        headers: {'Content-Type':'application/x-www-form-urlencoded'},
+        body: `acao=movimentacao&produto_id=${produtoId}&tipo=${tipo}&quantidade=${quantidade}`
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert(data.mensagem);
+        if (data.sucesso) fecharModal();
+    });
+}
+
+// Gerar relatório por data
+function gerarRelatorio() {
+    const inicio = document.getElementById("dataInicio").value;
+    const fim = document.getElementById("dataFim").value;
+
+    if (!inicio || !fim) {
+        alert("Selecione as datas!");
+        return;
+    }
+
+    fetch('api/actions.php', {
+        method: 'POST',
+        headers: {'Content-Type':'application/x-www-form-urlencoded'},
+        body: `acao=relatorio_intervalo&inicio=${inicio}&fim=${fim}`
+    })
+    .then(res => res.json())
+    .then(dados => {
+        if (dados.length === 0) {
+            document.getElementById("resultadoRelatorio").innerHTML = "<p>Nenhuma movimentação encontrada.</p>";
+            return;
+        }
+        let tabela = `<table><tr><th>Produto</th><th>Tipo</th><th>Quantidade</th><th>Data</th></tr>`;
+        dados.forEach(m => {
+            tabela += `<tr>
+                <td>${m.nome}</td>
+                <td>${m.tipo}</td>
+                <td>${m.quantidade}</td>
+                <td>${m.data}</td>
+            </tr>`;
+        });
+        tabela += "</table>";
+        document.getElementById("resultadoRelatorio").innerHTML = tabela;
+    });
+}

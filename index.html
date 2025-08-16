@@ -1,68 +1,41 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Estoque</title>
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <body>
-
-    <div class="container">
+    <header>
         <h1>Sistema de Estoque</h1>
+    </header>
 
-        <!-- Cards de Ação -->
-        <div class="card">
-            <span>Cadastrar Produto</span>
-            <button onclick="abrirModal('cadastrar')">Cadastrar</button>
+    <main>
+        <div class="cards-container">
+            <div class="card" onclick="abrirModal('cadastrar')">
+                <i class="fa-solid fa-box"></i>
+                <span>Cadastrar Produto</span>
+            </div>
+            <div class="card" onclick="abrirModal('entrada')">
+                <i class="fa-solid fa-arrow-down"></i>
+                <span>Entrada de Produto</span>
+            </div>
+            <div class="card" onclick="abrirModal('saida')">
+                <i class="fa-solid fa-arrow-up"></i>
+                <span>Saída de Produto</span>
+            </div>
+            <div class="card" onclick="abrirModal('relatorio')">
+                <i class="fa-solid fa-chart-line"></i>
+                <span>Relatório</span>
+            </div>
         </div>
+    </main>
 
-        <div class="card">
-            <span>Entrada de Produto</span>
-            <button onclick="abrirModal('entrada')">Registrar Entrada</button>
-        </div>
-
-        <div class="card">
-            <span>Saída de Produto</span>
-            <button onclick="abrirModal('saida')">Registrar Saída</button>
-        </div>
-
-        <div class="card">
-            <span>Relatório de Movimentações</span>
-            <button onclick="abrirModal('relatorio')">Ver Relatório</button>
-        </div>
-
-        <!-- Lista de produtos -->
-        <h2>Produtos Cadastrados</h2>
-        <table id="tabelaProdutos">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Nome</th>
-                    <th>Quantidade</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Produtos preenchidos via JS -->
-            </tbody>
-        </table>
-    </div>
-
-    <!-- =========================
-         Modal Único Dinâmico
-    ========================= -->
-    <div id="modal" class="modal">
+    <div class="modal" id="modal">
         <div class="modal-content">
             <span class="close" onclick="fecharModal()">&times;</span>
-            <h2 id="modalTitulo">Modal</h2>
-
-            <!-- Inputs dinâmicos -->
-            <div id="modalBody">
-                <!-- Preenchido via JS -->
-            </div>
-
-            <button id="modalBtn">Executar</button>
+            <div id="modal-body"></div>
         </div>
     </div>
 
