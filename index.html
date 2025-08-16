@@ -2,80 +2,91 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Estoque da Gordinha e do Careca</title>
+    <title>Sistema de Estoque</title>
     <link rel="stylesheet" href="css/styles.css">
+
+    <!-- jsPDF e AutoTable -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
     <header>
-        <h1>Estoque da Gordinha e do Careca</h1>
-        <div class="botoes">
-            <button id="btnCadastrar">Cadastrar Produto</button>
-            <button id="btnEntrada">Entrada de Produto</button>
-            <button id="btnSaida">Saída de Produto</button>
-            <button id="btnRelatorio">Relatório</button>
-        </div>
+        <h1>📦 Sistema de Estoque</h1>
     </header>
 
     <main>
-        <h2>Produtos em Estoque</h2>
-        <table id="tabelaProdutos">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Produto</th>
-                    <th>Quantidade</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Linhas preenchidas pelo JS -->
-            </tbody>
-        </table>
+        <section class="acoes">
+            <button onclick="abrirModalCadastro()">➕ Cadastrar Produto</button>
+            <button onclick="abrirModalMovimentacao('entrada')">⬆️ Entrada</button>
+            <button onclick="abrirModalMovimentacao('saida')">⬇️ Saída</button>
+            <button onclick="abrirModalRelatorio()">📊 Relatório</button>
+            <button class="exportar" onclick="exportarPDFProdutos()">📑 Exportar Produtos PDF</button>
+        </section>
+
+        <section>
+            <h2>Produtos Cadastrados</h2>
+            <table id="tabelaProdutos">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nome</th>
+                        <th>Quantidade</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Produtos serão carregados via JS -->
+                </tbody>
+            </table>
+        </section>
     </main>
 
-    <!-- Modais -->
-    <div class="modal" id="modalCadastro">
+    <!-- Modal Cadastro -->
+    <div id="modalCadastro" class="modal">
         <div class="modal-content">
-            <h3>Cadastrar Produto</h3>
-            <input type="text" id="nomeProduto" placeholder="Nome do produto">
-            <input type="number" id="quantidadeProduto" placeholder="Quantidade">
-            <button id="salvarCadastro">Salvar</button>
-            <button class="fecharModal">Cancelar</button>
+            <h2>Cadastrar Produto</h2>
+            <label>Nome:</label>
+            <input type="text" id="nomeProduto">
+            <label>Quantidade:</label>
+            <input type="number" id="quantidadeProduto" min="1" value="1">
+            <div class="modal-actions">
+                <button onclick="cadastrarProduto()">Salvar</button>
+                <button class="cancelar" onclick="fecharModal('modalCadastro')">Cancelar</button>
+            </div>
         </div>
     </div>
 
-    <div class="modal" id="modalEntrada">
+    <!-- Modal Movimentação -->
+    <div id="modalMovimentacao" class="modal">
         <div class="modal-content">
-            <h3>Entrada de Produto</h3>
-            <input type="text" id="nomeEntrada" placeholder="Nome do produto">
-            <input type="number" id="quantidadeEntrada" placeholder="Quantidade">
-            <button id="salvarEntrada">Registrar</button>
-            <button class="fecharModal">Cancelar</button>
+            <h2 id="tituloMovimentacao"></h2>
+            <label>Produto:</label>
+            <select id="produtoMov"></select>
+            <label>Quantidade:</label>
+            <input type="number" id="quantidadeMov" min="1" value="1">
+            <div class="modal-actions">
+                <button onclick="registrarMovimentacao()">Confirmar</button>
+                <button class="cancelar" onclick="fecharModal('modalMovimentacao')">Cancelar</button>
+            </div>
         </div>
     </div>
 
-    <div class="modal" id="modalSaida">
+    <!-- Modal Relatório -->
+    <div id="modalRelatorio" class="modal">
         <div class="modal-content">
-            <h3>Saída de Produto</h3>
-            <input type="text" id="nomeSaida" placeholder="Nome do produto">
-            <input type="number" id="quantidadeSaida" placeholder="Quantidade">
-            <button id="salvarSaida">Registrar</button>
-            <button class="fecharModal">Cancelar</button>
-        </div>
-    </div>
-
-    <div class="modal" id="modalRelatorio">
-        <div class="modal-content">
-            <h3>Relatório de Movimentações</h3>
-            <label>Data Início:</label>
+            <h2>Relatório de Movimentações</h2>
+            <label>Data Inicial:</label>
             <input type="date" id="dataInicio">
-            <label>Data Fim:</label>
+            <label>Data Final:</label>
             <input type="date" id="dataFim">
-            <button id="gerarRelatorio">Gerar</button>
-            <button class="fecharModal">Cancelar</button>
+            <div class="modal-actions">
+                <button onclick="gerarRelatorio()">Gerar</button>
+                <button class="cancelar" onclick="fecharModal('modalRelatorio')">Cancelar</button>
+            </div>
 
             <table id="tabelaRelatorio">
                 <thead>
                     <tr>
+                        <th>ID</th>
                         <th>Produto</th>
                         <th>Tipo</th>
                         <th>Quantidade</th>
@@ -83,9 +94,11 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <!-- Linhas preenchidas pelo JS -->
+                    <!-- Relatório via JS -->
                 </tbody>
             </table>
+
+            <button class="exportar" onclick="exportarPDF()">📑 Exportar Relatório PDF</button>
         </div>
     </div>
 
