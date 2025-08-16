@@ -4,38 +4,88 @@
     <meta charset="UTF-8">
     <title>Sistema de Estoque</title>
     <link rel="stylesheet" href="css/styles.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <body>
     <header>
         <h1>Sistema de Estoque</h1>
+        <div class="botoes">
+            <button id="btnCadastrar">Cadastrar Produto</button>
+            <button id="btnEntrada">Entrada de Produto</button>
+            <button id="btnSaida">Saída de Produto</button>
+            <button id="btnRelatorio">Relatório</button>
+        </div>
     </header>
 
     <main>
-        <div class="cards-container">
-            <div class="card" onclick="abrirModal('cadastrar')">
-                <i class="fa-solid fa-box"></i>
-                <span>Cadastrar Produto</span>
-            </div>
-            <div class="card" onclick="abrirModal('entrada')">
-                <i class="fa-solid fa-arrow-down"></i>
-                <span>Entrada de Produto</span>
-            </div>
-            <div class="card" onclick="abrirModal('saida')">
-                <i class="fa-solid fa-arrow-up"></i>
-                <span>Saída de Produto</span>
-            </div>
-            <div class="card" onclick="abrirModal('relatorio')">
-                <i class="fa-solid fa-chart-line"></i>
-                <span>Relatório</span>
-            </div>
-        </div>
+        <h2>Produtos em Estoque</h2>
+        <table id="tabelaProdutos">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Produto</th>
+                    <th>Quantidade</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Linhas preenchidas pelo JS -->
+            </tbody>
+        </table>
     </main>
 
-    <div class="modal" id="modal">
+    <!-- Modais -->
+    <div class="modal" id="modalCadastro">
         <div class="modal-content">
-            <span class="close" onclick="fecharModal()">&times;</span>
-            <div id="modal-body"></div>
+            <h3>Cadastrar Produto</h3>
+            <input type="text" id="nomeProduto" placeholder="Nome do produto">
+            <input type="number" id="quantidadeProduto" placeholder="Quantidade">
+            <button id="salvarCadastro">Salvar</button>
+            <button class="fecharModal">Cancelar</button>
+        </div>
+    </div>
+
+    <div class="modal" id="modalEntrada">
+        <div class="modal-content">
+            <h3>Entrada de Produto</h3>
+            <input type="text" id="nomeEntrada" placeholder="Nome do produto">
+            <input type="number" id="quantidadeEntrada" placeholder="Quantidade">
+            <button id="salvarEntrada">Registrar</button>
+            <button class="fecharModal">Cancelar</button>
+        </div>
+    </div>
+
+    <div class="modal" id="modalSaida">
+        <div class="modal-content">
+            <h3>Saída de Produto</h3>
+            <input type="text" id="nomeSaida" placeholder="Nome do produto">
+            <input type="number" id="quantidadeSaida" placeholder="Quantidade">
+            <button id="salvarSaida">Registrar</button>
+            <button class="fecharModal">Cancelar</button>
+        </div>
+    </div>
+
+    <div class="modal" id="modalRelatorio">
+        <div class="modal-content">
+            <h3>Relatório de Movimentações</h3>
+            <label>Data Início:</label>
+            <input type="date" id="dataInicio">
+            <label>Data Fim:</label>
+            <input type="date" id="dataFim">
+            <button id="gerarRelatorio">Gerar</button>
+            <button class="fecharModal">Cancelar</button>
+
+            <table id="tabelaRelatorio">
+                <thead>
+                    <tr>
+                        <th>Produto</th>
+                        <th>Tipo</th>
+                        <th>Quantidade</th>
+                        <th>Data</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Linhas preenchidas pelo JS -->
+                </tbody>
+            </table>
         </div>
     </div>
 
