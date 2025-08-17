@@ -1,41 +1,163 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Sistema de Estoque</title>
-    <link rel="stylesheet" href="css/styles.css">
+    <title>Estoque da Gordinha e do Careca</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { text-align: center; }
+        .container { max-width: 800px; margin: auto; }
+        .mb-3 { margin-bottom: 15px; }
+        label { display: inline-block; width: 80px; }
+        input[type="text"], input[type="number"], input[type="date"] { padding: 5px; margin-right: 10px; }
+        button { padding: 5px 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        table, th, td { border: 1px solid #ccc; }
+        th, td { padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        #relatorio-container { max-height: 400px; overflow-y: auto; border: 1px solid #ccc; margin-top: 10px; }
+        .flex { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+    </style>
 </head>
 <body>
     <div class="container">
-        <h1>Sistema de Estoque</h1>
-        <div class="botoes">
-            <button onclick="abrirModal('cadastrar')">Cadastrar Produto</button>
-            <button onclick="abrirModal('entrada')">Entrada</button>
-            <button onclick="abrirModal('saida')">Saída</button>
-            <button onclick="abrirModal('remover')">Remover Produto</button>
-            <button onclick="abrirModal('relatorio')">Relatório</button>
+        <h1>Estoque da Gordinha e do Careca</h1>
+
+        <!-- Cadastro de Produto -->
+        <div class="mb-3 flex">
+            <input type="text" id="produto-nome" placeholder="Nome do produto">
+            <input type="number" id="produto-qtd" placeholder="Quantidade" min="0">
+            <button id="btn-cadastrar">Cadastrar</button>
         </div>
-        <table id="tabelaProdutos">
-            <thead>
-                <tr>
-                    <th>Produto</th>
-                    <th>Quantidade</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Produtos cadastrados serão carregados aqui -->
-            </tbody>
-        </table>
+
+        <!-- Entrada e Saída -->
+        <div class="mb-3 flex">
+            <input type="text" id="movimento-nome" placeholder="Nome do produto">
+            <input type="number" id="movimento-qtd" placeholder="Quantidade" min="1">
+            <button id="btn-entrada">Entrada</button>
+            <button id="btn-saida">Saída</button>
+            <button id="btn-remover">Remover</button>
+        </div>
+
+        <!-- Lista de Produtos -->
+        <div class="mb-3">
+            <h2>Produtos</h2>
+            <table id="produtos-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nome</th>
+                        <th>Quantidade</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- Relatório -->
+        <div class="relatorio-section">
+            <h2>Relatório de Movimentações</h2>
+            <div class="relatorio-filtro flex">
+                <label>Data Início: <input type="date" id="inicio"></label>
+                <label>Data Fim: <input type="date" id="fim"></label>
+                <button id="btn-relatorio">Gerar Relatório</button>
+            </div>
+            <div id="relatorio-container">
+                <table id="relatorio-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Produto</th>
+                            <th>Quantidade</th>
+                            <th>Tipo</th>
+                            <th>Data</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
     </div>
 
-    <!-- Modal -->
-    <div id="modal" class="modal">
-        <div class="modal-content">
-            <h2 id="modal-titulo"></h2>
-            <div id="modal-conteudo"></div>
-        </div>
-    </div>
+    <script>
+        // Função genérica para chamar actions.php
+        async function acaoPost(acao, dados) {
+            dados.acao = acao;
+            const res = await fetch('actions.php', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(dados)
+            });
+            return res.json();
+        }
 
-    <script src="js/script.js"></script>
+        // Listar produtos
+        async function listarProdutos() {
+            const produtos = await acaoPost('listar', {});
+            const tbody = document.querySelector('#produtos-table tbody');
+            tbody.innerHTML = '';
+            produtos.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${p.id}</td><td>${p.nome}</td><td>${p.quantidade}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Cadastrar produto
+        document.getElementById('btn-cadastrar').addEventListener('click', async () => {
+            const nome = document.getElementById('produto-nome').value.trim();
+            const qtd = parseInt(document.getElementById('produto-qtd').value);
+            if(!nome || qtd < 0) { alert('Preencha corretamente'); return; }
+            const res = await acaoPost('cadastrar', {nome, qtd});
+            if(res.erro) alert(res.erro); else listarProdutos();
+        });
+
+        // Entrada e saída
+        document.getElementById('btn-entrada').addEventListener('click', async () => movimentar('entrada'));
+        document.getElementById('btn-saida').addEventListener('click', async () => movimentar('saida'));
+        document.getElementById('btn-remover').addEventListener('click', async () => {
+            const nome = document.getElementById('movimento-nome').value.trim();
+            if(!nome) { alert('Informe o nome'); return; }
+            const res = await acaoPost('remover', {nome});
+            if(res.erro) alert(res.erro); else listarProdutos();
+        });
+
+        async function movimentar(tipo) {
+            const nome = document.getElementById('movimento-nome').value.trim();
+            const qtd = parseInt(document.getElementById('movimento-qtd').value);
+            if(!nome || qtd <= 0) { alert('Preencha corretamente'); return; }
+            const res = await acaoPost(tipo, {nome, qtd});
+            if(res.erro) alert(res.erro); else listarProdutos();
+        }
+
+        // Relatório
+        document.getElementById('btn-relatorio').addEventListener('click', async () => {
+            const inicio = document.getElementById('inicio').value;
+            const fim = document.getElementById('fim').value;
+            if(!inicio || !fim) { alert('Selecione as datas'); return; }
+            const dados = await acaoPost('relatorio', {inicio, fim});
+            mostrarRelatorio(dados);
+        });
+
+        function mostrarRelatorio(dados) {
+            const tbody = document.querySelector('#relatorio-table tbody');
+            tbody.innerHTML = '';
+            if(dados.length === 0){
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td colspan="5" style="text-align:center">Nenhuma movimentação encontrada</td>`;
+                tbody.appendChild(tr);
+                return;
+            }
+            dados.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${item.id}</td><td>${item.nome}</td><td>${item.quantidade}</td><td>${item.tipo}</td><td>${item.data}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Inicializa lista de produtos
+        listarProdutos();
+    </script>
 </body>
 </html>
