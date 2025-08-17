@@ -1,193 +1,134 @@
-function abrirModal(acao) {
-    const modal = document.getElementById('modal');
-    const titulo = document.getElementById('modal-titulo');
-    const conteudo = document.getElementById('modal-conteudo');
+const modal = document.getElementById('modal');
+const modalTitulo = document.getElementById('modal-titulo');
+const modalConteudo = document.getElementById('modal-conteudo');
+const tabelaProdutos = document.getElementById('tabelaProdutos').querySelector('tbody');
 
-    conteudo.innerHTML = '';
-    
-    if (acao === 'cadastrar') {
-        titulo.textContent = 'Cadastrar Produto';
-        conteudo.innerHTML = `
-            <input type="text" id="nomeProduto" placeholder="Nome do produto">
-            <input type="number" id="qtdProduto" placeholder="Quantidade">
-            <button onclick="cadastrarProduto()">Cadastrar</button>
-            <button class="fechar" onclick="fecharModal()">Fechar</button>
-        `;
-    } else if (acao === 'entrada') {
-        titulo.textContent = 'Entrada de Produto';
-        conteudo.innerHTML = `
-            <input type="text" id="nomeProduto" placeholder="Nome do produto">
-            <input type="number" id="qtdProduto" placeholder="Quantidade">
-            <button onclick="entradaProduto()">Registrar Entrada</button>
-            <button class="fechar" onclick="fecharModal()">Fechar</button>
-        `;
-    } else if (acao === 'saida') {
-        titulo.textContent = 'Saída de Produto';
-        conteudo.innerHTML = `
-            <input type="text" id="nomeProduto" placeholder="Nome do produto">
-            <input type="number" id="qtdProduto" placeholder="Quantidade">
-            <button onclick="saidaProduto()">Registrar Saída</button>
-            <button class="fechar" onclick="fecharModal()">Fechar</button>
-        `;
-    } else if (acao === 'remover') {
-        titulo.textContent = 'Remover Produto';
-        conteudo.innerHTML = `
-            <input type="text" id="nomeProduto" placeholder="Nome do produto">
-            <button onclick="removerProduto()">Remover</button>
-            <button class="fechar" onclick="fecharModal()">Fechar</button>
-        `;
-    } else if (acao === 'relatorio') {
-        titulo.textContent = 'Relatório de Movimentações';
-        conteudo.innerHTML = `
-            <form id="formRelatorio">
-                <input type="date" id="inicio" required>
-                <input type="date" id="fim" required>
-                <button type="submit">Gerar Relatório</button>
-            </form>
-            <div id="resultadoRelatorio"></div>
-            <button class="fechar" onclick="fecharModal()">Fechar</button>
-        `;
+// Fecha modal ao clicar fora
+window.onclick = function(event) {
+    if(event.target == modal){
+        modal.style.display = 'none';
+        modalConteudo.innerHTML = '';
+    }
+}
 
-        document.getElementById('formRelatorio').addEventListener('submit', function(e) {
-            e.preventDefault();
-            gerarRelatorio();
+async function abrirModal(acao){
+    modal.style.display = 'flex';
+    modalTitulo.textContent = acao.charAt(0).toUpperCase() + acao.slice(1);
+    modalConteudo.innerHTML = '';
+
+    if(acao === 'cadastrar'){
+        const nomeInput = document.createElement('input');
+        nomeInput.placeholder = 'Nome do produto';
+        const qtdInput = document.createElement('input');
+        qtdInput.type = 'number';
+        qtdInput.placeholder = 'Quantidade';
+        const btn = document.createElement('button');
+        btn.textContent = 'Confirmar';
+        btn.onclick = () => executarAcao(acao, nomeInput.value, qtdInput.value);
+        modalConteudo.append(nomeInput,qtdInput,btn);
+
+    } else if(acao === 'entrada' || acao === 'saida'){
+        const select = document.createElement('select');
+        select.id = 'selectProduto';
+        const res = await fetch('api/actions.php', {
+            method: 'POST',
+            body: JSON.stringify({acao:'listar'})
         });
+        const produtos = await res.json();
+        produtos.forEach(p => {
+            const option = document.createElement('option');
+            option.value = p.nome;
+            option.textContent = p.nome;
+            select.appendChild(option);
+        });
+        const qtdInput = document.createElement('input');
+        qtdInput.type = 'number';
+        qtdInput.placeholder = 'Quantidade';
+        const btn = document.createElement('button');
+        btn.textContent = 'Confirmar';
+        btn.onclick = () => executarAcao(acao, select.value, qtdInput.value);
+        modalConteudo.append(select,qtdInput,btn);
+
+    } else if(acao === 'remover'){
+        const select = document.createElement('select');
+        select.id = 'selectProduto';
+        const res = await fetch('api/actions.php', {
+            method: 'POST',
+            body: JSON.stringify({acao:'listar'})
+        });
+        const produtos = await res.json();
+        produtos.forEach(p => {
+            const option = document.createElement('option');
+            option.value = p.nome;
+            option.textContent = p.nome;
+            select.appendChild(option);
+        });
+        const btn = document.createElement('button');
+        btn.textContent = 'Remover';
+        btn.onclick = () => executarAcao('remover', select.value, 0);
+        modalConteudo.append(select,btn);
+
+    } else if(acao === 'relatorio'){
+        const inicio = document.createElement('input');
+        inicio.type = 'date';
+        const fim = document.createElement('input');
+        fim.type = 'date';
+        const btn = document.createElement('button');
+        btn.textContent = 'Gerar Relatório';
+        btn.onclick = () => gerarRelatorio(inicio.value,fim.value);
+        modalConteudo.append(inicio,fim,btn);
     }
 
-    modal.style.display = 'flex';
+    // Botão fechar
+    const btnFechar = document.createElement('button');
+    btnFechar.textContent = 'Fechar';
+    btnFechar.className = 'fechar';
+    btnFechar.onclick = () => {
+        modal.style.display = 'none';
+        modalConteudo.innerHTML = '';
+    }
+    modalConteudo.appendChild(btnFechar);
 }
 
-function fecharModal() {
-    const modal = document.getElementById('modal');
+// Atualiza tabela principal
+async function atualizarTabela(){
+    const res = await fetch('api/actions.php', {
+        method:'POST',
+        body: JSON.stringify({acao:'listar'})
+    });
+    const produtos = await res.json();
+    tabelaProdutos.innerHTML = '';
+    produtos.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${p.nome}</td><td>${p.quantidade}</td>`;
+        tabelaProdutos.appendChild(tr);
+    });
+}
+
+// Funções fictícias (executarAcao, gerarRelatorio)
+async function executarAcao(acao,nome,qtd){ 
+    await fetch('api/actions.php', {
+        method:'POST',
+        body: JSON.stringify({acao,nome,qtd})
+    });
+    atualizarTabela();
     modal.style.display = 'none';
+    modalConteudo.innerHTML = '';
 }
 
-function atualizarTabela() {
-    fetch('actions.php', {
-        method: 'POST',
-        body: JSON.stringify({ acao: 'listar' })
-    })
-    .then(res => res.json())
-    .then(data => {
-        const tbody = document.querySelector('#tabelaProdutos tbody');
-        tbody.innerHTML = '';
-        data.forEach(prod => {
-            tbody.innerHTML += `<tr><td>${prod.nome}</td><td>${prod.quantidade}</td></tr>`;
-        });
+async function gerarRelatorio(inicio,fim){
+    const res = await fetch('api/actions.php', {
+        method:'POST',
+        body: JSON.stringify({acao:'relatorio',inicio,fim})
     });
-}
-
-// Funções de ações
-function cadastrarProduto() {
-    const nome = document.getElementById('nomeProduto').value;
-    const qtd = document.getElementById('qtdProduto').value;
-
-    fetch('actions.php', {
-        method: 'POST',
-        body: JSON.stringify({ acao: 'cadastrar', nome, qtd })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if(data.sucesso) {
-            atualizarTabela();
-            fecharModal();
-        } else alert(data.erro);
+    const rel = await res.json();
+    let html = `<table><tr><th>Produto</th><th>Quantidade</th><th>Tipo</th><th>Data</th></tr>`;
+    rel.forEach(r => {
+        html += `<tr><td>${r.nome}</td><td>${r.quantidade}</td><td>${r.tipo}</td><td>${r.data}</td></tr>`;
     });
+    html += '</table>';
+    modalConteudo.innerHTML = html;
 }
-
-function entradaProduto() {
-    const nome = document.getElementById('nomeProduto').value;
-    const qtd = document.getElementById('qtdProduto').value;
-
-    fetch('actions.php', {
-        method: 'POST',
-        body: JSON.stringify({ acao: 'entrada', nome, qtd })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if(data.sucesso) {
-            atualizarTabela();
-            fecharModal();
-        } else alert(data.erro);
-    });
-}
-
-function saidaProduto() {
-    const nome = document.getElementById('nomeProduto').value;
-    const qtd = document.getElementById('qtdProduto').value;
-
-    fetch('actions.php', {
-        method: 'POST',
-        body: JSON.stringify({ acao: 'saida', nome, qtd })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if(data.sucesso) {
-            atualizarTabela();
-            fecharModal();
-        } else alert(data.erro);
-    });
-}
-
-function removerProduto() {
-    const nome = document.getElementById('nomeProduto').value;
-
-    fetch('actions.php', {
-        method: 'POST',
-        body: JSON.stringify({ acao: 'remover', nome })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if(data.sucesso) {
-            atualizarTabela();
-            fecharModal();
-        } else alert(data.erro);
-    });
-}
-
-// Geração do relatório com scroll
-function gerarRelatorio() {
-    const inicio = document.getElementById('inicio').value;
-    const fim = document.getElementById('fim').value;
-
-    fetch('actions.php', {
-        method: 'POST',
-        body: JSON.stringify({ acao: 'relatorio', inicio, fim })
-    })
-    .then(res => res.json())
-    .then(data => {
-        let tabelaHTML = `
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Produto</th>
-                        <th>Quantidade</th>
-                        <th>Tipo</th>
-                        <th>Data</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
-        data.forEach(item => {
-            tabelaHTML += `<tr>
-                <td>${item.id}</td>
-                <td>${item.produto_id}</td>
-                <td>${item.quantidade}</td>
-                <td>${item.tipo}</td>
-                <td>${item.data}</td>
-            </tr>`;
-        });
-        tabelaHTML += `</tbody></table>`;
-
-        // Aqui adicionamos o container que aplica o scroll
-        document.getElementById('resultadoRelatorio').innerHTML = `
-            <div class="relatorio-container">
-                ${tabelaHTML}
-            </div>
-        `;
-    });
-}
-
-// Inicializa a tabela ao carregar
+  
+// Atualiza tabela ao carregar página
 window.onload = atualizarTabela;
