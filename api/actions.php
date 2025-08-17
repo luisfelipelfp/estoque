@@ -6,8 +6,8 @@ header("Access-Control-Allow-Headers: Content-Type");
 
 // Conexão com MariaDB
 $host = "192.168.15.100"; 
-$user = "seu_usuario"; 
-$pass = "sua_senha"; 
+$user = "root"; 
+$pass = "#Shakka01"; 
 $db   = "estoque";
 
 $conn = new mysqli($host, $user, $pass, $db);
