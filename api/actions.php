@@ -2,8 +2,8 @@
 header('Content-Type: application/json');
 
 $host = "192.168.15.100";
-$user = "seu_usuario";
-$pass = "sua_senha";
+$user = "root";
+$pass = "#shakka01";
 $db = "estoque";
 
 $conn = new mysqli($host,$user,$pass,$db);
