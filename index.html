@@ -2,13 +2,12 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Controle de Estoque</title>
+    <title>Sistema de Estoque</title>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
     <div class="container">
-        <h1>Controle de Estoque</h1>
+        <h1>Sistema de Estoque</h1>
         <div class="botoes">
             <button onclick="abrirModal('cadastrar')">Cadastrar Produto</button>
             <button onclick="abrirModal('entrada')">Entrada</button>
@@ -19,21 +18,21 @@
         <table id="tabelaProdutos">
             <thead>
                 <tr>
-                    <th>ID</th>
-                    <th>Nome</th>
+                    <th>Produto</th>
                     <th>Quantidade</th>
                 </tr>
             </thead>
-            <tbody></tbody>
+            <tbody>
+                <!-- Produtos cadastrados serão carregados aqui -->
+            </tbody>
         </table>
     </div>
 
     <!-- Modal -->
     <div id="modal" class="modal">
         <div class="modal-content">
-            <h2 id="modalTitulo"></h2>
-            <div id="modalConteudo"></div>
-            <button class="fechar" onclick="fecharModal()">Fechar</button>
+            <h2 id="modal-titulo"></h2>
+            <div id="modal-conteudo"></div>
         </div>
     </div>
 
