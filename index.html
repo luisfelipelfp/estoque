@@ -2,62 +2,40 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Estoque da Gordinha e do Careca</title>
-    <link rel="stylesheet" href="css/style.css">
+    <title>Sistema de Estoque</title>
+    <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-    <h1>Estoque da Gordinha e do Careca</h1>
-
-    <!-- Cadastro de Produto -->
-    <div>
-        <input type="text" id="nome" placeholder="Nome do produto">
-        <input type="number" id="qtd" placeholder="Quantidade">
-        <button onclick="cadastrarProduto()">Cadastrar</button>
+    <div class="container">
+        <h1>Sistema de Estoque</h1>
+        <div class="botoes">
+            <button onclick="abrirModal('cadastrar')">Cadastrar Produto</button>
+            <button onclick="abrirModal('entrada')">Entrada</button>
+            <button onclick="abrirModal('saida')">Saída</button>
+            <button onclick="abrirModal('remover')">Remover Produto</button>
+            <button onclick="abrirModal('relatorio')">Relatório</button>
+        </div>
+        <table id="tabelaProdutos">
+            <thead>
+                <tr>
+                    <th>Produto</th>
+                    <th>Quantidade</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Produtos cadastrados serão carregados aqui -->
+            </tbody>
+        </table>
     </div>
 
-    <!-- Movimentação -->
-    <div>
-        <input type="text" id="nomeMov" placeholder="Nome do produto">
-        <input type="number" id="qtdMov" placeholder="Quantidade">
-        <button onclick="entrada()">Entrada</button>
-        <button onclick="saida()">Saída</button>
+    <!-- Modal -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <h2 id="modal-titulo"></h2>
+            <div id="modal-conteudo"></div>
+        </div>
     </div>
 
-    <!-- Relatório -->
-    <div>
-        <input type="date" id="inicio">
-        <input type="date" id="fim">
-        <button onclick="gerarRelatorio()">Gerar Relatório</button>
-    </div>
-
-    <!-- Listagem de Produtos -->
-    <h2>Produtos</h2>
-    <table border="1" id="tabelaProdutos">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Nome</th>
-                <th>Quantidade</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
-
-    <!-- Relatório -->
-    <h2>Relatório de Movimentações</h2>
-    <table border="1" id="tabelaRelatorio">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Produto</th>
-                <th>Quantidade</th>
-                <th>Tipo</th>
-                <th>Data</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
-
-    <script src="js/scripts.js"></script>
+    <script src="js/script.js"></script>
 </body>
 </html>
