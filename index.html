@@ -1,118 +1,41 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Estoque da Gordinha e do Careca</title>
+    <title>Sistema de Estoque</title>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
     <div class="container">
-        <h1>📦 Estoque da Gordinha e do Careca</h1>
-
-        <!-- Botões principais -->
-        <div class="buttons">
-            <button onclick="openModal('modalAdd')">Cadastrar Produto</button>
-            <button onclick="openModal('modalMovimentacao')">Entrada / Saída</button>
-            <button onclick="openModal('modalRemove')">Remover Produto</button>
-            <button id="btnRelatorio">Relatório</button>
+        <h1>Sistema de Estoque</h1>
+        <div class="botoes">
+            <button onclick="abrirModal('cadastrar')">Cadastrar Produto</button>
+            <button onclick="abrirModal('entrada')">Entrada</button>
+            <button onclick="abrirModal('saida')">Saída</button>
+            <button onclick="abrirModal('remover')">Remover Produto</button>
+            <button onclick="abrirModal('relatorio')">Relatório</button>
         </div>
-
-        <!-- Tabela de produtos -->
-        <h2>Produtos em Estoque</h2>
         <table id="tabelaProdutos">
             <thead>
                 <tr>
-                    <th>ID</th>
-                    <th>Nome</th>
+                    <th>Produto</th>
                     <th>Quantidade</th>
                 </tr>
             </thead>
             <tbody>
-                <!-- Produtos serão carregados aqui via JS -->
+                <!-- Produtos cadastrados serão carregados aqui -->
             </tbody>
         </table>
     </div>
 
-    <!-- ================= MODAIS ================= -->
-
-    <!-- Modal Cadastro -->
-    <div id="modalAdd" class="modal">
+    <!-- Modal -->
+    <div id="modal" class="modal">
         <div class="modal-content">
-            <span class="close" onclick="closeModal('modalAdd')">&times;</span>
-            <h2>Cadastrar Produto</h2>
-            <form id="formAdd">
-                <label for="nome">Nome do Produto:</label>
-                <input type="text" name="nome" required>
-
-                <label for="quantidade">Quantidade:</label>
-                <input type="number" name="quantidade" required>
-
-                <button type="submit">Cadastrar</button>
-            </form>
+            <h2 id="modal-titulo"></h2>
+            <div id="modal-conteudo"></div>
         </div>
     </div>
 
-    <!-- Modal Movimentação -->
-    <div id="modalMovimentacao" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeModal('modalMovimentacao')">&times;</span>
-            <h2>Entrada / Saída de Produto</h2>
-            <form id="formMovimentacao">
-                <label for="produtoEntrada">Produto:</label>
-                <select id="produtoEntrada" name="produto_id" required></select>
-
-                <label for="tipo">Tipo:</label>
-                <select name="tipo" required>
-                    <option value="entrada">Entrada</option>
-                    <option value="saida">Saída</option>
-                </select>
-
-                <label for="quantidade">Quantidade:</label>
-                <input type="number" name="quantidade" required>
-
-                <button type="submit">Registrar</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal Remover -->
-    <div id="modalRemove" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeModal('modalRemove')">&times;</span>
-            <h2>Remover Produto</h2>
-            <form id="formRemove">
-                <label for="produtoRemover">Selecione o Produto:</label>
-                <select id="produtoRemover" name="produto_id" required></select>
-
-                <button type="submit">Remover</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal Relatório -->
-    <div id="modalRelatorio" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeModal('modalRelatorio')">&times;</span>
-            <h2>Relatório de Movimentações</h2>
-            <table id="tabelaRelatorio">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Produto</th>
-                        <th>Quantidade</th>
-                        <th>Tipo</th>
-                        <th>Data</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- Movimentações via JS -->
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- Scripts -->
-    <script src="js/scripts.js"></script>
+    <script src="js/script.js"></script>
 </body>
 </html>
