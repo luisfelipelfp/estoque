@@ -1,160 +1,109 @@
-/* Reset básico */
-* {
+:root {
+    --bg: #f0f2f5;
+    --container-bg: #ffffff;
+    --text-color: #333;
+    --btn-bg: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+    --btn-text: #fff;
+    --th-bg: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+    --tr-even: #f9f9f9;
+}
+
+body.dark{
+    --bg: #1e1e1e;
+    --container-bg: #2c2c2c;
+    --text-color: #f5f5f5;
+    --btn-bg: linear-gradient(135deg, #444 0%, #888 100%);
+    --btn-text: #fff;
+    --th-bg: linear-gradient(135deg, #444 0%, #888 100%);
+    --tr-even: #333;
+}
+
+body{
+    font-family: Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text-color);
     margin: 0;
     padding: 0;
-    box-sizing: border-box;
-    font-family: Arial, sans-serif;
 }
 
-/* Variáveis de cores para dark/light mode */
-:root {
-    --bg-color: #ffffff;
-    --text-color: #222222;
-    --header-bg: #007bff;
-    --header-text: #ffffff;
-    --btn-bg: #007bff;
-    --btn-text: #ffffff;
-    --btn-hover: #0056b3;
-    --modal-bg: #ffffff;
-    --overlay-bg: rgba(0,0,0,0.5);
+.container{
+    max-width: 800px;
+    margin: 40px auto;
+    background: var(--container-bg);
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }
 
-body.dark {
-    --bg-color: #222222;
-    --text-color: #eeeeee;
-    --header-bg: #333333;
-    --header-text: #ffffff;
-    --btn-bg: #444444;
-    --btn-text: #ffffff;
-    --btn-hover: #666666;
-    --modal-bg: #333333;
-    --overlay-bg: rgba(0,0,0,0.7);
+h1{
+    text-align: center;
 }
 
-body {
-    background-color: var(--bg-color);
-    color: var(--text-color);
-    min-height: 100vh;
-}
-
-/* Header */
-header {
-    background-color: var(--header-bg);
-    color: var(--header-text);
-    padding: 15px;
+.botoes{
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-header h1 {
-    font-size: 1.8em;
-}
-
-/* Botões */
-.btn {
-    padding: 10px 15px;
-    border: none;
-    border-radius: 5px;
-    background-color: var(--btn-bg);
-    color: var(--btn-text);
-    cursor: pointer;
-    transition: background-color 0.3s;
-}
-
-.btn:hover {
-    background-color: var(--btn-hover);
-}
-
-/* Controls */
-.controls {
-    margin: 20px 0;
-    display: flex;
+    flex-wrap: wrap;
     gap: 10px;
+    justify-content: center;
+    margin-bottom: 20px;
 }
 
-/* Tabela */
-table {
+button{
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    background: var(--btn-bg);
+    color: var(--btn-text);
+    font-weight: bold;
+}
+
+table{
     width: 100%;
     border-collapse: collapse;
-    margin-bottom: 30px;
 }
 
-th, td {
-    padding: 12px 15px;
+th, td{
+    padding: 10px;
     text-align: left;
-    border-bottom: 1px solid #ccc;
 }
 
-th {
-    background-color: var(--btn-bg);
-    color: var(--btn-text);
+th{
+    background: var(--th-bg);
+    color: #fff;
 }
 
-/* Modais */
-.modal-overlay {
+tr:nth-child(even){
+    background: var(--tr-even);
+}
+
+/* Modal */
+#modal{
+    display: none;
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: var(--overlay-bg);
-    display: flex;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background: rgba(0,0,0,0.5);
     justify-content: center;
     align-items: center;
-    z-index: 999;
 }
 
-.modal {
-    background-color: var(--modal-bg);
-    padding: 20px 25px;
-    border-radius: 8px;
+.modal-conteudo{
+    background: var(--container-bg);
+    padding: 20px;
+    border-radius: 10px;
+    min-width: 300px;
+}
+
+.modal-conteudo input, .modal-conteudo select{
+    display: block;
     width: 90%;
-    max-width: 400px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-    position: relative;
+    margin-bottom: 10px;
+    padding: 8px;
 }
 
-.modal h2 {
-    margin-bottom: 15px;
-}
-
-.modal input, .modal select {
-    width: 100%;
-    padding: 8px 10px;
-    margin-bottom: 15px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    background-color: var(--bg-color);
-    color: var(--text-color);
-}
-
-.modal .btn-close {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background: transparent;
-    color: var(--text-color);
-    font-size: 1.2em;
-}
-
-.modal .btn-action {
-    width: 100%;
-}
-
-/* Responsividade */
-@media(max-width: 500px){
-    header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-    }
-
-    .controls {
-        flex-direction: column;
-    }
-
-    table, th, td {
-        font-size: 0.9em;
-    }
+.modal-conteudo .fechar{
+    margin-top: 10px;
+    background: #999;
 }

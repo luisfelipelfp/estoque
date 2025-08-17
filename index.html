@@ -1,35 +1,43 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Controle de Estoque</title>
+    <title>Sistema de Estoque</title>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-    <header>
-        <h1>Controle de Estoque</h1>
-        <button id="dark-mode-toggle" class="btn">Dark/Light Mode</button>
-    </header>
+    <div class="container">
+        <h1>Sistema de Estoque</h1>
 
-    <main>
-        <div class="controls">
-            <button id="btn-cadastrar" class="btn">Cadastrar Produto</button>
-            <button id="btn-relatorio" class="btn">Relatório</button>
+        <div class="botoes">
+            <button onclick="abrirModal('cadastrar')">Cadastrar Produto</button>
+            <button onclick="abrirModal('entrada')">Entrada</button>
+            <button onclick="abrirModal('saida')">Saída</button>
+            <button onclick="abrirModal('remover')">Remover Produto</button>
+            <button onclick="abrirModal('relatorio')">Relatório</button>
+            <button id="btnTema">🌙 Dark Mode</button>
         </div>
 
-        <table id="produtos-table">
-            <tr>
-                <th>ID</th>
-                <th>Nome</th>
-                <th>Quantidade</th>
-                <th>Ações</th>
-            </tr>
-            <!-- Produtos serão carregados aqui via JS -->
+        <table id="tabelaProdutos">
+            <thead>
+                <tr>
+                    <th>Produto</th>
+                    <th>Quantidade</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Produtos carregados via JS -->
+            </tbody>
         </table>
-    </main>
+    </div>
 
-    <!-- Modais são criados dinamicamente pelo JS -->
+    <!-- Modal -->
+    <div id="modal">
+        <div class="modal-conteudo">
+            <h2 id="modal-titulo"></h2>
+            <div id="modal-conteudo"></div>
+        </div>
+    </div>
 
     <script src="js/script.js"></script>
 </body>
