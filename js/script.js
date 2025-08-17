@@ -1,134 +1,68 @@
-const modal = document.getElementById('modal');
-const modalTitulo = document.getElementById('modal-titulo');
-const modalConteudo = document.getElementById('modal-conteudo');
-const tabelaProdutos = document.getElementById('tabelaProdutos').querySelector('tbody');
+const url = "actions.php";
 
-// Fecha modal ao clicar fora
-window.onclick = function(event) {
-    if(event.target == modal){
-        modal.style.display = 'none';
-        modalConteudo.innerHTML = '';
-    }
-}
-
-async function abrirModal(acao){
-    modal.style.display = 'flex';
-    modalTitulo.textContent = acao.charAt(0).toUpperCase() + acao.slice(1);
-    modalConteudo.innerHTML = '';
-
-    if(acao === 'cadastrar'){
-        const nomeInput = document.createElement('input');
-        nomeInput.placeholder = 'Nome do produto';
-        const qtdInput = document.createElement('input');
-        qtdInput.type = 'number';
-        qtdInput.placeholder = 'Quantidade';
-        const btn = document.createElement('button');
-        btn.textContent = 'Confirmar';
-        btn.onclick = () => executarAcao(acao, nomeInput.value, qtdInput.value);
-        modalConteudo.append(nomeInput,qtdInput,btn);
-
-    } else if(acao === 'entrada' || acao === 'saida'){
-        const select = document.createElement('select');
-        select.id = 'selectProduto';
-        const res = await fetch('api/actions.php', {
-            method: 'POST',
-            body: JSON.stringify({acao:'listar'})
-        });
-        const produtos = await res.json();
-        produtos.forEach(p => {
-            const option = document.createElement('option');
-            option.value = p.nome;
-            option.textContent = p.nome;
-            select.appendChild(option);
-        });
-        const qtdInput = document.createElement('input');
-        qtdInput.type = 'number';
-        qtdInput.placeholder = 'Quantidade';
-        const btn = document.createElement('button');
-        btn.textContent = 'Confirmar';
-        btn.onclick = () => executarAcao(acao, select.value, qtdInput.value);
-        modalConteudo.append(select,qtdInput,btn);
-
-    } else if(acao === 'remover'){
-        const select = document.createElement('select');
-        select.id = 'selectProduto';
-        const res = await fetch('api/actions.php', {
-            method: 'POST',
-            body: JSON.stringify({acao:'listar'})
-        });
-        const produtos = await res.json();
-        produtos.forEach(p => {
-            const option = document.createElement('option');
-            option.value = p.nome;
-            option.textContent = p.nome;
-            select.appendChild(option);
-        });
-        const btn = document.createElement('button');
-        btn.textContent = 'Remover';
-        btn.onclick = () => executarAcao('remover', select.value, 0);
-        modalConteudo.append(select,btn);
-
-    } else if(acao === 'relatorio'){
-        const inicio = document.createElement('input');
-        inicio.type = 'date';
-        const fim = document.createElement('input');
-        fim.type = 'date';
-        const btn = document.createElement('button');
-        btn.textContent = 'Gerar Relatório';
-        btn.onclick = () => gerarRelatorio(inicio.value,fim.value);
-        modalConteudo.append(inicio,fim,btn);
-    }
-
-    // Botão fechar
-    const btnFechar = document.createElement('button');
-    btnFechar.textContent = 'Fechar';
-    btnFechar.className = 'fechar';
-    btnFechar.onclick = () => {
-        modal.style.display = 'none';
-        modalConteudo.innerHTML = '';
-    }
-    modalConteudo.appendChild(btnFechar);
-}
-
-// Atualiza tabela principal
-async function atualizarTabela(){
-    const res = await fetch('api/actions.php', {
-        method:'POST',
-        body: JSON.stringify({acao:'listar'})
+// Função genérica para enviar requisições
+async function enviarAcao(acao, dados) {
+    dados.acao = acao;
+    const res = await fetch(url, {
+        method: "POST",
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(dados)
     });
-    const produtos = await res.json();
-    tabelaProdutos.innerHTML = '';
+    return await res.json();
+}
+
+// Cadastro
+async function cadastrarProduto() {
+    const nome = document.getElementById("nome").value;
+    const qtd = parseInt(document.getElementById("qtd").value);
+    const resp = await enviarAcao('cadastrar', {nome, qtd});
+    alert(resp.erro || "Produto cadastrado com sucesso!");
+    listarProdutos();
+}
+
+// Entrada
+async function entrada() {
+    const nome = document.getElementById("nomeMov").value;
+    const qtd = parseInt(document.getElementById("qtdMov").value);
+    const resp = await enviarAcao('entrada', {nome, qtd});
+    alert(resp.erro || "Entrada registrada!");
+    listarProdutos();
+}
+
+// Saída
+async function saida() {
+    const nome = document.getElementById("nomeMov").value;
+    const qtd = parseInt(document.getElementById("qtdMov").value);
+    const resp = await enviarAcao('saida', {nome, qtd});
+    alert(resp.erro || "Saída registrada!");
+    listarProdutos();
+}
+
+// Listar produtos
+async function listarProdutos() {
+    const produtos = await enviarAcao('listar', {});
+    const tbody = document.querySelector("#tabelaProdutos tbody");
+    tbody.innerHTML = "";
     produtos.forEach(p => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${p.nome}</td><td>${p.quantidade}</td>`;
-        tabelaProdutos.appendChild(tr);
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${p.id}</td><td>${p.nome}</td><td>${p.quantidade}</td>`;
+        tbody.appendChild(tr);
     });
 }
 
-// Funções fictícias (executarAcao, gerarRelatorio)
-async function executarAcao(acao,nome,qtd){ 
-    await fetch('api/actions.php', {
-        method:'POST',
-        body: JSON.stringify({acao,nome,qtd})
+// Gerar relatório
+async function gerarRelatorio() {
+    const inicio = document.getElementById("inicio").value;
+    const fim = document.getElementById("fim").value;
+    const rel = await enviarAcao('relatorio', {inicio, fim});
+    const tbody = document.querySelector("#tabelaRelatorio tbody");
+    tbody.innerHTML = "";
+    rel.forEach(m => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${m.id}</td><td>${m.nome}</td><td>${m.quantidade}</td><td>${m.tipo}</td><td>${m.data}</td>`;
+        tbody.appendChild(tr);
     });
-    atualizarTabela();
-    modal.style.display = 'none';
-    modalConteudo.innerHTML = '';
 }
 
-async function gerarRelatorio(inicio,fim){
-    const res = await fetch('api/actions.php', {
-        method:'POST',
-        body: JSON.stringify({acao:'relatorio',inicio,fim})
-    });
-    const rel = await res.json();
-    let html = `<table><tr><th>Produto</th><th>Quantidade</th><th>Tipo</th><th>Data</th></tr>`;
-    rel.forEach(r => {
-        html += `<tr><td>${r.nome}</td><td>${r.quantidade}</td><td>${r.tipo}</td><td>${r.data}</td></tr>`;
-    });
-    html += '</table>';
-    modalConteudo.innerHTML = html;
-}
-  
-// Atualiza tabela ao carregar página
-window.onload = atualizarTabela;
+// Inicializa
+listarProdutos();
