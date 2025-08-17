@@ -2,40 +2,65 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Sistema de Estoque</title>
-    <link rel="stylesheet" href="css/styles.css">
+    <title>Estoque da Gordinha e do Careca</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
-        <h1>Sistema de Estoque</h1>
-        <div class="botoes">
-            <button onclick="abrirModal('cadastrar')">Cadastrar Produto</button>
-            <button onclick="abrirModal('entrada')">Entrada</button>
-            <button onclick="abrirModal('saida')">Saída</button>
-            <button onclick="abrirModal('remover')">Remover Produto</button>
-            <button onclick="abrirModal('relatorio')">Relatório</button>
-        </div>
-        <table id="tabelaProdutos">
+<div class="container">
+    <h1>Estoque da Gordinha e do Careca</h1>
+
+    <!-- Formulário de produto -->
+    <div class="mb-3 d-flex gap-2">
+        <input type="text" id="nome-produto" placeholder="Nome do produto">
+        <input type="number" id="qtd-produto" placeholder="Quantidade" min="0">
+        <button id="btn-cadastrar">Cadastrar</button>
+        <button id="btn-entrada">Entrada</button>
+        <button id="btn-saida">Saída</button>
+        <button id="btn-remover">Remover</button>
+    </div>
+
+    <!-- Lista de produtos -->
+    <table id="lista-produtos">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>Quantidade</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Linhas preenchidas via JS -->
+        </tbody>
+    </table>
+
+    <!-- Relatório -->
+    <div class="mb-3 d-flex gap-2" style="margin-top:30px;">
+        <label for="inicio">Início:</label>
+        <input type="date" id="inicio">
+        <label for="fim">Fim:</label>
+        <input type="date" id="fim">
+        <button id="btn-relatorio">Gerar Relatório</button>
+    </div>
+
+    <div class="relatorio-container">
+        <table id="tabela-relatorio">
             <thead>
                 <tr>
+                    <th>ID</th>
                     <th>Produto</th>
                     <th>Quantidade</th>
+                    <th>Tipo</th>
+                    <th>Data</th>
                 </tr>
             </thead>
             <tbody>
-                <!-- Produtos cadastrados serão carregados aqui -->
+                <!-- Linhas preenchidas via JS -->
             </tbody>
         </table>
     </div>
 
-    <!-- Modal -->
-    <div id="modal" class="modal">
-        <div class="modal-content">
-            <h2 id="modal-titulo"></h2>
-            <div id="modal-conteudo"></div>
-        </div>
-    </div>
+</div>
 
-    <script src="js/script.js"></script>
+<script src="js/scripts.js"></script>
 </body>
 </html>
