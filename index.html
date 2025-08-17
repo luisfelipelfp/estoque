@@ -8,16 +8,13 @@
 <body>
     <div class="container">
         <h1>Sistema de Estoque</h1>
-
         <div class="botoes">
             <button onclick="abrirModal('cadastrar')">Cadastrar Produto</button>
             <button onclick="abrirModal('entrada')">Entrada</button>
             <button onclick="abrirModal('saida')">Saída</button>
             <button onclick="abrirModal('remover')">Remover Produto</button>
             <button onclick="abrirModal('relatorio')">Relatório</button>
-            <button id="btnTema">🌙 Dark Mode</button>
         </div>
-
         <table id="tabelaProdutos">
             <thead>
                 <tr>
@@ -26,14 +23,14 @@
                 </tr>
             </thead>
             <tbody>
-                <!-- Produtos carregados via JS -->
+                <!-- Produtos cadastrados serão carregados aqui -->
             </tbody>
         </table>
     </div>
 
     <!-- Modal -->
-    <div id="modal">
-        <div class="modal-conteudo">
+    <div id="modal" class="modal">
+        <div class="modal-content">
             <h2 id="modal-titulo"></h2>
             <div id="modal-conteudo"></div>
         </div>
