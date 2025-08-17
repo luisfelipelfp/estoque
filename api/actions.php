@@ -16,6 +16,13 @@ if ($conn->connect_error) {
 $input = json_decode(file_get_contents("php://input"), true);
 $acao = $input['acao'] ?? '';
 
+function validarQuantidade($qtd) {
+    if (!is_numeric($qtd) || intval($qtd) <= 0) {
+        return false;
+    }
+    return true;
+}
+
 if ($acao == 'listar') {
     $res = $conn->query("SELECT id, nome, quantidade FROM produtos ORDER BY nome ASC");
     $produtos = [];
@@ -25,13 +32,18 @@ if ($acao == 'listar') {
     echo json_encode($produtos);
 
 } elseif ($acao == 'cadastrar') {
-    $nome = $conn->real_escape_string($input['nome'] ?? '');
-    $quantidade = (int)($input['quantidade'] ?? 0);
+    $nome = trim($conn->real_escape_string($input['nome'] ?? ''));
+    $quantidade = $input['quantidade'] ?? 0;
 
     if (empty($nome)) {
         echo json_encode(["erro" => "Nome do produto não pode ser vazio"]);
         exit;
     }
+    if (!validarQuantidade($quantidade)) {
+        echo json_encode(["erro" => "Quantidade inválida"]);
+        exit;
+    }
+    $quantidade = intval($quantidade);
 
     // Evita duplicados
     $check = $conn->query("SELECT id FROM produtos WHERE nome='$nome'");
@@ -48,10 +60,16 @@ if ($acao == 'listar') {
     }
 
 } elseif ($acao == 'entrada' || $acao == 'saida') {
-    $produto_id = isset($input['produto_id']) ? (int)$input['produto_id'] : 0;
+    $produto_id = isset($input['produto_id']) ? intval($input['produto_id']) : 0;
     $nome       = $conn->real_escape_string($input['nome'] ?? '');
-    $quantidade = (int)($input['quantidade'] ?? 0);
+    $quantidade = $input['quantidade'] ?? 0;
     $tipo = $acao;
+
+    if (!validarQuantidade($quantidade)) {
+        echo json_encode(["erro" => "Quantidade inválida"]);
+        exit;
+    }
+    $quantidade = intval($quantidade);
 
     // Busca produto por ID ou nome
     if ($produto_id > 0) {
@@ -70,7 +88,7 @@ if ($acao == 'listar') {
 
     $row = $res->fetch_assoc();
     $produto_id = $row['id'];
-    $estoque_atual = (int)$row['quantidade'];
+    $estoque_atual = intval($row['quantidade']);
 
     if ($tipo == 'entrada') {
         $novo_estoque = $estoque_atual + $quantidade;
@@ -85,10 +103,14 @@ if ($acao == 'listar') {
     $conn->query("UPDATE produtos SET quantidade=$novo_estoque WHERE id=$produto_id");
     $conn->query("INSERT INTO movimentacoes (produto_id, tipo, quantidade) VALUES ($produto_id, '$tipo', $quantidade)");
 
-    echo json_encode(["sucesso" => "Movimentação registrada", "novo_estoque" => $novo_estoque]);
+    echo json_encode([
+        "sucesso" => "Movimentação registrada",
+        "produto" => $row['nome'],
+        "novo_estoque" => $novo_estoque
+    ]);
 
 } elseif ($acao == 'remover') {
-    $produto_id = (int)($input['produto_id'] ?? 0);
+    $produto_id = intval($input['produto_id'] ?? 0);
     if ($produto_id <= 0) {
         echo json_encode(["erro" => "ID do produto inválido"]);
         exit;
