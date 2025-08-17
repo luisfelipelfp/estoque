@@ -5,10 +5,10 @@ header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type");
 
-$servername = "192.168.15.100"; // IP do servidor do MySQL
-$username   = "root";
-$password   = "#Shakka01";
-$dbname     = "estoque";
+$host = "192.168.15.100";
+$user = "root";
+$pass = "#Shakka01";
+$db = "estoque";
 
 // Conexão com banco
 $conn = new mysqli($servername, $username, $password, $dbname);
