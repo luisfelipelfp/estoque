@@ -2,90 +2,42 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Estoque</title>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
     <header>
         <h1>Sistema de Estoque</h1>
-        <div class="botoes">
-            <button id="btnCadastrar">Cadastrar Produto</button>
-            <button id="btnEntrada">Entrada de Produto</button>
-            <button id="btnSaida">Saída de Produto</button>
-            <button id="btnRelatorio">Relatório</button>
-        </div>
     </header>
 
-    <main>
-        <h2>Produtos em Estoque</h2>
-        <table id="tabelaProdutos">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Produto</th>
-                    <th>Quantidade</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Linhas preenchidas pelo JS -->
-            </tbody>
-        </table>
-    </main>
-
-    <!-- Modais -->
-    <div class="modal" id="modalCadastro">
-        <div class="modal-content">
-            <h3>Cadastrar Produto</h3>
-            <input type="text" id="nomeProduto" placeholder="Nome do produto">
-            <input type="number" id="quantidadeProduto" placeholder="Quantidade">
-            <button id="salvarCadastro">Salvar</button>
-            <button class="fecharModal">Cancelar</button>
-        </div>
+    <div class="cards">
+        <div class="card" onclick="abrirModal('cadastrar')">Cadastrar Produto</div>
+        <div class="card" onclick="abrirModal('entrada')">Entrada</div>
+        <div class="card" onclick="abrirModal('saida')">Saída</div>
+        <div class="card" onclick="abrirModal('relatorio')">Relatório</div>
+        <div class="card" onclick="abrirModal('remover')">Remover</div>
     </div>
 
-    <div class="modal" id="modalEntrada">
-        <div class="modal-content">
-            <h3>Entrada de Produto</h3>
-            <input type="text" id="nomeEntrada" placeholder="Nome do produto">
-            <input type="number" id="quantidadeEntrada" placeholder="Quantidade">
-            <button id="salvarEntrada">Registrar</button>
-            <button class="fecharModal">Cancelar</button>
-        </div>
-    </div>
+    <table id="tabelaProdutos">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Produto</th>
+                <th>Quantidade</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Linhas preenchidas via JS -->
+        </tbody>
+    </table>
 
-    <div class="modal" id="modalSaida">
+    <div id="modal" class="modal">
         <div class="modal-content">
-            <h3>Saída de Produto</h3>
-            <input type="text" id="nomeSaida" placeholder="Nome do produto">
-            <input type="number" id="quantidadeSaida" placeholder="Quantidade">
-            <button id="salvarSaida">Registrar</button>
-            <button class="fecharModal">Cancelar</button>
-        </div>
-    </div>
-
-    <div class="modal" id="modalRelatorio">
-        <div class="modal-content">
-            <h3>Relatório de Movimentações</h3>
-            <label>Data Início:</label>
-            <input type="date" id="dataInicio">
-            <label>Data Fim:</label>
-            <input type="date" id="dataFim">
-            <button id="gerarRelatorio">Gerar</button>
-            <button class="fecharModal">Cancelar</button>
-
-            <table id="tabelaRelatorio">
-                <thead>
-                    <tr>
-                        <th>Produto</th>
-                        <th>Tipo</th>
-                        <th>Quantidade</th>
-                        <th>Data</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- Linhas preenchidas pelo JS -->
-                </tbody>
-            </table>
+            <span class="close" onclick="fecharModal()">&times;</span>
+            <h2 id="modal-titulo"></h2>
+            <div id="modal-conteudo"></div>
         </div>
     </div>
 

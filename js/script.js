@@ -1,90 +1,91 @@
-document.addEventListener('DOMContentLoaded', function() {
+const modal = document.getElementById('modal');
+const modalTitulo = document.getElementById('modal-titulo');
+const modalConteudo = document.getElementById('modal-conteudo');
+const tabela = document.getElementById('tabelaProdutos').querySelector('tbody');
 
-    function fetchAPI(data) {
-        return fetch('api/actions.php', {
-            method: 'POST',
-            headers: {'Content-Type':'application/x-www-form-urlencoded'},
-            body: new URLSearchParams(data)
-        }).then(res => res.json());
+function abrirModal(acao) {
+    modal.style.display = 'flex';
+    modalTitulo.textContent = acao.charAt(0).toUpperCase() + acao.slice(1);
+    modalConteudo.innerHTML = '';
+
+    if(acao === 'cadastrar' || acao === 'entrada' || acao === 'saida' || acao === 'remover'){
+        const nomeInput = document.createElement('input');
+        nomeInput.placeholder = 'Nome do produto';
+        const qtdInput = document.createElement('input');
+        qtdInput.type = 'number';
+        qtdInput.placeholder = 'Quantidade';
+        if(acao==='remover') qtdInput.style.display = 'none';
+
+        const btn = document.createElement('button');
+        btn.textContent = 'Confirmar';
+        btn.onclick = () => executarAcao(acao, nomeInput.value, qtdInput.value);
+
+        modalConteudo.append(nomeInput, qtdInput, btn);
+    } else if(acao === 'relatorio'){
+        const inicio = document.createElement('input');
+        inicio.type = 'date';
+        const fim = document.createElement('input');
+        fim.type = 'date';
+        const btn = document.createElement('button');
+        btn.textContent = 'Gerar Relatório';
+        btn.onclick = () => gerarRelatorio(inicio.value, fim.value);
+        modalConteudo.append(inicio,fim,btn);
     }
+}
 
-    // Modal helper
-    function abrirModal(id) { document.getElementById(id).style.display = 'flex'; }
-    function fecharModal(id) { document.getElementById(id).style.display = 'none'; }
+function fecharModal() {
+    modal.style.display = 'none';
+}
 
-    // Preenche tabela de produtos
-    function listarProdutos() {
-        fetchAPI({acao: 'listar_produtos'}).then(res => {
-            if(res.sucesso) {
-                let tbody = document.querySelector('#tabelaProdutos tbody');
-                tbody.innerHTML = '';
-                res.produtos.forEach(p => {
-                    let tr = document.createElement('tr');
-                    tr.innerHTML = `<td>${p.id}</td><td>${p.nome}</td><td>${p.quantidade}</td>`;
-                    tbody.appendChild(tr);
-                });
-            }
-        });
-    }
-
-    listarProdutos(); // inicial
-
-    // Abrir modais
-    document.getElementById('btnCadastrar').onclick = () => abrirModal('modalCadastro');
-    document.getElementById('btnEntrada').onclick = () => abrirModal('modalEntrada');
-    document.getElementById('btnSaida').onclick = () => abrirModal('modalSaida');
-    document.getElementById('btnRelatorio').onclick = () => abrirModal('modalRelatorio');
-
-    // Fechar modais
-    document.querySelectorAll('.fecharModal').forEach(btn => btn.onclick = e => {
-        btn.closest('.modal').style.display = 'none';
+async function executarAcao(acao, nome, qtd){
+    const data = {acao, nome, quantidade: qtd};
+    const res = await fetch('api/actions.php', {
+        method: 'POST',
+        body: JSON.stringify(data)
     });
+    const json = await res.json();
+    if(json.erro) alert(json.erro);
+    else {
+        alert('Operação realizada com sucesso!');
+        fecharModal();
+        listarProdutos();
+    }
+}
 
-    // Cadastrar produto
-    document.getElementById('salvarCadastro').onclick = () => {
-        let nome = document.getElementById('nomeProduto').value;
-        let quantidade = document.getElementById('quantidadeProduto').value;
-        fetchAPI({acao:'cadastrar_produto', nome, quantidade}).then(res=>{
-            alert(res.mensagem);
-            if(res.sucesso) { fecharModal('modalCadastro'); listarProdutos(); }
-        });
-    };
+async function listarProdutos(){
+    const res = await fetch('api/actions.php', {
+        method: 'POST',
+        body: JSON.stringify({acao:'listar'})
+    });
+    const produtos = await res.json();
+    tabela.innerHTML = '';
+    produtos.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${p.id}</td><td>${p.nome}</td><td>${p.quantidade}</td>
+        <td><button onclick="removerProduto('${p.nome}')">Remover</button></td>`;
+        tabela.appendChild(tr);
+    });
+}
 
-    // Entrada produto
-    document.getElementById('salvarEntrada').onclick = () => {
-        let nome = document.getElementById('nomeEntrada').value;
-        let quantidade = document.getElementById('quantidadeEntrada').value;
-        fetchAPI({acao:'entrada_produto', nome, quantidade}).then(res=>{
-            alert(res.mensagem);
-            if(res.sucesso) { fecharModal('modalEntrada'); listarProdutos(); }
-        });
-    };
+async function removerProduto(nome){
+    if(!confirm('Remover '+nome+'?')) return;
+    await executarAcao('remover', nome, 0);
+}
 
-    // Saída produto
-    document.getElementById('salvarSaida').onclick = () => {
-        let nome = document.getElementById('nomeSaida').value;
-        let quantidade = document.getElementById('quantidadeSaida').value;
-        fetchAPI({acao:'saida_produto', nome, quantidade}).then(res=>{
-            alert(res.mensagem);
-            if(res.sucesso) { fecharModal('modalSaida'); listarProdutos(); }
-        });
-    };
+async function gerarRelatorio(inicio,fim){
+    const res = await fetch('api/actions.php',{
+        method:'POST',
+        body:JSON.stringify({acao:'relatorio', inicio, fim})
+    });
+    const dados = await res.json();
+    modalConteudo.innerHTML = '<table><tr><th>Produto</th><th>Tipo</th><th>Qtd</th><th>Data</th></tr></table>';
+    const tbody = modalConteudo.querySelector('table');
+    dados.forEach(d=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${d.produto_nome}</td><td>${d.tipo}</td><td>${d.quantidade}</td><td>${d.data}</td>`;
+        tbody.appendChild(tr);
+    });
+}
 
-    // Relatório
-    document.getElementById('gerarRelatorio').onclick = () => {
-        let dataInicio = document.getElementById('dataInicio').value;
-        let dataFim = document.getElementById('dataFim').value;
-        fetchAPI({acao:'relatorio', dataInicio, dataFim}).then(res=>{
-            if(res.sucesso) {
-                let tbody = document.querySelector('#tabelaRelatorio tbody');
-                tbody.innerHTML = '';
-                res.movimentacoes.forEach(m=>{
-                    let tr = document.createElement('tr');
-                    tr.innerHTML = `<td>${m.nome}</td><td>${m.tipo}</td><td>${m.quantidade}</td><td>${m.data}</td>`;
-                    tbody.appendChild(tr);
-                });
-            } else { alert(res.mensagem); }
-        });
-    };
-
-});
+// Inicializa tabela
+listarProdutos();
