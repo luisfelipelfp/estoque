@@ -1,134 +1,184 @@
-const modal = document.getElementById('modal');
-const modalTitulo = document.getElementById('modal-titulo');
-const modalConteudo = document.getElementById('modal-conteudo');
-const tabelaProdutos = document.getElementById('tabelaProdutos').querySelector('tbody');
+document.addEventListener("DOMContentLoaded", () => {
 
-// Fecha modal ao clicar fora
-window.onclick = function(event) {
-    if(event.target == modal){
-        modal.style.display = 'none';
-        modalConteudo.innerHTML = '';
-    }
-}
+    const produtosTable = document.getElementById("produtos-table");
+    const btnCadastrar = document.getElementById("btn-cadastrar");
+    const btnEntradaSaida = document.getElementById("btn-entrada-saida");
+    const btnRelatorio = document.getElementById("btn-relatorio");
+    const btnRemover = document.getElementById("btn-remover");
+    const darkModeToggle = document.getElementById("dark-mode-toggle");
 
-async function abrirModal(acao){
-    modal.style.display = 'flex';
-    modalTitulo.textContent = acao.charAt(0).toUpperCase() + acao.slice(1);
-    modalConteudo.innerHTML = '';
+    // Função auxiliar para criar modais
+    function criarModal(titulo, conteudo, onConfirm) {
+        const modal = document.createElement("div");
+        modal.classList.add("modal");
+        modal.innerHTML = `
+            <div class="modal-content">
+                <h2>${titulo}</h2>
+                <div class="modal-body">${conteudo}</div>
+                <div class="modal-footer">
+                    <button class="btn btn-cancel">Cancelar</button>
+                    <button class="btn btn-confirm">Confirmar</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
 
-    if(acao === 'cadastrar'){
-        const nomeInput = document.createElement('input');
-        nomeInput.placeholder = 'Nome do produto';
-        const qtdInput = document.createElement('input');
-        qtdInput.type = 'number';
-        qtdInput.placeholder = 'Quantidade';
-        const btn = document.createElement('button');
-        btn.textContent = 'Confirmar';
-        btn.onclick = () => executarAcao(acao, nomeInput.value, qtdInput.value);
-        modalConteudo.append(nomeInput,qtdInput,btn);
-
-    } else if(acao === 'entrada' || acao === 'saida'){
-        const select = document.createElement('select');
-        select.id = 'selectProduto';
-        const res = await fetch('api/actions.php', {
-            method: 'POST',
-            body: JSON.stringify({acao:'listar'})
-        });
-        const produtos = await res.json();
-        produtos.forEach(p => {
-            const option = document.createElement('option');
-            option.value = p.nome;
-            option.textContent = p.nome;
-            select.appendChild(option);
-        });
-        const qtdInput = document.createElement('input');
-        qtdInput.type = 'number';
-        qtdInput.placeholder = 'Quantidade';
-        const btn = document.createElement('button');
-        btn.textContent = 'Confirmar';
-        btn.onclick = () => executarAcao(acao, select.value, qtdInput.value);
-        modalConteudo.append(select,qtdInput,btn);
-
-    } else if(acao === 'remover'){
-        const select = document.createElement('select');
-        select.id = 'selectProduto';
-        const res = await fetch('api/actions.php', {
-            method: 'POST',
-            body: JSON.stringify({acao:'listar'})
-        });
-        const produtos = await res.json();
-        produtos.forEach(p => {
-            const option = document.createElement('option');
-            option.value = p.nome;
-            option.textContent = p.nome;
-            select.appendChild(option);
-        });
-        const btn = document.createElement('button');
-        btn.textContent = 'Remover';
-        btn.onclick = () => executarAcao('remover', select.value, 0);
-        modalConteudo.append(select,btn);
-
-    } else if(acao === 'relatorio'){
-        const inicio = document.createElement('input');
-        inicio.type = 'date';
-        const fim = document.createElement('input');
-        fim.type = 'date';
-        const btn = document.createElement('button');
-        btn.textContent = 'Gerar Relatório';
-        btn.onclick = () => gerarRelatorio(inicio.value,fim.value);
-        modalConteudo.append(inicio,fim,btn);
+        modal.querySelector(".btn-cancel").onclick = () => modal.remove();
+        modal.querySelector(".btn-confirm").onclick = () => { onConfirm(modal); };
     }
 
-    // Botão fechar
-    const btnFechar = document.createElement('button');
-    btnFechar.textContent = 'Fechar';
-    btnFechar.className = 'fechar';
-    btnFechar.onclick = () => {
-        modal.style.display = 'none';
-        modalConteudo.innerHTML = '';
+    // Função para atualizar tabela de produtos
+    function atualizarTabela() {
+        fetch("api/actions.php", {
+            method: "POST",
+            body: new URLSearchParams({ acao: "listar_produtos" })
+        })
+        .then(res => res.json())
+        .then(produtos => {
+            produtosTable.innerHTML = `
+                <tr>
+                    <th>ID</th><th>Nome</th><th>Quantidade</th><th>Ações</th>
+                </tr>`;
+            produtos.forEach(p => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td>${p.id}</td>
+                    <td>${p.nome}</td>
+                    <td>${p.quantidade}</td>
+                    <td>
+                        <button class="btn btn-entrada" data-id="${p.id}">Entrada</button>
+                        <button class="btn btn-saida" data-id="${p.id}">Saída</button>
+                        <button class="btn btn-remover" data-id="${p.id}">Remover</button>
+                    </td>`;
+                produtosTable.appendChild(tr);
+            });
+            adicionarEventosBotoes();
+        });
     }
-    modalConteudo.appendChild(btnFechar);
-}
 
-// Atualiza tabela principal
-async function atualizarTabela(){
-    const res = await fetch('api/actions.php', {
-        method:'POST',
-        body: JSON.stringify({acao:'listar'})
-    });
-    const produtos = await res.json();
-    tabelaProdutos.innerHTML = '';
-    produtos.forEach(p => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${p.nome}</td><td>${p.quantidade}</td>`;
-        tabelaProdutos.appendChild(tr);
-    });
-}
+    // Eventos dos botões na tabela
+    function adicionarEventosBotoes() {
+        document.querySelectorAll(".btn-entrada").forEach(btn => {
+            btn.onclick = () => abrirEntradaSaida(btn.dataset.id, "entrada");
+        });
+        document.querySelectorAll(".btn-saida").forEach(btn => {
+            btn.onclick = () => abrirEntradaSaida(btn.dataset.id, "saida");
+        });
+        document.querySelectorAll(".btn-remover").forEach(btn => {
+            btn.onclick = () => removerProduto(btn.dataset.id);
+        });
+    }
 
-// Funções fictícias (executarAcao, gerarRelatorio)
-async function executarAcao(acao,nome,qtd){ 
-    await fetch('api/actions.php', {
-        method:'POST',
-        body: JSON.stringify({acao,nome,qtd})
-    });
+    // Modal de cadastro
+    btnCadastrar.onclick = () => {
+        criarModal("Cadastrar Produto",
+            `<input type="text" id="nome-produto" placeholder="Nome do produto">
+             <input type="number" id="quantidade-produto" placeholder="Quantidade inicial">`,
+            (modal) => {
+                const nome = modal.querySelector("#nome-produto").value.trim();
+                const quantidade = modal.querySelector("#quantidade-produto").value.trim();
+                fetch("api/actions.php", {
+                    method: "POST",
+                    body: new URLSearchParams({
+                        acao: "cadastrar_produto",
+                        nome,
+                        quantidade
+                    })
+                })
+                .then(res => res.json())
+                .then(resp => {
+                    alert(resp.mensagem);
+                    modal.remove();
+                    atualizarTabela();
+                });
+            }
+        );
+    };
+
+    // Entrada/Saída
+    function abrirEntradaSaida(produtoId, tipo) {
+        criarModal(tipo === "entrada" ? "Registrar Entrada" : "Registrar Saída",
+            `<input type="number" id="quantidade-mov" placeholder="Quantidade">`,
+            (modal) => {
+                const quantidade = modal.querySelector("#quantidade-mov").value.trim();
+                fetch("api/actions.php", {
+                    method: "POST",
+                    body: new URLSearchParams({
+                        acao: "entrada_saida",
+                        produto_id: produtoId,
+                        quantidade,
+                        tipo
+                    })
+                })
+                .then(res => res.json())
+                .then(resp => {
+                    alert(resp.mensagem);
+                    modal.remove();
+                    atualizarTabela();
+                });
+            }
+        );
+    }
+
+    // Remover produto
+    function removerProduto(produtoId) {
+        if(!confirm("Deseja realmente remover este produto?")) return;
+        fetch("api/actions.php", {
+            method: "POST",
+            body: new URLSearchParams({
+                acao: "remover_produto",
+                produto_id: produtoId
+            })
+        })
+        .then(res => res.json())
+        .then(resp => {
+            alert(resp.mensagem);
+            atualizarTabela();
+        });
+    }
+
+    // Relatório
+    btnRelatorio.onclick = () => {
+        criarModal("Relatório de Movimentações",
+            `<label>Data início: <input type="date" id="data-inicio"></label>
+             <label>Data fim: <input type="date" id="data-fim"></label>
+             <div id="resultado-relatorio"></div>`,
+            (modal) => {
+                const inicio = modal.querySelector("#data-inicio").value;
+                const fim = modal.querySelector("#data-fim").value;
+                fetch("api/actions.php", {
+                    method: "POST",
+                    body: new URLSearchParams({
+                        acao: "relatorio",
+                        data_inicio: inicio,
+                        data_fim: fim
+                    })
+                })
+                .then(res => res.json())
+                .then(movs => {
+                    const div = modal.querySelector("#resultado-relatorio");
+                    div.innerHTML = "<h3>Movimentações:</h3>";
+                    if(movs.length === 0) div.innerHTML += "<p>Nenhuma movimentação encontrada</p>";
+                    else {
+                        const table = document.createElement("table");
+                        table.innerHTML = "<tr><th>Produto</th><th>Tipo</th><th>Quantidade</th><th>Data</th></tr>";
+                        movs.forEach(m => {
+                            const tr = document.createElement("tr");
+                            tr.innerHTML = `<td>${m.nome}</td><td>${m.tipo}</td><td>${m.quantidade}</td><td>${m.data}</td>`;
+                            table.appendChild(tr);
+                        });
+                        div.appendChild(table);
+                    }
+                });
+            }
+        );
+    };
+
+    // Dark/Light Mode
+    darkModeToggle.onclick = () => {
+        document.body.classList.toggle("dark-mode");
+    };
+
+    // Inicializa tabela
     atualizarTabela();
-    modal.style.display = 'none';
-    modalConteudo.innerHTML = '';
-}
 
-async function gerarRelatorio(inicio,fim){
-    const res = await fetch('api/actions.php', {
-        method:'POST',
-        body: JSON.stringify({acao:'relatorio',inicio,fim})
-    });
-    const rel = await res.json();
-    let html = `<table><tr><th>Produto</th><th>Quantidade</th><th>Tipo</th><th>Data</th></tr>`;
-    rel.forEach(r => {
-        html += `<tr><td>${r.nome}</td><td>${r.quantidade}</td><td>${r.tipo}</td><td>${r.data}</td></tr>`;
-    });
-    html += '</table>';
-    modalConteudo.innerHTML = html;
-}
-  
-// Atualiza tabela ao carregar página
-window.onload = atualizarTabela;
+});
