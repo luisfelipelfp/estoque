@@ -113,6 +113,15 @@ tr:nth-child(even){
     background: #c0392b;
 }
 
+.relatorio-container {
+    max-height: 300px; /* altura máxima do modal */
+    overflow-y: auto;  /* scroll vertical */
+    margin-top: 15px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+
+/* Animações */
 @keyframes slideIn{
     to { transform: translateY(0); }
 }
