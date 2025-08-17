@@ -1,139 +1,90 @@
-// ===== Funções utilitárias =====
-function abrirModal(id) {
-    document.getElementById(id).style.display = "flex";
-}
+document.addEventListener('DOMContentLoaded', function() {
 
-function fecharModal(id) {
-    document.getElementById(id).style.display = "none";
-}
+    function fetchAPI(data) {
+        return fetch('api/actions.php', {
+            method: 'POST',
+            headers: {'Content-Type':'application/x-www-form-urlencoded'},
+            body: new URLSearchParams(data)
+        }).then(res => res.json());
+    }
 
-// Fechar modal ao clicar fora do conteúdo
-window.onclick = function(event) {
-    document.querySelectorAll(".modal").forEach(modal => {
-        if (event.target === modal) {
-            modal.style.display = "none";
-        }
-    });
-};
+    // Modal helper
+    function abrirModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function fecharModal(id) { document.getElementById(id).style.display = 'none'; }
 
-// ===== Produtos =====
-async function carregarProdutos() {
-    try {
-        const resp = await fetch("api/actions.php?action=listarProdutos");
-        const produtos = await resp.json();
-
-        const tbody = document.querySelector("#tabelaProdutos tbody");
-        tbody.innerHTML = "";
-
-        if (produtos.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="2" style="text-align:center">Nenhum produto cadastrado</td></tr>`;
-            return;
-        }
-
-        produtos.forEach(p => {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `
-                <td>${p.nome}</td>
-                <td>${p.quantidade}</td>
-            `;
-            tbody.appendChild(tr);
+    // Preenche tabela de produtos
+    function listarProdutos() {
+        fetchAPI({acao: 'listar_produtos'}).then(res => {
+            if(res.sucesso) {
+                let tbody = document.querySelector('#tabelaProdutos tbody');
+                tbody.innerHTML = '';
+                res.produtos.forEach(p => {
+                    let tr = document.createElement('tr');
+                    tr.innerHTML = `<td>${p.id}</td><td>${p.nome}</td><td>${p.quantidade}</td>`;
+                    tbody.appendChild(tr);
+                });
+            }
         });
-
-    } catch (err) {
-        console.error("Erro ao carregar produtos:", err);
-    }
-}
-
-async function cadastrarProduto() {
-    const nome = document.getElementById("nomeProduto").value;
-    const quantidade = document.getElementById("quantidadeProduto").value;
-
-    if (!nome || !quantidade) {
-        alert("Preencha todos os campos!");
-        return;
     }
 
-    const formData = new FormData();
-    formData.append("action", "cadastrarProduto");
-    formData.append("nome", nome);
-    formData.append("quantidade", quantidade);
+    listarProdutos(); // inicial
 
-    const resp = await fetch("api/actions.php", { method: "POST", body: formData });
-    const resultado = await resp.text();
+    // Abrir modais
+    document.getElementById('btnCadastrar').onclick = () => abrirModal('modalCadastro');
+    document.getElementById('btnEntrada').onclick = () => abrirModal('modalEntrada');
+    document.getElementById('btnSaida').onclick = () => abrirModal('modalSaida');
+    document.getElementById('btnRelatorio').onclick = () => abrirModal('modalRelatorio');
 
-    alert(resultado);
-    fecharModal("modalCadastro");
-    carregarProdutos();
-}
-
-// ===== Movimentações =====
-async function registrarMovimentacao() {
-    const produtoId = document.getElementById("produtoMov").value;
-    const tipo = document.getElementById("tipoMov").value;
-    const quantidade = document.getElementById("qtdMov").value;
-
-    if (!produtoId || !quantidade) {
-        alert("Preencha todos os campos!");
-        return;
-    }
-
-    const formData = new FormData();
-    formData.append("action", "registrarMovimentacao");
-    formData.append("produto_id", produtoId);
-    formData.append("tipo", tipo);
-    formData.append("quantidade", quantidade);
-
-    const resp = await fetch("api/actions.php", { method: "POST", body: formData });
-    const resultado = await resp.text();
-
-    alert(resultado);
-    fecharModal("modalMovimentacao");
-    carregarProdutos();
-}
-
-// ===== Relatório =====
-async function gerarRelatorio() {
-    const dataInicio = document.getElementById("dataInicio").value;
-    const dataFim = document.getElementById("dataFim").value;
-
-    if (!dataInicio || !dataFim) {
-        alert("Selecione o intervalo de datas!");
-        return;
-    }
-
-    const resp = await fetch(`api/actions.php?action=relatorio&inicio=${dataInicio}&fim=${dataFim}`);
-    const relatorio = await resp.json();
-
-    const tbody = document.querySelector("#tabelaRelatorio tbody");
-    tbody.innerHTML = "";
-
-    if (relatorio.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center">Nenhuma movimentação encontrada</td></tr>`;
-        return;
-    }
-
-    relatorio.forEach(r => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-            <td>${r.produto}</td>
-            <td>${r.tipo}</td>
-            <td>${r.quantidade}</td>
-            <td>${r.data}</td>
-        `;
-        tbody.appendChild(tr);
+    // Fechar modais
+    document.querySelectorAll('.fecharModal').forEach(btn => btn.onclick = e => {
+        btn.closest('.modal').style.display = 'none';
     });
-}
 
-// ===== Exportações =====
-function exportarProdutosPDF() {
-    window.open("api/actions.php?action=exportarProdutosPDF", "_blank");
-}
+    // Cadastrar produto
+    document.getElementById('salvarCadastro').onclick = () => {
+        let nome = document.getElementById('nomeProduto').value;
+        let quantidade = document.getElementById('quantidadeProduto').value;
+        fetchAPI({acao:'cadastrar_produto', nome, quantidade}).then(res=>{
+            alert(res.mensagem);
+            if(res.sucesso) { fecharModal('modalCadastro'); listarProdutos(); }
+        });
+    };
 
-function exportarRelatorioPDF() {
-    window.open("api/actions.php?action=exportarRelatorioPDF", "_blank");
-}
+    // Entrada produto
+    document.getElementById('salvarEntrada').onclick = () => {
+        let nome = document.getElementById('nomeEntrada').value;
+        let quantidade = document.getElementById('quantidadeEntrada').value;
+        fetchAPI({acao:'entrada_produto', nome, quantidade}).then(res=>{
+            alert(res.mensagem);
+            if(res.sucesso) { fecharModal('modalEntrada'); listarProdutos(); }
+        });
+    };
 
-// ===== Inicialização =====
-document.addEventListener("DOMContentLoaded", () => {
-    carregarProdutos();
+    // Saída produto
+    document.getElementById('salvarSaida').onclick = () => {
+        let nome = document.getElementById('nomeSaida').value;
+        let quantidade = document.getElementById('quantidadeSaida').value;
+        fetchAPI({acao:'saida_produto', nome, quantidade}).then(res=>{
+            alert(res.mensagem);
+            if(res.sucesso) { fecharModal('modalSaida'); listarProdutos(); }
+        });
+    };
+
+    // Relatório
+    document.getElementById('gerarRelatorio').onclick = () => {
+        let dataInicio = document.getElementById('dataInicio').value;
+        let dataFim = document.getElementById('dataFim').value;
+        fetchAPI({acao:'relatorio', dataInicio, dataFim}).then(res=>{
+            if(res.sucesso) {
+                let tbody = document.querySelector('#tabelaRelatorio tbody');
+                tbody.innerHTML = '';
+                res.movimentacoes.forEach(m=>{
+                    let tr = document.createElement('tr');
+                    tr.innerHTML = `<td>${m.nome}</td><td>${m.tipo}</td><td>${m.quantidade}</td><td>${m.data}</td>`;
+                    tbody.appendChild(tr);
+                });
+            } else { alert(res.mensagem); }
+        });
+    };
+
 });
