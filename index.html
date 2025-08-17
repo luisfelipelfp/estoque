@@ -1,36 +1,52 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Sistema de Estoque</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estoque da Gordinha e do Careca</title>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-    <div class="container">
-        <h1>Sistema de Estoque</h1>
-        <div class="botoes">
-            <button onclick="abrirModal('cadastrar')">Cadastrar Produto</button>
-            <button onclick="abrirModal('entrada')">Entrada</button>
-            <button onclick="abrirModal('saida')">Saída</button>
-            <button onclick="abrirModal('remover')">Remover Produto</button>
-            <button onclick="abrirModal('relatorio')">Relatório</button>
+    <h1>Estoque da Gordinha e do Careca</h1>
+
+    <!-- Cards de ações -->
+    <div class="cards">
+        <div class="card" onclick="abrirModal('cadastrar')">
+            <span>Cadastrar Produto</span>
         </div>
-        <table id="tabelaProdutos">
-            <thead>
-                <tr>
-                    <th>Produto</th>
-                    <th>Quantidade</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Produtos cadastrados serão carregados aqui -->
-            </tbody>
-        </table>
+        <div class="card" onclick="abrirModal('entrada')">
+            <span>Entrada de Produto</span>
+        </div>
+        <div class="card" onclick="abrirModal('saida')">
+            <span>Saída de Produto</span>
+        </div>
+        <div class="card" onclick="abrirModal('relatorio')">
+            <span>Relatório</span>
+        </div>
+        <div class="card" onclick="abrirModal('remover')">
+            <span>Remover Produto</span>
+        </div>
     </div>
 
-    <!-- Modal -->
+    <!-- Tabela de produtos -->
+    <table id="tabelaProdutos">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Produto</th>
+                <th>Quantidade</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Linhas preenchidas pelo JS -->
+        </tbody>
+    </table>
+
+    <!-- Modal genérico -->
     <div id="modal" class="modal">
         <div class="modal-content">
+            <span class="close" onclick="fecharModal()">&times;</span>
             <h2 id="modal-titulo"></h2>
             <div id="modal-conteudo"></div>
         </div>
