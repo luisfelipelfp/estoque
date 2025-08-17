@@ -5,8 +5,8 @@ ini_set('display_errors', 1);
 
 // Configurações do banco
 $host = '192.168.15.100';
-$user = 'SEU_USUARIO';
-$pass = 'SUA_SENHA';
+$user = 'root';
+$pass = '#Shakka01';
 $db   = 'estoque';
 
 $conn = new mysqli($host, $user, $pass, $db);
