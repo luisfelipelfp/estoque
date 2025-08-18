@@ -1,22 +1,21 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Estoque da Gordinha e do Careca</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Sistema de Estoque</title>
+    <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
     <div class="container">
-        <h1>Estoque da Gordinha e do Careca</h1>
-
-        <div class="mb-3 d-flex gap-2">
-            <button class="btn btn-primary" id="btnEntrada">Entrada</button>
-            <button class="btn btn-secondary" id="btnSaida">Saída</button>
-            <button class="btn btn-success" id="btnRelatorio">Relatório</button>
+        <h1>Sistema de Estoque</h1>
+        <div class="botoes">
+            <button onclick="abrirModal('cadastrar')">Cadastrar Produto</button>
+            <button onclick="abrirModal('entrada')">Entrada</button>
+            <button onclick="abrirModal('saida')">Saída</button>
+            <button onclick="abrirModal('remover')">Remover Produto</button>
+            <button onclick="abrirModal('relatorio')">Relatório</button>
         </div>
-
-        <table class="table" id="tabelaProdutos">
+        <table id="tabelaProdutos">
             <thead>
                 <tr>
                     <th>Produto</th>
@@ -24,39 +23,19 @@
                 </tr>
             </thead>
             <tbody>
-                <!-- Produtos serão carregados via JS -->
+                <!-- Produtos cadastrados serão carregados aqui -->
             </tbody>
         </table>
     </div>
 
-    <!-- Modal do Relatório -->
-    <div class="modal" id="modalRelatorio">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <span class="close" id="closeModal">&times;</span>
-                <h2>Relatório de Movimentações</h2>
-                
-                <!-- ✅ Adicionada a div com scroll -->
-                <div id="reportContent">
-                    <table class="table" id="tabelaRelatorio">
-                        <thead>
-                            <tr>
-                                <th>Produto</th>
-                                <th>Quantidade</th>
-                                <th>Tipo</th>
-                                <th>Data</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- Relatório carregado via JS -->
-                        </tbody>
-                    </table>
-                </div>
-                <!-- fim reportContent -->
-            </div>
+    <!-- Modal -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <h2 id="modal-titulo"></h2>
+            <div id="modal-conteudo"></div>
         </div>
     </div>
 
-    <script src="scripts.js"></script>
+    <script src="js/script.js"></script>
 </body>
 </html>
