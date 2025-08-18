@@ -70,8 +70,29 @@ if($acao == 'cadastrar'){
 
 } elseif($acao == 'remover'){
     $nome = $conn->real_escape_string($data['nome']);
-    $conn->query("DELETE FROM produtos WHERE nome='$nome'");
-    echo json_encode(['sucesso'=>true]);
+    
+    // Busca o produto antes de remover
+    $res = $conn->query("SELECT id, quantidade FROM produtos WHERE nome='$nome' LIMIT 1");
+    if($res && $res->num_rows > 0){
+        $produto = $res->fetch_assoc();
+        $produto_id = $produto['id'];
+        $qtdAtual = $produto['quantidade'];
+
+        // Registra a remoção com a quantidade existente
+        $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo, data) 
+                      VALUES ($produto_id, $qtdAtual, 'remocao', NOW())");
+
+        // Remove da tabela de produtos
+        $delete = $conn->query("DELETE FROM produtos WHERE id=$produto_id");
+
+        if($delete){
+            echo json_encode(['sucesso'=>true, 'mensagem'=>'Produto removido com sucesso']);
+        } else {
+            echo json_encode(['erro'=>'Falha ao remover produto: '.$conn->error]);
+        }
+    } else {
+        echo json_encode(['erro'=>'Produto não encontrado']);
+    }
 
 } elseif($acao == 'listar'){
     $res = $conn->query("SELECT * FROM produtos");
