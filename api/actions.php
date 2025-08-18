@@ -22,7 +22,16 @@ if($acao == 'cadastrar'){
     if($verifica->num_rows > 0){
         echo json_encode(['erro'=>'Produto já existe']);
     } else {
+        // Insere produto
         $conn->query("INSERT INTO produtos (nome, quantidade) VALUES ('$nome',$qtd)");
+        $produto_id = $conn->insert_id;
+
+        // Registra movimentação inicial como "entrada"
+        if($qtd > 0){
+            $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo, data) 
+                          VALUES ($produto_id, $qtd, 'entrada', NOW())");
+        }
+
         echo json_encode(['sucesso'=>true]);
     }
 
@@ -54,7 +63,9 @@ if($acao == 'cadastrar'){
     }
 
     // Registra movimentação
-    $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo, data) VALUES ($produto_id, $qtd, '$tipo', NOW())");
+    $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo, data) 
+                  VALUES ($produto_id, $qtd, '$tipo', NOW())");
+
     echo json_encode(['sucesso'=>true]);
 
 } elseif($acao == 'remover'){
