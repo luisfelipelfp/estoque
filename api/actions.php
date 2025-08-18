@@ -70,22 +70,7 @@ if($acao == 'cadastrar'){
 
 } elseif($acao == 'remover'){
     $nome = $conn->real_escape_string($data['nome']);
-    
-    // Busca o produto antes de remover
-    $res = $conn->query("SELECT id, quantidade FROM produtos WHERE nome='$nome'");
-    if($res->num_rows > 0){
-        $produto = $res->fetch_assoc();
-        $produto_id = $produto['id'];
-        $qtdAtual = $produto['quantidade'];
-
-        // Registra a remoção com a quantidade existente
-        $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo, data) 
-                      VALUES ($produto_id, $qtdAtual, 'remocao', NOW())");
-
-        // Remove da tabela de produtos
-        $conn->query("DELETE FROM produtos WHERE id=$produto_id");
-    }
-
+    $conn->query("DELETE FROM produtos WHERE nome='$nome'");
     echo json_encode(['sucesso'=>true]);
 
 } elseif($acao == 'listar'){
@@ -100,12 +85,11 @@ if($acao == 'cadastrar'){
     $inicio = $conn->real_escape_string($data['inicio']);
     $fim = $conn->real_escape_string($data['fim']);
 
-    // Relatório com LEFT JOIN para pegar também produtos removidos
+    // Relatório com join para pegar o nome do produto
     $res = $conn->query("
-        SELECT m.id, m.produto_id, COALESCE(p.nome, '[REMOVIDO]') as nome, 
-               m.quantidade, m.tipo, m.data 
+        SELECT m.id, m.produto_id, p.nome, m.quantidade, m.tipo, m.data 
         FROM movimentacoes m
-        LEFT JOIN produtos p ON m.produto_id = p.id
+        JOIN produtos p ON m.produto_id = p.id
         WHERE m.data BETWEEN '$inicio 00:00:00' AND '$fim 23:59:59'
         ORDER BY m.data ASC
     ");
