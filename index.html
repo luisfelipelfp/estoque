@@ -2,105 +2,47 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Estoque</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Sistema de Estoque</title>
+    <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-    <h1>Estoque da Gordinha e do Careca</h1>
+    <div class="container">
+        <h1>Sistema de Estoque!</h1>
 
-    <div class="mb-3 d-flex gap-2">
-        <button onclick="abrirModal('modalCadastro')">Cadastrar Produto</button>
-        <button onclick="abrirModal('modalEntrada')">Entrada</button>
-        <button onclick="abrirModal('modalSaida')">Saída</button>
-        <button onclick="abrirModal('modalRemover')">Remover Produto</button>
-        <button onclick="abrirModal('modalRelatorio')">Relatório</button>
+        <div class="mb-3 d-flex gap-2">
+            <button class="btn btn-primary" onclick="abrirModal('cadastrar')">Cadastrar Produto</button>
+            <button class="btn btn-primary" onclick="abrirModal('entrada')">Entrada</button>
+            <button class="btn btn-primary" onclick="abrirModal('saida')">Saída</button>
+            <button class="btn btn-danger" onclick="abrirModal('remover')">Remover Produto</button>
+            <button class="btn btn-primary" onclick="abrirModal('relatorio')">Relatório</button>
+        </div>
+
+        <table id="tabelaProdutos">
+            <thead>
+                <tr>
+                    <th>Produto</th>
+                    <th>Quantidade</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Produtos cadastrados serão carregados aqui -->
+            </tbody>
+        </table>
     </div>
 
-    <!-- Tabela de produtos -->
-    <table id="tabelaProdutos">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Produto</th>
-                <th>Quantidade</th>
-            </tr>
-        </thead>
-        <tbody>
-            <!-- preenchido via JS -->
-        </tbody>
-    </table>
+    <!-- Modal -->
+    <div id="modal" class="modal">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <h2 id="modal-titulo"></h2>
+                <div id="modal-conteudo"></div>
 
-    <!-- ================== MODAIS ================== -->
-
-    <!-- Cadastro -->
-    <div class="modal" id="modalCadastro">
-        <div class="modal-content">
-            <h2>Cadastrar Produto</h2>
-            <input type="text" id="nome" placeholder="Nome">
-            <input type="number" id="quantidade" placeholder="Quantidade">
-            <div class="modal-actions">
-                <button onclick="cadastrar()">Salvar</button>
-                <button onclick="fecharModal('modalCadastro')">Cancelar</button>
+                <!-- ✅ Área exclusiva para o relatório com scroll -->
+                <div id="reportContent" style="display:none;"></div>
             </div>
         </div>
     </div>
 
-    <!-- Entrada -->
-    <div class="modal" id="modalEntrada">
-        <div class="modal-content">
-            <h2>Entrada</h2>
-            <input type="text" id="nomeEntrada" placeholder="Nome do produto">
-            <input type="number" id="qtdEntrada" placeholder="Quantidade">
-            <div class="modal-actions">
-                <button onclick="entrada()">Salvar</button>
-                <button onclick="fecharModal('modalEntrada')">Cancelar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Saída -->
-    <div class="modal" id="modalSaida">
-        <div class="modal-content">
-            <h2>Saída</h2>
-            <input type="text" id="nomeSaida" placeholder="Nome do produto">
-            <input type="number" id="qtdSaida" placeholder="Quantidade">
-            <div class="modal-actions">
-                <button onclick="saida()">Salvar</button>
-                <button onclick="fecharModal('modalSaida')">Cancelar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Remover -->
-    <div class="modal" id="modalRemover">
-        <div class="modal-content">
-            <h2>Remover Produto</h2>
-            <input type="text" id="nomeRemover" placeholder="Nome do produto">
-            <div class="modal-actions">
-                <button onclick="remover()">Remover</button>
-                <button onclick="fecharModal('modalRemover')">Cancelar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Relatório -->
-    <div class="modal" id="modalRelatorio">
-        <div class="modal-content">
-            <h2>Relatório</h2>
-            <label>Início:</label>
-            <input type="date" id="inicio">
-            <label>Fim:</label>
-            <input type="date" id="fim">
-            <div class="modal-actions">
-                <button onclick="relatorio()">Gerar</button>
-                <button onclick="fecharModal('modalRelatorio')">Fechar</button>
-            </div>
-            <!-- Aqui vai o relatório com scroll -->
-            <div id="reportContent"></div>
-        </div>
-    </div>
-
-    <script src="script.js"></script>
+    <script src="js/script.js"></script>
 </body>
 </html>
