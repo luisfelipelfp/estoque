@@ -1,6 +1,6 @@
 <?php
 header('Content-Type: application/json');
-$conn = new mysqli("localhost", "root", "#Shakka01", "estoque");
+$conn = new mysqli("192.168.15.100", "root", "#Shakka01", "estoque");
 
 if ($conn->connect_error) {
     die(json_encode(["erro" => "Falha na conexão: " . $conn->connect_error]));
