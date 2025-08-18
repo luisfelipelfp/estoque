@@ -70,24 +70,7 @@ if($acao == 'cadastrar'){
 
 } elseif($acao == 'remover'){
     $nome = $conn->real_escape_string($data['nome']);
-    
-    // Busca produto antes de remover
-    $res = $conn->query("SELECT id, quantidade FROM produtos WHERE nome='$nome'");
-    if($res->num_rows > 0){
-        $produto = $res->fetch_assoc();
-        $produto_id = $produto['id'];
-        $qtd = $produto['quantidade'];
-
-        // Registra saída total antes de remover
-        if($qtd > 0){
-            $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo, data) 
-                          VALUES ($produto_id, $qtd, 'saida', NOW())");
-        }
-
-        // Remove produto
-        $conn->query("DELETE FROM produtos WHERE id=$produto_id");
-    }
-
+    $conn->query("DELETE FROM produtos WHERE nome='$nome'");
     echo json_encode(['sucesso'=>true]);
 
 } elseif($acao == 'listar'){
