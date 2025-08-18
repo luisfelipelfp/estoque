@@ -8,13 +8,15 @@
 <body>
     <div class="container">
         <h1>Sistema de Estoque</h1>
-        <div class="botoes">
-            <button onclick="abrirModal('cadastrar')">Cadastrar Produto</button>
-            <button onclick="abrirModal('entrada')">Entrada</button>
-            <button onclick="abrirModal('saida')">Saída</button>
-            <button onclick="abrirModal('remover')">Remover Produto</button>
-            <button onclick="abrirModal('relatorio')">Relatório</button>
+
+        <div class="mb-3 d-flex gap-2">
+            <button class="btn btn-primary" onclick="abrirModal('cadastrar')">Cadastrar Produto</button>
+            <button class="btn btn-primary" onclick="abrirModal('entrada')">Entrada</button>
+            <button class="btn btn-primary" onclick="abrirModal('saida')">Saída</button>
+            <button class="btn btn-danger" onclick="abrirModal('remover')">Remover Produto</button>
+            <button class="btn btn-primary" onclick="abrirModal('relatorio')">Relatório</button>
         </div>
+
         <table id="tabelaProdutos">
             <thead>
                 <tr>
@@ -30,9 +32,14 @@
 
     <!-- Modal -->
     <div id="modal" class="modal">
-        <div class="modal-content">
-            <h2 id="modal-titulo"></h2>
-            <div id="modal-conteudo"></div>
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <h2 id="modal-titulo"></h2>
+                <div id="modal-conteudo"></div>
+
+                <!-- ✅ Área exclusiva para o relatório com scroll -->
+                <div id="reportContent" style="display:none;"></div>
+            </div>
         </div>
     </div>
 
