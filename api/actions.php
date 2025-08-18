@@ -70,24 +70,7 @@ if($acao == 'cadastrar'){
 
 } elseif($acao == 'remover'){
     $nome = $conn->real_escape_string($data['nome']);
-    
-    // Primeiro buscar o produto
-    $res = $conn->query("SELECT id, quantidade FROM produtos WHERE nome='$nome'");
-    if($res->num_rows == 0){
-        echo json_encode(['erro'=>'Produto não encontrado']);
-        exit;
-    }
-    $produto = $res->fetch_assoc();
-    $produto_id = $produto['id'];
-    $qtd = $produto['quantidade'];
-
-    // Registrar movimentação ANTES de remover
-    $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo, data) 
-                  VALUES ($produto_id, $qtd, 'remocao', NOW())");
-
-    // Agora sim remover o produto
-    $conn->query("DELETE FROM produtos WHERE id=$produto_id");
-
+    $conn->query("DELETE FROM produtos WHERE nome='$nome'");
     echo json_encode(['sucesso'=>true]);
 
 } elseif($acao == 'listar'){
@@ -106,7 +89,7 @@ if($acao == 'cadastrar'){
     $res = $conn->query("
         SELECT m.id, m.produto_id, p.nome, m.quantidade, m.tipo, m.data 
         FROM movimentacoes m
-        LEFT JOIN produtos p ON m.produto_id = p.id
+        JOIN produtos p ON m.produto_id = p.id
         WHERE m.data BETWEEN '$inicio 00:00:00' AND '$fim 23:59:59'
         ORDER BY m.data ASC
     ");
