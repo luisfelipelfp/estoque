@@ -1,102 +1,104 @@
 <?php
-$servername = "localhost";
-$username = "root";
-$password = "#Shakka01";
-$dbname = "estoque";
+header('Content-Type: application/json');
 
-$conn = new mysqli($servername, $username, $password, $dbname);
+$host = "192.168.15.100";
+$user = "root";
+$pass = "#Shakka01";
+$db = "estoque";
 
-if ($conn->connect_error) {
-    die("Conexão falhou: " . $conn->connect_error);
+$conn = new mysqli($host, $user, $pass, $db);
+if($conn->connect_error){ 
+    die(json_encode(['erro'=>'Falha na conexão'])); 
 }
 
-$action = $_GET['action'] ?? '';
+$data = json_decode(file_get_contents("php://input"), true);
+$acao = $data['acao'] ?? '';
 
-if ($action == 'adicionar') {
-    $nome = $_POST['nome'];
-    $quantidade = (int) $_POST['quantidade'];
-
-    $sql = "INSERT INTO produtos (nome, quantidade) VALUES ('$nome', $quantidade)";
-    if ($conn->query($sql) === TRUE) {
-        // registrar movimentação
+if($acao == 'cadastrar'){
+    $nome = $conn->real_escape_string($data['nome']);
+    $qtd = intval($data['qtd']);
+    
+    $verifica = $conn->query("SELECT * FROM produtos WHERE nome='$nome'");
+    if($verifica->num_rows > 0){
+        echo json_encode(['erro'=>'Produto já existe']);
+    } else {
+        // Insere produto
+        $conn->query("INSERT INTO produtos (nome, quantidade) VALUES ('$nome',$qtd)");
         $produto_id = $conn->insert_id;
-        $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo) VALUES ($produto_id, $quantidade, 'entrada')");
-        echo "Produto adicionado com sucesso";
-    } else {
-        echo "Erro: " . $conn->error;
-    }
-}
 
-elseif ($action == 'entrada' || $action == 'saida') {
-    $produto_id = (int) $_POST['id'];
-    $quantidade = (int) $_POST['quantidade'];
-
-    // Buscar produto atual
-    $res = $conn->query("SELECT quantidade FROM produtos WHERE id = $produto_id");
-    if ($res->num_rows > 0) {
-        $row = $res->fetch_assoc();
-        $quantidadeAtual = $row['quantidade'];
-
-        if ($action == 'entrada') {
-            $novaQuantidade = $quantidadeAtual + $quantidade;
-            $tipo = 'entrada';
-        } else {
-            $novaQuantidade = $quantidadeAtual - $quantidade;
-            if ($novaQuantidade < 0) $novaQuantidade = 0;
-            $tipo = 'saida';
+        // Registra movimentação inicial como "entrada"
+        if($qtd > 0){
+            $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo, data) 
+                          VALUES ($produto_id, $qtd, 'entrada', NOW())");
         }
 
-        $conn->query("UPDATE produtos SET quantidade = $novaQuantidade WHERE id = $produto_id");
-        $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo) VALUES ($produto_id, $quantidade, '$tipo')");
+        echo json_encode(['sucesso'=>true]);
+    }
 
-        echo "Movimentação registrada com sucesso";
+} elseif($acao == 'entrada' || $acao == 'saida'){
+    $nome = $conn->real_escape_string($data['nome']);
+    $qtd = intval($data['qtd']);
+    
+    // Busca o ID do produto
+    $res = $conn->query("SELECT id, quantidade FROM produtos WHERE nome='$nome'");
+    if($res->num_rows == 0){
+        echo json_encode(['erro'=>'Produto não encontrado']);
+        exit;
+    }
+    $produto = $res->fetch_assoc();
+    $produto_id = $produto['id'];
+
+    // Atualiza quantidade
+    if($acao == 'entrada'){
+        $conn->query("UPDATE produtos SET quantidade = quantidade + $qtd WHERE id=$produto_id");
+        $tipo = 'entrada';
     } else {
-        echo "Produto não encontrado";
-    }
-}
-
-elseif ($action == 'remover') {
-    $produto_id = (int) $_POST['id'];
-
-    // registrar movimentação antes de remover
-    $res = $conn->query("SELECT quantidade FROM produtos WHERE id = $produto_id");
-    if ($res->num_rows > 0) {
-        $row = $res->fetch_assoc();
-        $quantidade = $row['quantidade'];
-
-        // movimentação de saída total
-        if ($quantidade > 0) {
-            $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo) VALUES ($produto_id, $quantidade, 'saida')");
+        $novaQtd = $produto['quantidade'] - $qtd;
+        if($novaQtd < 0){
+            echo json_encode(['erro'=>'Estoque insuficiente']);
+            exit;
         }
+        $conn->query("UPDATE produtos SET quantidade = $novaQtd WHERE id=$produto_id");
+        $tipo = 'saida';
     }
 
-    // remove produto
-    $conn->query("DELETE FROM produtos WHERE id = $produto_id");
+    // Registra movimentação
+    $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo, data) 
+                  VALUES ($produto_id, $qtd, '$tipo', NOW())");
 
-    echo "Produto removido com sucesso";
-}
+    echo json_encode(['sucesso'=>true]);
 
-elseif ($action == 'listar') {
-    $result = $conn->query("SELECT * FROM produtos ORDER BY nome ASC");
+} elseif($acao == 'remover'){
+    $nome = $conn->real_escape_string($data['nome']);
+    $conn->query("DELETE FROM produtos WHERE nome='$nome'");
+    echo json_encode(['sucesso'=>true]);
+
+} elseif($acao == 'listar'){
+    $res = $conn->query("SELECT * FROM produtos");
     $produtos = [];
-    while ($row = $result->fetch_assoc()) {
+    while($row = $res->fetch_assoc()){
         $produtos[] = $row;
     }
     echo json_encode($produtos);
-}
 
-elseif ($action == 'relatorio') {
-    // ✅ Agora pegando só da tabela movimentacoes
-    $sql = "SELECT id, produto_nome, tipo, quantidade, data 
-            FROM movimentacoes
-            ORDER BY data DESC";
-    $result = $conn->query($sql);
+} elseif($acao == 'relatorio'){
+    $inicio = $conn->real_escape_string($data['inicio']);
+    $fim = $conn->real_escape_string($data['fim']);
 
-    $movimentacoes = [];
-    while ($row = $result->fetch_assoc()) {
-        $movimentacoes[] = $row;
+    // Relatório com join para pegar o nome do produto
+    $res = $conn->query("
+        SELECT m.id, m.produto_id, p.nome, m.quantidade, m.tipo, m.data 
+        FROM movimentacoes m
+        JOIN produtos p ON m.produto_id = p.id
+        WHERE m.data BETWEEN '$inicio 00:00:00' AND '$fim 23:59:59'
+        ORDER BY m.data ASC
+    ");
+    $rel = [];
+    while($row = $res->fetch_assoc()){
+        $rel[] = $row;
     }
-    echo json_encode($movimentacoes);
+    echo json_encode($rel);
 }
 
 $conn->close();
+?>

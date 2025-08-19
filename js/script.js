@@ -1,132 +1,134 @@
-document.addEventListener("DOMContentLoaded", function () {
-    const formAdicionar = document.getElementById("formAdicionar");
-    const formEntrada = document.getElementById("formEntrada");
-    const formSaida = document.getElementById("formSaida");
-    const tabelaProdutos = document
-        .getElementById("tabelaProdutos")
-        .querySelector("tbody");
-    const tabelaRelatorio = document
-        .getElementById("tabelaRelatorio")
-        .querySelector("tbody");
+const modal = document.getElementById('modal');
+const modalTitulo = document.getElementById('modal-titulo');
+const modalConteudo = document.getElementById('modal-conteudo');
+const tabelaProdutos = document.getElementById('tabelaProdutos').querySelector('tbody');
 
-    // Atualiza lista de produtos
-    function atualizarListaProdutos() {
-        fetch("actions.php?action=listar")
-            .then((res) => res.json())
-            .then((produtos) => {
-                tabelaProdutos.innerHTML = "";
-                produtos.forEach((produto) => {
-                    const row = document.createElement("tr");
-                    row.innerHTML = `
-                        <td>${produto.id}</td>
-                        <td>${produto.nome}</td>
-                        <td>${produto.quantidade}</td>
-                        <td>
-                            <button class="btn btn-success btn-sm entrada" data-id="${produto.id}">Entrada</button>
-                            <button class="btn btn-warning btn-sm saida" data-id="${produto.id}">Saída</button>
-                            <button class="btn btn-danger btn-sm remover" data-id="${produto.id}">Remover</button>
-                        </td>
-                    `;
-                    tabelaProdutos.appendChild(row);
-                });
-            });
+// Fecha modal ao clicar fora
+window.onclick = function(event) {
+    if(event.target == modal){
+        modal.style.display = 'none';
+        modalConteudo.innerHTML = '';
+    }
+}
+
+async function abrirModal(acao){
+    modal.style.display = 'flex';
+    modalTitulo.textContent = acao.charAt(0).toUpperCase() + acao.slice(1);
+    modalConteudo.innerHTML = '';
+
+    if(acao === 'cadastrar'){
+        const nomeInput = document.createElement('input');
+        nomeInput.placeholder = 'Nome do produto';
+        const qtdInput = document.createElement('input');
+        qtdInput.type = 'number';
+        qtdInput.placeholder = 'Quantidade';
+        const btn = document.createElement('button');
+        btn.textContent = 'Confirmar';
+        btn.onclick = () => executarAcao(acao, nomeInput.value, qtdInput.value);
+        modalConteudo.append(nomeInput,qtdInput,btn);
+
+    } else if(acao === 'entrada' || acao === 'saida'){
+        const select = document.createElement('select');
+        select.id = 'selectProduto';
+        const res = await fetch('api/actions.php', {
+            method: 'POST',
+            body: JSON.stringify({acao:'listar'})
+        });
+        const produtos = await res.json();
+        produtos.forEach(p => {
+            const option = document.createElement('option');
+            option.value = p.nome;
+            option.textContent = p.nome;
+            select.appendChild(option);
+        });
+        const qtdInput = document.createElement('input');
+        qtdInput.type = 'number';
+        qtdInput.placeholder = 'Quantidade';
+        const btn = document.createElement('button');
+        btn.textContent = 'Confirmar';
+        btn.onclick = () => executarAcao(acao, select.value, qtdInput.value);
+        modalConteudo.append(select,qtdInput,btn);
+
+    } else if(acao === 'remover'){
+        const select = document.createElement('select');
+        select.id = 'selectProduto';
+        const res = await fetch('api/actions.php', {
+            method: 'POST',
+            body: JSON.stringify({acao:'listar'})
+        });
+        const produtos = await res.json();
+        produtos.forEach(p => {
+            const option = document.createElement('option');
+            option.value = p.nome;
+            option.textContent = p.nome;
+            select.appendChild(option);
+        });
+        const btn = document.createElement('button');
+        btn.textContent = 'Remover';
+        btn.onclick = () => executarAcao('remover', select.value, 0);
+        modalConteudo.append(select,btn);
+
+    } else if(acao === 'relatorio'){
+        const inicio = document.createElement('input');
+        inicio.type = 'date';
+        const fim = document.createElement('input');
+        fim.type = 'date';
+        const btn = document.createElement('button');
+        btn.textContent = 'Gerar Relatório';
+        btn.onclick = () => gerarRelatorio(inicio.value,fim.value);
+        modalConteudo.append(inicio,fim,btn);
     }
 
-    // Atualiza relatório
-    function atualizarRelatorio() {
-        fetch("actions.php?action=relatorio")
-            .then((res) => res.json())
-            .then((movimentacoes) => {
-                tabelaRelatorio.innerHTML = "";
-                movimentacoes.forEach((mov) => {
-                    const row = document.createElement("tr");
-                    row.innerHTML = `
-                        <td>${mov.id}</td>
-                        <td>${mov.produto_nome ?? "(Produto removido)"}</td>
-                        <td>${mov.tipo}</td>
-                        <td>${mov.quantidade}</td>
-                        <td>${mov.data}</td>
-                    `;
-                    tabelaRelatorio.appendChild(row);
-                });
-            });
+    // Botão fechar
+    const btnFechar = document.createElement('button');
+    btnFechar.textContent = 'Fechar';
+    btnFechar.className = 'fechar';
+    btnFechar.onclick = () => {
+        modal.style.display = 'none';
+        modalConteudo.innerHTML = '';
     }
+    modalConteudo.appendChild(btnFechar);
+}
 
-    // Evento adicionar produto
-    formAdicionar.addEventListener("submit", function (e) {
-        e.preventDefault();
-        const formData = new FormData(formAdicionar);
-        fetch("actions.php?action=adicionar", {
-            method: "POST",
-            body: formData,
-        })
-            .then((res) => res.text())
-            .then(() => {
-                formAdicionar.reset();
-                atualizarListaProdutos();
-                atualizarRelatorio();
-            });
+// Atualiza tabela principal
+async function atualizarTabela(){
+    const res = await fetch('api/actions.php', {
+        method:'POST',
+        body: JSON.stringify({acao:'listar'})
     });
-
-    // Delegação de eventos para entrada, saída e remover
-    tabelaProdutos.addEventListener("click", function (e) {
-        if (e.target.classList.contains("entrada")) {
-            const id = e.target.dataset.id;
-            const quantidade = prompt("Quantidade de entrada:");
-            if (quantidade) {
-                const formData = new FormData();
-                formData.append("id", id);
-                formData.append("quantidade", quantidade);
-                fetch("actions.php?action=entrada", {
-                    method: "POST",
-                    body: formData,
-                })
-                    .then((res) => res.text())
-                    .then(() => {
-                        atualizarListaProdutos();
-                        atualizarRelatorio();
-                    });
-            }
-        }
-
-        if (e.target.classList.contains("saida")) {
-            const id = e.target.dataset.id;
-            const quantidade = prompt("Quantidade de saída:");
-            if (quantidade) {
-                const formData = new FormData();
-                formData.append("id", id);
-                formData.append("quantidade", quantidade);
-                fetch("actions.php?action=saida", {
-                    method: "POST",
-                    body: formData,
-                })
-                    .then((res) => res.text())
-                    .then(() => {
-                        atualizarListaProdutos();
-                        atualizarRelatorio();
-                    });
-            }
-        }
-
-        if (e.target.classList.contains("remover")) {
-            const id = e.target.dataset.id;
-            if (confirm("Tem certeza que deseja remover este produto?")) {
-                const formData = new FormData();
-                formData.append("id", id);
-                fetch("actions.php?action=remover", {
-                    method: "POST",
-                    body: formData,
-                })
-                    .then((res) => res.text())
-                    .then(() => {
-                        atualizarListaProdutos();
-                        atualizarRelatorio();
-                    });
-            }
-        }
+    const produtos = await res.json();
+    tabelaProdutos.innerHTML = '';
+    produtos.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${p.nome}</td><td>${p.quantidade}</td>`;
+        tabelaProdutos.appendChild(tr);
     });
+}
 
-    // Inicializa listas
-    atualizarListaProdutos();
-    atualizarRelatorio();
-});
+// Funções fictícias (executarAcao, gerarRelatorio)
+async function executarAcao(acao,nome,qtd){ 
+    await fetch('api/actions.php', {
+        method:'POST',
+        body: JSON.stringify({acao,nome,qtd})
+    });
+    atualizarTabela();
+    modal.style.display = 'none';
+    modalConteudo.innerHTML = '';
+}
+
+async function gerarRelatorio(inicio,fim){
+    const res = await fetch('api/actions.php', {
+        method:'POST',
+        body: JSON.stringify({acao:'relatorio',inicio,fim})
+    });
+    const rel = await res.json();
+    let html = `<table><tr><th>Produto</th><th>Quantidade</th><th>Tipo</th><th>Data</th></tr>`;
+    rel.forEach(r => {
+        html += `<tr><td>${r.nome}</td><td>${r.quantidade}</td><td>${r.tipo}</td><td>${r.data}</td></tr>`;
+    });
+    html += '</table>';
+    modalConteudo.innerHTML = html;
+}
+  
+// Atualiza tabela ao carregar página
+window.onload = atualizarTabela;
