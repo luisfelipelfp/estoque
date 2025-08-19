@@ -1,122 +1,104 @@
 <?php
-$host = 'localhost';
-$db   = 'estoque';
-$user = 'root';
-$pass = '#Shakka01';
-$charset = 'utf8mb4';
+header('Content-Type: application/json');
 
-$dsn = "mysql:host=$host;dbname=$db;charset=$charset";
-$options = [
-    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    PDO::ATTR_EMULATE_PREPARES   => false,
-];
+$host = "192.168.15.100";
+$user = "root";
+$pass = "#Shakka01";
+$db = "estoque";
 
-try {
-    $pdo = new PDO($dsn, $user, $pass, $options);
-} catch (\PDOException $e) {
-    throw new \PDOException($e->getMessage(), (int)$e->getCode());
+$conn = new mysqli($host, $user, $pass, $db);
+if($conn->connect_error){ 
+    die(json_encode(['erro'=>'Falha na conexão'])); 
 }
 
-$action = $_POST['action'] ?? '';
+$data = json_decode(file_get_contents("php://input"), true);
+$acao = $data['acao'] ?? '';
 
-if ($action === 'add') {
-    // Adicionar produto
-    $nome = $_POST['nome'];
-    $quantidade = (int) $_POST['quantidade'];
-
-    $stmt = $pdo->prepare("INSERT INTO produtos (nome, quantidade) VALUES (?, ?)");
-    $stmt->execute([$nome, $quantidade]);
-
-    $produto_id = $pdo->lastInsertId();
-
-    // Registrar entrada na movimentação
-    $stmt = $pdo->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade) VALUES (?, ?, 'entrada', ?)");
-    $stmt->execute([$produto_id, $nome, $quantidade]);
-
-    echo "Produto adicionado com sucesso!";
-}
-
-elseif ($action === 'entrada') {
-    // Entrada de produtos
-    $produto_id = (int) $_POST['produto_id'];
-    $quantidade = (int) $_POST['quantidade'];
-
-    // Atualiza estoque
-    $stmt = $pdo->prepare("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?");
-    $stmt->execute([$quantidade, $produto_id]);
-
-    // Pega nome do produto
-    $stmt = $pdo->prepare("SELECT nome FROM produtos WHERE id = ?");
-    $stmt->execute([$produto_id]);
-    $produto_nome = $stmt->fetchColumn();
-
-    // Registra movimentação
-    $stmt = $pdo->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade) VALUES (?, ?, 'entrada', ?)");
-    $stmt->execute([$produto_id, $produto_nome, $quantidade]);
-
-    echo "Entrada registrada!";
-}
-
-elseif ($action === 'saida') {
-    // Saída de produtos
-    $produto_id = (int) $_POST['produto_id'];
-    $quantidade = (int) $_POST['quantidade'];
-
-    // Atualiza estoque
-    $stmt = $pdo->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?");
-    $stmt->execute([$quantidade, $produto_id]);
-
-    // Pega nome do produto
-    $stmt = $pdo->prepare("SELECT nome FROM produtos WHERE id = ?");
-    $stmt->execute([$produto_id]);
-    $produto_nome = $stmt->fetchColumn();
-
-    // Registra movimentação
-    $stmt = $pdo->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade) VALUES (?, ?, 'saida', ?)");
-    $stmt->execute([$produto_id, $produto_nome, $quantidade]);
-
-    echo "Saída registrada!";
-}
-
-elseif ($action === 'remove') {
-    // Remover produto do cadastro, mas manter histórico
-    $produto_id = (int) $_POST['produto_id'];
-
-    // Pega nome e quantidade antes de apagar
-    $stmt = $pdo->prepare("SELECT nome, quantidade FROM produtos WHERE id = ?");
-    $stmt->execute([$produto_id]);
-    $produto = $stmt->fetch();
-
-    if ($produto) {
-        $produto_nome = $produto['nome'];
-        $quantidade = $produto['quantidade'];
-
-        // Registrar a remoção como movimentação especial
-        $stmt = $pdo->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade) VALUES (?, ?, 'saida', ?)");
-        $stmt->execute([$produto_id, $produto_nome, $quantidade]);
-
-        // Agora sim remove da tabela produtos
-        $stmt = $pdo->prepare("DELETE FROM produtos WHERE id = ?");
-        $stmt->execute([$produto_id]);
-
-        echo "Produto removido (histórico mantido)!";
+if($acao == 'cadastrar'){
+    $nome = $conn->real_escape_string($data['nome']);
+    $qtd = intval($data['qtd']);
+    
+    $verifica = $conn->query("SELECT * FROM produtos WHERE nome='$nome'");
+    if($verifica->num_rows > 0){
+        echo json_encode(['erro'=>'Produto já existe']);
     } else {
-        echo "Produto não encontrado.";
+        // Insere produto
+        $conn->query("INSERT INTO produtos (nome, quantidade) VALUES ('$nome',$qtd)");
+        $produto_id = $conn->insert_id;
+
+        // Registra movimentação inicial como "entrada"
+        if($qtd > 0){
+            $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo, data) 
+                          VALUES ($produto_id, $qtd, 'entrada', NOW())");
+        }
+
+        echo json_encode(['sucesso'=>true]);
     }
-}
 
-elseif ($action === 'list') {
-    // Listar produtos
-    $stmt = $pdo->query("SELECT * FROM produtos");
-    $produtos = $stmt->fetchAll();
+} elseif($acao == 'entrada' || $acao == 'saida'){
+    $nome = $conn->real_escape_string($data['nome']);
+    $qtd = intval($data['qtd']);
+    
+    // Busca o ID do produto
+    $res = $conn->query("SELECT id, quantidade FROM produtos WHERE nome='$nome'");
+    if($res->num_rows == 0){
+        echo json_encode(['erro'=>'Produto não encontrado']);
+        exit;
+    }
+    $produto = $res->fetch_assoc();
+    $produto_id = $produto['id'];
+
+    // Atualiza quantidade
+    if($acao == 'entrada'){
+        $conn->query("UPDATE produtos SET quantidade = quantidade + $qtd WHERE id=$produto_id");
+        $tipo = 'entrada';
+    } else {
+        $novaQtd = $produto['quantidade'] - $qtd;
+        if($novaQtd < 0){
+            echo json_encode(['erro'=>'Estoque insuficiente']);
+            exit;
+        }
+        $conn->query("UPDATE produtos SET quantidade = $novaQtd WHERE id=$produto_id");
+        $tipo = 'saida';
+    }
+
+    // Registra movimentação
+    $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo, data) 
+                  VALUES ($produto_id, $qtd, '$tipo', NOW())");
+
+    echo json_encode(['sucesso'=>true]);
+
+} elseif($acao == 'remover'){
+    $nome = $conn->real_escape_string($data['nome']);
+    $conn->query("DELETE FROM produtos WHERE nome='$nome'");
+    echo json_encode(['sucesso'=>true]);
+
+} elseif($acao == 'listar'){
+    $res = $conn->query("SELECT * FROM produtos");
+    $produtos = [];
+    while($row = $res->fetch_assoc()){
+        $produtos[] = $row;
+    }
     echo json_encode($produtos);
+
+} elseif($acao == 'relatorio'){
+    $inicio = $conn->real_escape_string($data['inicio']);
+    $fim = $conn->real_escape_string($data['fim']);
+
+    // Relatório com join para pegar o nome do produto
+    $res = $conn->query("
+        SELECT m.id, m.produto_id, p.nome, m.quantidade, m.tipo, m.data 
+        FROM movimentacoes m
+        JOIN produtos p ON m.produto_id = p.id
+        WHERE m.data BETWEEN '$inicio 00:00:00' AND '$fim 23:59:59'
+        ORDER BY m.data ASC
+    ");
+    $rel = [];
+    while($row = $res->fetch_assoc()){
+        $rel[] = $row;
+    }
+    echo json_encode($rel);
 }
 
-elseif ($action === 'relatorio') {
-    // Relatório de movimentações
-    $stmt = $pdo->query("SELECT * FROM movimentacoes ORDER BY data DESC");
-    $movimentacoes = $stmt->fetchAll();
-    echo json_encode($movimentacoes);
-}
+$conn->close();
 ?>
