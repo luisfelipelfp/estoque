@@ -85,10 +85,11 @@ if($acao == 'cadastrar'){
     $inicio = $conn->real_escape_string($data['inicio']);
     $fim = $conn->real_escape_string($data['fim']);
 
-    // Relatório usando produto_nome para não perder registros de produtos removidos
+    // Relatório com join para pegar o nome do produto
     $res = $conn->query("
-        SELECT m.id, m.produto_id, m.produto_nome AS nome, m.quantidade, m.tipo, m.data 
+        SELECT m.id, m.produto_id, p.nome, m.quantidade, m.tipo, m.data 
         FROM movimentacoes m
+        JOIN produtos p ON m.produto_id = p.id
         WHERE m.data BETWEEN '$inicio 00:00:00' AND '$fim 23:59:59'
         ORDER BY m.data ASC
     ");
