@@ -2,7 +2,7 @@
 $host = 'localhost';
 $db   = 'estoque';
 $user = 'root';
-$pass = '';
+$pass = '#Shakka01';
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
