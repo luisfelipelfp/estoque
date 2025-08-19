@@ -70,6 +70,19 @@ if($acao == 'cadastrar'){
 
 } elseif($acao == 'remover'){
     $nome = $conn->real_escape_string($data['nome']);
+
+    // Pega ID antes de remover
+    $res = $conn->query("SELECT id FROM produtos WHERE nome='$nome'");
+    if($res->num_rows > 0){
+        $produto = $res->fetch_assoc();
+        $produto_id = $produto['id'];
+
+        // Registra a movimentação de remoção (saida total do estoque)
+        $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo, data) 
+                      VALUES ($produto_id, 0, 'saida', NOW())");
+    }
+
+    // Remove produto
     $conn->query("DELETE FROM produtos WHERE nome='$nome'");
     echo json_encode(['sucesso'=>true]);
 
@@ -85,11 +98,13 @@ if($acao == 'cadastrar'){
     $inicio = $conn->real_escape_string($data['inicio']);
     $fim = $conn->real_escape_string($data['fim']);
 
-    // Relatório com join para pegar o nome do produto
+    // Relatório que mantém os produtos mesmo que tenham sido removidos
     $res = $conn->query("
-        SELECT m.id, m.produto_id, p.nome, m.quantidade, m.tipo, m.data 
+        SELECT m.id, m.produto_id, 
+               COALESCE(p.nome, m.produto_nome) AS nome, 
+               m.quantidade, m.tipo, m.data
         FROM movimentacoes m
-        JOIN produtos p ON m.produto_id = p.id
+        LEFT JOIN produtos p ON m.produto_id = p.id
         WHERE m.data BETWEEN '$inicio 00:00:00' AND '$fim 23:59:59'
         ORDER BY m.data ASC
     ");
