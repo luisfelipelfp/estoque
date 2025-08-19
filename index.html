@@ -1,46 +1,93 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Sistema de Estoque</title>
-    <link rel="stylesheet" href="css/styles.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estoque da Gordinha e do Careca</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body>
-    <div class="container">
-        <h1>Sistema de Estoque!</h1>
+<body class="bg-light">
 
-        <div class="mb-3 d-flex gap-2">
-            <button class="btn btn-primary" onclick="abrirModal('cadastrar')">Cadastrar Produto</button>
-            <button class="btn btn-primary" onclick="abrirModal('entrada')">Entrada</button>
-            <button class="btn btn-primary" onclick="abrirModal('saida')">Saída</button>
-            <button class="btn btn-danger" onclick="abrirModal('remover')">Remover Produto</button>
-            <button class="btn btn-primary" onclick="abrirModal('relatorio')">Relatório</button>
-        </div>
+    <div class="container py-4">
+        <h1 class="mb-4 text-center">Estoque da Gordinha e do Careca</h1>
 
-        <table id="tabelaProdutos">
-            <thead>
-                <tr>
-                    <th>Produto</th>
-                    <th>Quantidade</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Produtos cadastrados serão carregados aqui -->
-            </tbody>
-        </table>
-    </div>
-
-    <!-- Modal -->
-    <div id="modal" class="modal">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <h2 id="modal-titulo"></h2>
-                <div id="modal-conteudo"></div>
-
-                <!-- ✅ Área exclusiva para o relatório com scroll -->
-                <div id="reportContent" style="display:none;"></div>
+        <!-- Formulário de cadastro -->
+        <div class="card mb-4">
+            <div class="card-header">Cadastrar Produto</div>
+            <div class="card-body">
+                <form id="formCadastro" class="row g-3">
+                    <div class="col-md-6">
+                        <input type="text" id="nome" class="form-control" placeholder="Nome do Produto" required>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="number" id="qtd" class="form-control" placeholder="Quantidade" required>
+                    </div>
+                    <div class="col-md-2 d-grid">
+                        <button type="submit" class="btn btn-success">Cadastrar</button>
+                    </div>
+                </form>
             </div>
         </div>
+
+        <!-- Botões de ações -->
+        <div class="mb-3 d-flex gap-2">
+            <button class="btn btn-primary" id="btnEntrada">Entrada</button>
+            <button class="btn btn-warning" id="btnSaida">Saída</button>
+            <button class="btn btn-danger" id="btnRemover">Remover</button>
+            <button class="btn btn-info" id="btnRelatorio">Relatório</button>
+        </div>
+
+        <!-- Tabela de produtos -->
+        <div class="card mb-4">
+            <div class="card-header">Produtos em Estoque</div>
+            <div class="card-body">
+                <table class="table table-bordered" id="tabelaProdutos">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Quantidade</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Relatório -->
+        <div class="card">
+            <div class="card-header">Relatório de Movimentações</div>
+            <div class="card-body">
+                <form id="formRelatorio" class="row g-3 mb-3">
+                    <div class="col-md-5">
+                        <label for="inicio" class="form-label">Data Início</label>
+                        <input type="date" id="inicio" class="form-control" required>
+                    </div>
+                    <div class="col-md-5">
+                        <label for="fim" class="form-label">Data Fim</label>
+                        <input type="date" id="fim" class="form-control" required>
+                    </div>
+                    <div class="col-md-2 d-grid align-items-end">
+                        <button type="submit" class="btn btn-secondary">Filtrar</button>
+                    </div>
+                </form>
+
+                <table class="table table-bordered" id="tabelaRelatorio">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Produto</th>
+                            <th>Quantidade</th>
+                            <th>Tipo</th>
+                            <th>Data</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
     </div>
 
     <script src="js/script.js"></script>
