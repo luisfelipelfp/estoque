@@ -1,5 +1,3 @@
-// script.js
-
 // ===============================
 // Função para listar produtos
 // ===============================
@@ -7,15 +5,18 @@ async function listarProdutos() {
     try {
         const response = await fetch('api/actions.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ acao: 'listar' })
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ acao: 'listar' })
         });
+
+        if (!response.ok) throw new Error("Erro HTTP " + response.status);
         const produtos = await response.json();
 
         const tabela = document.querySelector('#tabelaProdutos tbody');
+        if (!tabela) return; // evita erro se tabela não existir
         tabela.innerHTML = '';
 
-        if (produtos.length === 0) {
+        if (!produtos || produtos.length === 0) {
             tabela.innerHTML = '<tr><td colspan="4">Nenhum produto encontrado</td></tr>';
             return;
         }
@@ -41,8 +42,13 @@ async function listarProdutos() {
 // Função para adicionar produto
 // ===============================
 async function adicionarProduto() {
-    const nome = document.getElementById('nomeProduto').value.trim();
-    const quantidade = parseInt(document.getElementById('quantidadeProduto').value);
+    const nomeEl = document.getElementById('nomeProduto');
+    const qtdEl = document.getElementById('quantidadeProduto');
+
+    if (!nomeEl || !qtdEl) return; // evita erro se inputs não existirem
+
+    const nome = nomeEl.value.trim();
+    const quantidade = parseInt(qtdEl.value);
 
     if (!nome || isNaN(quantidade)) {
         alert('Preencha todos os campos!');
@@ -52,14 +58,15 @@ async function adicionarProduto() {
     try {
         const response = await fetch('api/actions.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ acao: 'adicionar', nome, quantidade })
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ acao: 'adicionar', nome, quantidade })
         });
+
         const result = await response.json();
 
         if (result.sucesso) {
-            document.getElementById('nomeProduto').value = '';
-            document.getElementById('quantidadeProduto').value = '';
+            nomeEl.value = '';
+            qtdEl.value = '';
             listarProdutos();
             listarMovimentacoes();
         } else {
@@ -79,8 +86,8 @@ async function removerProduto(id) {
     try {
         const response = await fetch('api/actions.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ acao: 'remover', id })
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ acao: 'remover', id })
         });
         const result = await response.json();
 
@@ -102,15 +109,18 @@ async function listarMovimentacoes(filtros = {}) {
     try {
         const response = await fetch('api/actions.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ acao: 'relatorio', ...filtros })
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ acao: 'relatorio', ...filtros })
         });
+
+        if (!response.ok) throw new Error("Erro HTTP " + response.status);
         const movimentacoes = await response.json();
 
         const tabela = document.querySelector('#tabelaMovimentacoes tbody');
+        if (!tabela) return; // evita erro se tabela não existir
         tabela.innerHTML = '';
 
-        if (movimentacoes.length === 0) {
+        if (!movimentacoes || movimentacoes.length === 0) {
             tabela.innerHTML = '<tr><td colspan="5">Nenhuma movimentação encontrada</td></tr>';
             return;
         }
@@ -135,9 +145,9 @@ async function listarMovimentacoes(filtros = {}) {
 // Função para aplicar filtros no relatório
 // ===============================
 function filtrarRelatorio() {
-    const dataInicio = document.getElementById('filtroDataInicio').value;
-    const dataFim = document.getElementById('filtroDataFim').value;
-    const tipo = document.getElementById('filtroTipo').value;
+    const dataInicio = document.getElementById('filtroDataInicio')?.value || "";
+    const dataFim = document.getElementById('filtroDataFim')?.value || "";
+    const tipo = document.getElementById('filtroTipo')?.value || "";
 
     listarMovimentacoes({ dataInicio, dataFim, tipo });
 }
@@ -149,9 +159,13 @@ document.addEventListener('DOMContentLoaded', () => {
     listarProdutos();
     listarMovimentacoes();
 
-    // Botão adicionar produto
-    document.getElementById('btnAdicionar').addEventListener('click', adicionarProduto);
+    const btnAdicionar = document.getElementById('btnAdicionar');
+    if (btnAdicionar) {
+        btnAdicionar.addEventListener('click', adicionarProduto);
+    }
 
-    // Botão aplicar filtro no relatório
-    document.getElementById('btnFiltrar').addEventListener('click', filtrarRelatorio);
+    const btnFiltrar = document.getElementById('btnFiltrar');
+    if (btnFiltrar) {
+        btnFiltrar.addEventListener('click', filtrarRelatorio);
+    }
 });
