@@ -2,7 +2,11 @@
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/db.php';
 
-$action = $_GET['action'] ?? '';
+// Captura JSON enviado no corpo da requisição
+$input = json_decode(file_get_contents("php://input"), true);
+
+// Suporta tanto JSON (fetch com body) quanto POST tradicional
+$action = $input['acao'] ?? ($_POST['acao'] ?? ($_GET['action'] ?? ''));
 
 function respostaErro($mensagem, $codigo = 400) {
     http_response_code($codigo);
@@ -29,8 +33,12 @@ switch ($action) {
         break;
 
     // ------------------------------------------------------------------
+    case 'relatorio': // <- renomeado para bater com o script.js
     case 'movimentacoes':
-        $sql = "SELECT * FROM movimentacoes ORDER BY data DESC";
+        $sql = "SELECT m.*, p.nome AS produto_nome 
+                FROM movimentacoes m 
+                LEFT JOIN produtos p ON m.produto_id = p.id 
+                ORDER BY m.data DESC";
         $result = $conn->query($sql);
 
         if (!$result) {
@@ -47,8 +55,8 @@ switch ($action) {
 
     // ------------------------------------------------------------------
     case 'adicionar':
-        $nome = $_POST['nome'] ?? '';
-        $quantidade = intval($_POST['quantidade'] ?? 0);
+        $nome = $input['nome'] ?? ($_POST['nome'] ?? '');
+        $quantidade = intval($input['quantidade'] ?? ($_POST['quantidade'] ?? 0));
 
         if (empty($nome)) {
             respostaErro("Nome do produto é obrigatório");
@@ -58,7 +66,7 @@ switch ($action) {
         $stmt->bind_param("si", $nome, $quantidade);
 
         if ($stmt->execute()) {
-            echo json_encode(["status" => "ok", "mensagem" => "Produto adicionado com sucesso"]);
+            echo json_encode(["sucesso" => true, "mensagem" => "Produto adicionado com sucesso"]);
         } else {
             respostaErro("Erro ao adicionar produto: " . $stmt->error, 500);
         }
@@ -66,13 +74,12 @@ switch ($action) {
 
     // ------------------------------------------------------------------
     case 'remover':
-        $id = intval($_POST['id'] ?? 0);
+        $id = intval($input['id'] ?? ($_POST['id'] ?? 0));
 
         if ($id <= 0) {
             respostaErro("ID inválido");
         }
 
-        // Primeiro registra na tabela movimentacoes antes de remover
         $produto = $conn->query("SELECT * FROM produtos WHERE id=$id")->fetch_assoc();
         if ($produto) {
             $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade) VALUES (?, 'saida', ?)");
@@ -84,7 +91,7 @@ switch ($action) {
         $stmt->bind_param("i", $id);
 
         if ($stmt->execute()) {
-            echo json_encode(["status" => "ok", "mensagem" => "Produto removido com sucesso"]);
+            echo json_encode(["sucesso" => true, "mensagem" => "Produto removido com sucesso"]);
         } else {
             respostaErro("Erro ao remover produto: " . $stmt->error, 500);
         }
@@ -93,8 +100,8 @@ switch ($action) {
     // ------------------------------------------------------------------
     case 'entrada':
     case 'saida':
-        $id = intval($_POST['id'] ?? 0);
-        $quantidade = intval($_POST['quantidade'] ?? 0);
+        $id = intval($input['id'] ?? ($_POST['id'] ?? 0));
+        $quantidade = intval($input['quantidade'] ?? ($_POST['quantidade'] ?? 0));
 
         if ($id <= 0 || $quantidade <= 0) {
             respostaErro("ID e quantidade são obrigatórios");
@@ -117,12 +124,11 @@ switch ($action) {
         $stmt->bind_param("ii", $novaQtd, $id);
 
         if ($stmt->execute()) {
-            // registra na movimentacao
             $stmt2 = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade) VALUES (?, ?, ?)");
             $stmt2->bind_param("isi", $id, $action, $quantidade);
             $stmt2->execute();
 
-            echo json_encode(["status" => "ok", "mensagem" => "Movimentação registrada com sucesso"]);
+            echo json_encode(["sucesso" => true, "mensagem" => "Movimentação registrada com sucesso"]);
         } else {
             respostaErro("Erro ao atualizar produto: " . $stmt->error, 500);
         }
