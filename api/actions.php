@@ -1,142 +1,83 @@
 <?php
-header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/db.php';
+header("Content-Type: application/json");
+require_once "db.php";
 
-// Captura JSON enviado no corpo da requisição
 $input = json_decode(file_get_contents("php://input"), true);
-
-// Suporta tanto JSON (fetch com body) quanto POST tradicional
-$action = $input['acao'] ?? ($_POST['acao'] ?? ($_GET['acao'] ?? ''));
-
-function respostaErro($mensagem, $codigo = 400) {
-    http_response_code($codigo);
-    echo json_encode(["sucesso" => false, "mensagem" => $mensagem], JSON_UNESCAPED_UNICODE);
-    exit;
-}
+$action = $input["action"] ?? "";
 
 switch ($action) {
-    // ------------------------------------------------------------------
-    case 'listar': // Produtos
-        $sql = "SELECT * FROM produtos ORDER BY id DESC";
-        $result = $conn->query($sql);
-
-        if (!$result) {
-            respostaErro("Erro ao buscar produtos: " . $conn->error, 500);
-        }
-
-        $produtos = [];
-        while ($row = $result->fetch_assoc()) {
-            $produtos[] = $row;
-        }
-
-        echo json_encode($produtos, JSON_UNESCAPED_UNICODE);
+    case "cadastrar":
+        $nome = $conn->real_escape_string($input["nome"]);
+        $quantidade = (int)$input["quantidade"];
+        $conn->query("INSERT INTO produtos (nome, quantidade) VALUES ('$nome', $quantidade)");
+        echo json_encode(["status" => "ok"]);
         break;
 
-    // ------------------------------------------------------------------
-    case 'relatorio': // Movimentações
-        $sql = "SELECT m.id, 
-                       COALESCE(p.nome, m.produto_nome) AS produto_nome,
-                       m.tipo, m.quantidade, m.data
-                FROM movimentacoes m
-                LEFT JOIN produtos p ON m.produto_id = p.id
-                ORDER BY m.data DESC";
-        $result = $conn->query($sql);
-
-        if (!$result) {
-            respostaErro("Erro ao buscar movimentações: " . $conn->error, 500);
+    case "movimentar":
+        $nome = $conn->real_escape_string($input["nome"]);
+        $quantidade = (int)$input["quantidade"];
+        $tipo = $input["tipo"];
+        
+        $res = $conn->query("SELECT id, quantidade FROM produtos WHERE nome='$nome'");
+        if ($res->num_rows > 0) {
+            $prod = $res->fetch_assoc();
+            $id = $prod["id"];
+            $novaQtd = $tipo == "entrada" ? $prod["quantidade"] + $quantidade : $prod["quantidade"] - $quantidade;
+            $conn->query("UPDATE produtos SET quantidade=$novaQtd WHERE id=$id");
+            $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo, data, status) VALUES ($id, $quantidade, '$tipo', NOW(), 'ok')");
         }
-
-        $movs = [];
-        while ($row = $result->fetch_assoc()) {
-            $movs[] = $row;
-        }
-
-        echo json_encode($movs, JSON_UNESCAPED_UNICODE);
+        echo json_encode(["status" => "ok"]);
         break;
 
-    // ------------------------------------------------------------------
-    case 'adicionar':
-        $nome = $input['nome'] ?? ($_POST['nome'] ?? '');
-        $quantidade = intval($input['quantidade'] ?? ($_POST['quantidade'] ?? 0));
-
-        if (empty($nome)) {
-            respostaErro("Nome do produto é obrigatório");
+    case "remover":
+        $nome = $conn->real_escape_string($input["nome"]);
+        $res = $conn->query("SELECT id FROM produtos WHERE nome='$nome'");
+        if ($res->num_rows > 0) {
+            $prod = $res->fetch_assoc();
+            $id = $prod["id"];
+            $conn->query("DELETE FROM produtos WHERE id=$id");
+            $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo, data, status) VALUES ($id, 0, 'remocao', NOW(), 'removido')");
         }
-
-        $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade) VALUES (?, ?)");
-        $stmt->bind_param("si", $nome, $quantidade);
-
-        if ($stmt->execute()) {
-            echo json_encode(["sucesso" => true, "mensagem" => "Produto adicionado com sucesso"]);
-        } else {
-            respostaErro("Erro ao adicionar produto: " . $stmt->error, 500);
-        }
+        echo json_encode(["status" => "ok"]);
         break;
 
-    // ------------------------------------------------------------------
-    case 'remover':
-        $id = intval($input['id'] ?? ($_POST['id'] ?? 0));
-
-        if ($id <= 0) {
-            respostaErro("ID inválido");
+    case "listarProdutos":
+        $res = $conn->query("SELECT * FROM produtos ORDER BY id ASC");
+        $out = [];
+        while ($row = $res->fetch_assoc()) {
+            $out[] = $row;
         }
-
-        $produto = $conn->query("SELECT * FROM produtos WHERE id=$id")->fetch_assoc();
-        if ($produto) {
-            // Registra saída antes de excluir
-            $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade) VALUES (?, 'saida', ?)");
-            $stmt->bind_param("ii", $id, $produto['quantidade']);
-            $stmt->execute();
-        }
-
-        $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
-        $stmt->bind_param("i", $id);
-
-        if ($stmt->execute()) {
-            echo json_encode(["sucesso" => true, "mensagem" => "Produto removido com sucesso"]);
-        } else {
-            respostaErro("Erro ao remover produto: " . $stmt->error, 500);
-        }
+        echo json_encode($out);
         break;
 
-    // ------------------------------------------------------------------
-    case 'entrada':
-    case 'saida':
-        $id = intval($input['id'] ?? ($_POST['id'] ?? 0));
-        $quantidade = intval($input['quantidade'] ?? ($_POST['quantidade'] ?? 0));
-
-        if ($id <= 0 || $quantidade <= 0) {
-            respostaErro("ID e quantidade são obrigatórios");
+    case "listarMovimentacoes":
+        $res = $conn->query("SELECT m.id, p.nome, m.quantidade, m.tipo, m.data, m.status 
+                             FROM movimentacoes m 
+                             JOIN produtos p ON m.produto_id = p.id
+                             ORDER BY m.data DESC");
+        $out = [];
+        while ($row = $res->fetch_assoc()) {
+            $out[] = $row;
         }
-
-        $produto = $conn->query("SELECT * FROM produtos WHERE id=$id")->fetch_assoc();
-        if (!$produto) {
-            respostaErro("Produto não encontrado", 404);
-        }
-
-        if ($action === 'saida' && $produto['quantidade'] < $quantidade) {
-            respostaErro("Quantidade em estoque insuficiente");
-        }
-
-        $novaQtd = $action === 'entrada'
-            ? $produto['quantidade'] + $quantidade
-            : $produto['quantidade'] - $quantidade;
-
-        $stmt = $conn->prepare("UPDATE produtos SET quantidade=? WHERE id=?");
-        $stmt->bind_param("ii", $novaQtd, $id);
-
-        if ($stmt->execute()) {
-            $stmt2 = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade) VALUES (?, ?, ?)");
-            $stmt2->bind_param("isi", $id, $action, $quantidade);
-            $stmt2->execute();
-
-            echo json_encode(["sucesso" => true, "mensagem" => "Movimentação registrada com sucesso"]);
-        } else {
-            respostaErro("Erro ao atualizar produto: " . $stmt->error, 500);
-        }
+        echo json_encode($out);
         break;
 
-    // ------------------------------------------------------------------
+    case "relatorio":
+        $inicio = $conn->real_escape_string($input["inicio"]);
+        $fim = $conn->real_escape_string($input["fim"]);
+        $res = $conn->query("SELECT m.id, p.nome, m.quantidade, m.tipo, m.data, m.status 
+                             FROM movimentacoes m 
+                             JOIN produtos p ON m.produto_id = p.id
+                             WHERE DATE(m.data) BETWEEN '$inicio' AND '$fim'
+                             ORDER BY m.data DESC");
+        $out = [];
+        while ($row = $res->fetch_assoc()) {
+            $out[] = $row;
+        }
+        echo json_encode($out);
+        break;
+
     default:
-        respostaErro("Ação inválida", 400);
+        echo json_encode(["erro" => "Ação inválida"]);
 }
+?>
