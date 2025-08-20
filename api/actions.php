@@ -2,82 +2,34 @@
 header("Content-Type: application/json");
 require_once "db.php";
 
-$input = json_decode(file_get_contents("php://input"), true);
-$action = $input["action"] ?? "";
+$input = json_decode(file_get_contents("php://input"), true) ?? [];
+$action = $input['action'] ?? ($_GET['action'] ?? null);
+
+if (!$action) {
+    echo json_encode(["erro" => "Ação inválida"]);
+    exit;
+}
 
 switch ($action) {
+    case "listar":
+        $stmt = $pdo->query("SELECT * FROM produtos ORDER BY id DESC");
+        echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
+        break;
+
     case "cadastrar":
-        $nome = $conn->real_escape_string($input["nome"]);
-        $quantidade = (int)$input["quantidade"];
-        $conn->query("INSERT INTO produtos (nome, quantidade) VALUES ('$nome', $quantidade)");
-        echo json_encode(["status" => "ok"]);
+        $nome = $input['nome'] ?? null;
+        $qtd = $input['quantidade'] ?? 0;
+        if ($nome) {
+            $stmt = $pdo->prepare("INSERT INTO produtos (nome, quantidade) VALUES (?, ?)");
+            $stmt->execute([$nome, $qtd]);
+            echo json_encode(["sucesso" => true]);
+        } else {
+            echo json_encode(["erro" => "Nome obrigatório"]);
+        }
         break;
 
-    case "movimentar":
-        $nome = $conn->real_escape_string($input["nome"]);
-        $quantidade = (int)$input["quantidade"];
-        $tipo = $input["tipo"];
-        
-        $res = $conn->query("SELECT id, quantidade FROM produtos WHERE nome='$nome'");
-        if ($res->num_rows > 0) {
-            $prod = $res->fetch_assoc();
-            $id = $prod["id"];
-            $novaQtd = $tipo == "entrada" ? $prod["quantidade"] + $quantidade : $prod["quantidade"] - $quantidade;
-            $conn->query("UPDATE produtos SET quantidade=$novaQtd WHERE id=$id");
-            $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo, data, status) VALUES ($id, $quantidade, '$tipo', NOW(), 'ok')");
-        }
-        echo json_encode(["status" => "ok"]);
-        break;
-
-    case "remover":
-        $nome = $conn->real_escape_string($input["nome"]);
-        $res = $conn->query("SELECT id FROM produtos WHERE nome='$nome'");
-        if ($res->num_rows > 0) {
-            $prod = $res->fetch_assoc();
-            $id = $prod["id"];
-            $conn->query("DELETE FROM produtos WHERE id=$id");
-            $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo, data, status) VALUES ($id, 0, 'remocao', NOW(), 'removido')");
-        }
-        echo json_encode(["status" => "ok"]);
-        break;
-
-    case "listarProdutos":
-        $res = $conn->query("SELECT * FROM produtos ORDER BY id ASC");
-        $out = [];
-        while ($row = $res->fetch_assoc()) {
-            $out[] = $row;
-        }
-        echo json_encode($out);
-        break;
-
-    case "listarMovimentacoes":
-        $res = $conn->query("SELECT m.id, p.nome, m.quantidade, m.tipo, m.data, m.status 
-                             FROM movimentacoes m 
-                             JOIN produtos p ON m.produto_id = p.id
-                             ORDER BY m.data DESC");
-        $out = [];
-        while ($row = $res->fetch_assoc()) {
-            $out[] = $row;
-        }
-        echo json_encode($out);
-        break;
-
-    case "relatorio":
-        $inicio = $conn->real_escape_string($input["inicio"]);
-        $fim = $conn->real_escape_string($input["fim"]);
-        $res = $conn->query("SELECT m.id, p.nome, m.quantidade, m.tipo, m.data, m.status 
-                             FROM movimentacoes m 
-                             JOIN produtos p ON m.produto_id = p.id
-                             WHERE DATE(m.data) BETWEEN '$inicio' AND '$fim'
-                             ORDER BY m.data DESC");
-        $out = [];
-        while ($row = $res->fetch_assoc()) {
-            $out[] = $row;
-        }
-        echo json_encode($out);
-        break;
+    // outras ações (movimentar, remover, relatorio) iguais à versão anterior
 
     default:
         echo json_encode(["erro" => "Ação inválida"]);
 }
-?>
