@@ -3,17 +3,23 @@
 // ===============================
 async function listarProdutos() {
     try {
-        const response = await fetch('api/actions.php', {
+        const response = await fetch('../api/actions.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({ acao: 'listar' })
         });
 
         if (!response.ok) throw new Error("Erro HTTP " + response.status);
-        const produtos = await response.json();
+        let produtos;
+        try {
+            produtos = await response.json();
+        } catch (e) {
+            console.error("Resposta não é JSON:", await response.text());
+            return;
+        }
 
         const tabela = document.querySelector('#tabelaProdutos tbody');
-        if (!tabela) return; // evita erro se tabela não existir
+        if (!tabela) return;
         tabela.innerHTML = '';
 
         if (!produtos || produtos.length === 0) {
@@ -45,7 +51,7 @@ async function adicionarProduto() {
     const nomeEl = document.getElementById('nomeProduto');
     const qtdEl = document.getElementById('quantidadeProduto');
 
-    if (!nomeEl || !qtdEl) return; // evita erro se inputs não existirem
+    if (!nomeEl || !qtdEl) return;
 
     const nome = nomeEl.value.trim();
     const quantidade = parseInt(qtdEl.value);
@@ -56,13 +62,19 @@ async function adicionarProduto() {
     }
 
     try {
-        const response = await fetch('api/actions.php', {
+        const response = await fetch('../api/actions.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({ acao: 'adicionar', nome, quantidade })
         });
 
-        const result = await response.json();
+        let result;
+        try {
+            result = await response.json();
+        } catch (e) {
+            console.error("Resposta não é JSON:", await response.text());
+            return;
+        }
 
         if (result.sucesso) {
             nomeEl.value = '';
@@ -84,12 +96,19 @@ async function removerProduto(id) {
     if (!confirm('Tem certeza que deseja remover este produto?')) return;
 
     try {
-        const response = await fetch('api/actions.php', {
+        const response = await fetch('../api/actions.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({ acao: 'remover', id })
         });
-        const result = await response.json();
+
+        let result;
+        try {
+            result = await response.json();
+        } catch (e) {
+            console.error("Resposta não é JSON:", await response.text());
+            return;
+        }
 
         if (result.sucesso) {
             listarProdutos();
@@ -107,17 +126,23 @@ async function removerProduto(id) {
 // ===============================
 async function listarMovimentacoes(filtros = {}) {
     try {
-        const response = await fetch('api/actions.php', {
+        const response = await fetch('../api/actions.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({ acao: 'relatorio', ...filtros })
         });
 
         if (!response.ok) throw new Error("Erro HTTP " + response.status);
-        const movimentacoes = await response.json();
+        let movimentacoes;
+        try {
+            movimentacoes = await response.json();
+        } catch (e) {
+            console.error("Resposta não é JSON:", await response.text());
+            return;
+        }
 
         const tabela = document.querySelector('#tabelaMovimentacoes tbody');
-        if (!tabela) return; // evita erro se tabela não existir
+        if (!tabela) return;
         tabela.innerHTML = '';
 
         if (!movimentacoes || movimentacoes.length === 0) {
