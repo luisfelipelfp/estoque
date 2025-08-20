@@ -1,126 +1,152 @@
-const API_URL = "../api/actions.php";
+const API_URL = "http://192.168.15.100/estoque/api/actions.php";
 
-// Função para cadastrar produto
-document.getElementById("form-cadastro").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const nome = document.getElementById("cad-nome").value;
-  const quantidade = document.getElementById("cad-qtd").value;
+// Função genérica para requisições
+async function apiRequest(action, data = {}) {
+    try {
+        const response = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action, ...data })
+        });
 
-  await fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "cadastrar", nome, quantidade })
-  });
+        if (!response.ok) throw new Error("Erro HTTP " + response.status);
 
-  listarProdutos();
-  e.target.reset();
-});
+        return await response.json();
+    } catch (err) {
+        console.error("Erro na API:", err);
+        throw err;
+    }
+}
 
-// Função para movimentar produto
-document.getElementById("form-movimentar").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const nome = document.getElementById("mov-nome").value;
-  const quantidade = document.getElementById("mov-qtd").value;
-  const tipo = document.querySelector("input[name='tipo']:checked").value;
-
-  await fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "movimentar", nome, quantidade, tipo })
-  });
-
-  listarProdutos();
-  listarMovimentacoes();
-  e.target.reset();
-});
-
-// Função para remover produto
-document.getElementById("form-remover").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const nome = document.getElementById("rem-nome").value;
-
-  await fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "remover", nome })
-  });
-
-  listarProdutos();
-  listarMovimentacoes();
-  e.target.reset();
-});
-
-// Função para gerar relatório
-document.getElementById("form-relatorio").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const inicio = document.getElementById("rel-inicio").value;
-  const fim = document.getElementById("rel-fim").value;
-
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "relatorio", inicio, fim })
-  });
-
-  const dados = await res.json();
-  const tbody = document.querySelector("#tabela-relatorio tbody");
-  tbody.innerHTML = "";
-
-  dados.forEach((m) => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${m.id}</td>
-                    <td>${m.nome}</td>
-                    <td>${m.quantidade}</td>
-                    <td>${m.tipo}</td>
-                    <td>${m.data}</td>
-                    <td>${m.status}</td>`;
-    tbody.appendChild(tr);
-  });
-});
+// ==================== PRODUTOS ====================
 
 // Listar produtos
 async function listarProdutos() {
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "listarProdutos" })
-  });
+    try {
+        const produtos = await apiRequest("listarProdutos");
+        const tabela = document.getElementById("tabelaProdutos").querySelector("tbody");
+        tabela.innerHTML = "";
 
-  const produtos = await res.json();
-  const tbody = document.querySelector("#tabela-produtos tbody");
-  tbody.innerHTML = "";
+        produtos.forEach(p => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td>${p.id}</td>
+                <td>${p.nome}</td>
+                <td>${p.quantidade}</td>
+                <td>
+                    <button class="btn btn-danger btn-sm" onclick="removerProduto('${p.nome}')">Remover</button>
+                </td>
+            `;
+            tabela.appendChild(tr);
+        });
+    } catch (err) {
+        console.error("Erro ao listar produtos:", err);
+    }
+}
 
-  produtos.forEach((p) => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${p.id}</td><td>${p.nome}</td><td>${p.quantidade}</td>`;
-    tbody.appendChild(tr);
-  });
+// Cadastrar produto
+async function cadastrarProduto() {
+    const nome = document.getElementById("nomeProduto").value.trim();
+    const quantidade = parseInt(document.getElementById("quantidadeProduto").value);
+
+    if (!nome || isNaN(quantidade)) {
+        alert("Preencha os campos corretamente.");
+        return;
+    }
+
+    await apiRequest("cadastrar", { nome, quantidade });
+    listarProdutos();
+    listarMovimentacoes();
+}
+
+// Remover produto
+async function removerProduto(nome) {
+    if (!confirm("Tem certeza que deseja remover o produto '" + nome + "'?")) return;
+
+    await apiRequest("remover", { nome });
+    listarProdutos();
+    listarMovimentacoes();
+}
+
+// ==================== MOVIMENTAÇÕES ====================
+
+// Registrar movimentação
+async function movimentarProduto() {
+    const nome = document.getElementById("movNome").value.trim();
+    const quantidade = parseInt(document.getElementById("movQuantidade").value);
+    const tipo = document.getElementById("movTipo").value;
+
+    if (!nome || isNaN(quantidade)) {
+        alert("Preencha os campos corretamente.");
+        return;
+    }
+
+    await apiRequest("movimentar", { nome, quantidade, tipo });
+    listarProdutos();
+    listarMovimentacoes();
 }
 
 // Listar movimentações
 async function listarMovimentacoes() {
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "listarMovimentacoes" })
-  });
+    try {
+        const movs = await apiRequest("listarMovimentacoes");
+        const tabela = document.getElementById("tabelaMovimentacoes").querySelector("tbody");
+        tabela.innerHTML = "";
 
-  const movs = await res.json();
-  const tbody = document.querySelector("#tabela-relatorio tbody");
-  tbody.innerHTML = "";
-
-  movs.forEach((m) => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${m.id}</td>
-                    <td>${m.nome}</td>
-                    <td>${m.quantidade}</td>
-                    <td>${m.tipo}</td>
-                    <td>${m.data}</td>
-                    <td>${m.status}</td>`;
-    tbody.appendChild(tr);
-  });
+        movs.forEach(m => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td>${m.id}</td>
+                <td>${m.produto_nome}</td>
+                <td>${m.quantidade}</td>
+                <td>${m.tipo}</td>
+                <td>${m.data}</td>
+            `;
+            tabela.appendChild(tr);
+        });
+    } catch (err) {
+        console.error("Erro ao listar movimentações:", err);
+    }
 }
 
-// Inicializa
-listarProdutos();
-listarMovimentacoes();
+// ==================== RELATÓRIO ====================
+
+// Gerar relatório por data
+async function gerarRelatorio() {
+    const inicio = document.getElementById("relInicio").value;
+    const fim = document.getElementById("relFim").value;
+
+    if (!inicio || !fim) {
+        alert("Preencha o período corretamente.");
+        return;
+    }
+
+    const dados = await apiRequest("relatorio", { inicio, fim });
+
+    const tabela = document.getElementById("tabelaRelatorio").querySelector("tbody");
+    tabela.innerHTML = "";
+
+    dados.forEach(r => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${r.id}</td>
+            <td>${r.produto_nome}</td>
+            <td>${r.quantidade}</td>
+            <td>${r.tipo}</td>
+            <td>${r.data}</td>
+        `;
+        tabela.appendChild(tr);
+    });
+}
+
+// ==================== INICIALIZAÇÃO ====================
+
+// Carregar listas ao abrir a página
+document.addEventListener("DOMContentLoaded", () => {
+    listarProdutos();
+    listarMovimentacoes();
+
+    document.getElementById("btnCadastrar").addEventListener("click", cadastrarProduto);
+    document.getElementById("btnMovimentar").addEventListener("click", movimentarProduto);
+    document.getElementById("btnRelatorio").addEventListener("click", gerarRelatorio);
+});
