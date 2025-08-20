@@ -1,109 +1,129 @@
 <?php
-header('Content-Type: application/json');
+require_once 'db.php';
 
-$host = "192.168.15.100";
-$user = "root";
-$pass = "#Shakka01";
-$db = "estoque";
+header("Content-Type: application/json; charset=UTF-8");
 
-$conn = new mysqli($host, $user, $pass, $db);
-if($conn->connect_error){ 
-    die(json_encode(['erro'=>'Falha na conexão'])); 
-}
+$action = $_GET['action'] ?? '';
 
-$data = json_decode(file_get_contents("php://input"), true);
-$acao = $data['acao'] ?? '';
+switch ($action) {
 
-if($acao == 'cadastrar'){
-    $nome = $conn->real_escape_string($data['nome']);
-    $qtd = intval($data['qtd']);
-    
-    $verifica = $conn->query("SELECT * FROM produtos WHERE nome='$nome'");
-    if($verifica->num_rows > 0){
-        echo json_encode(['erro'=>'Produto já existe']);
-    } else {
-        $conn->query("INSERT INTO produtos (nome, quantidade) VALUES ('$nome',$qtd)");
-        $produto_id = $conn->insert_id;
-
-        if($qtd > 0){
-            $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo, data) 
-                          VALUES ($produto_id, $qtd, 'entrada', NOW())");
+    // ✅ Listar produtos
+    case 'listar':
+        try {
+            $stmt = $pdo->query("SELECT * FROM produtos ORDER BY nome ASC");
+            echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC), JSON_UNESCAPED_UNICODE);
+        } catch (PDOException $e) {
+            echo json_encode(["success" => false, "message" => "Erro ao listar produtos: " . $e->getMessage()]);
         }
-        echo json_encode(['sucesso'=>true]);
-    }
+        break;
 
-} elseif($acao == 'entrada' || $acao == 'saida'){
-    $nome = $conn->real_escape_string($data['nome']);
-    $qtd = intval($data['qtd']);
-    
-    $res = $conn->query("SELECT id, quantidade FROM produtos WHERE nome='$nome'");
-    if($res->num_rows == 0){
-        echo json_encode(['erro'=>'Produto não encontrado']);
-        exit;
-    }
-    $produto = $res->fetch_assoc();
-    $produto_id = $produto['id'];
+    // ✅ Cadastrar produto
+    case 'cadastrar':
+        $data = json_decode(file_get_contents("php://input"), true);
+        $nome = $data['nome'] ?? '';
+        $quantidade = (int)($data['quantidade'] ?? 0);
 
-    if($acao == 'entrada'){
-        $conn->query("UPDATE produtos SET quantidade = quantidade + $qtd WHERE id=$produto_id");
-        $tipo = 'entrada';
-    } else {
-        $novaQtd = $produto['quantidade'] - $qtd;
-        if($novaQtd < 0){
-            echo json_encode(['erro'=>'Estoque insuficiente']);
+        if (!$nome) {
+            echo json_encode(["success" => false, "message" => "Nome do produto é obrigatório"]);
             exit;
         }
-        $conn->query("UPDATE produtos SET quantidade = $novaQtd WHERE id=$produto_id");
-        $tipo = 'saida';
-    }
 
-    $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo, data) 
-                  VALUES ($produto_id, $qtd, '$tipo', NOW())");
+        $stmt = $pdo->prepare("INSERT INTO produtos (nome, quantidade) VALUES (?, ?)");
+        try {
+            $stmt->execute([$nome, $quantidade]);
+            echo json_encode(["success" => true, "message" => "Produto cadastrado com sucesso!"]);
+        } catch (PDOException $e) {
+            echo json_encode(["success" => false, "message" => "Erro: " . $e->getMessage()]);
+        }
+        break;
 
-    echo json_encode(['sucesso'=>true]);
+    // ✅ Remover produto
+    case 'remover':
+        $data = json_decode(file_get_contents("php://input"), true);
+        $nome = $data['nome'] ?? '';
 
-} elseif($acao == 'remover'){
-    $nome = $conn->real_escape_string($data['nome']);
+        if (!$nome) {
+            echo json_encode(["success" => false, "message" => "Nome do produto é obrigatório"]);
+            exit;
+        }
 
-    $res = $conn->query("SELECT id, quantidade FROM produtos WHERE nome='$nome'");
-    if($res->num_rows > 0){
-        $produto = $res->fetch_assoc();
-        $produto_id = $produto['id'];
-        $qtd_removida = $produto['quantidade'];
+        $stmt = $pdo->prepare("DELETE FROM produtos WHERE nome = ?");
+        $stmt->execute([$nome]);
 
-        // registra saída de todo o estoque antes de remover
-        $conn->query("INSERT INTO movimentacoes (produto_id, quantidade, tipo, data) 
-                      VALUES ($produto_id, $qtd_removida, 'saida', NOW())");
+        echo json_encode(["success" => true, "message" => "Produto removido com sucesso!"]);
+        break;
 
-        $conn->query("DELETE FROM produtos WHERE id=$produto_id");
-    }
-    echo json_encode(['sucesso'=>true]);
+    // ✅ Movimentar (entrada / saída)
+    case 'movimentar':
+        $data = json_decode(file_get_contents("php://input"), true);
+        $nome = $data['nome'] ?? '';
+        $quantidade = (int)($data['quantidade'] ?? 0);
+        $tipo = $data['tipo'] ?? '';
 
-} elseif($acao == 'listar'){
-    $res = $conn->query("SELECT * FROM produtos");
-    $produtos = [];
-    while($row = $res->fetch_assoc()){
-        $produtos[] = $row;
-    }
-    echo json_encode($produtos);
+        if (!$nome || !$tipo) {
+            echo json_encode(["success" => false, "message" => "Dados incompletos para movimentação"]);
+            exit;
+        }
 
-} elseif($acao == 'relatorio'){
-    $inicio = $conn->real_escape_string($data['inicio']);
-    $fim = $conn->real_escape_string($data['fim']);
+        // Buscar produto
+        $stmt = $pdo->prepare("SELECT * FROM produtos WHERE nome = ?");
+        $stmt->execute([$nome]);
+        $produto = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    $res = $conn->query("
-        SELECT m.id, m.produto_id, p.nome, m.quantidade, m.tipo, m.data
-        FROM movimentacoes m
-        LEFT JOIN produtos p ON m.produto_id = p.id
-        WHERE m.data BETWEEN '$inicio 00:00:00' AND '$fim 23:59:59'
-        ORDER BY m.data ASC
-    ");
+        if ($produto) {
+            if ($tipo === 'entrada') {
+                $novaQtd = $produto['quantidade'] + $quantidade;
+            } else {
+                $novaQtd = max(0, $produto['quantidade'] - $quantidade); // Evita negativo
+            }
 
-    $rel = [];
-    while($row = $res->fetch_assoc()){
-        $rel[] = $row;
-    }
-    echo json_encode($rel);
+            $stmt = $pdo->prepare("UPDATE produtos SET quantidade = ? WHERE id = ?");
+            $stmt->execute([$novaQtd, $produto['id']]);
+
+            $stmt = $pdo->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade) VALUES (?, ?, ?, ?)");
+            $stmt->execute([$produto['id'], $produto['nome'], $tipo, $quantidade]);
+
+            echo json_encode(["success" => true, "message" => "Movimentação registrada com sucesso!"]);
+        } else {
+            echo json_encode(["success" => false, "message" => "Produto não encontrado!"]);
+        }
+        break;
+
+    // ✅ Listar movimentações
+    case 'movimentacoes':
+        $stmt = $pdo->query("
+            SELECT m.id, m.tipo, m.quantidade, m.data,
+                   COALESCE(m.produto_nome, p.nome) as produto_nome
+            FROM movimentacoes m
+            LEFT JOIN produtos p ON m.produto_id = p.id
+            ORDER BY m.data DESC
+        ");
+        echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC), JSON_UNESCAPED_UNICODE);
+        break;
+
+    // ✅ Relatório com filtro de datas
+    case 'relatorio':
+        $inicio = $_GET['inicio'] ?? '';
+        $fim = $_GET['fim'] ?? '';
+
+        if ($inicio && $fim) {
+            $stmt = $pdo->prepare("
+                SELECT m.id, m.tipo, m.quantidade, m.data,
+                       COALESCE(m.produto_nome, p.nome) as produto_nome
+                FROM movimentacoes m
+                LEFT JOIN produtos p ON m.produto_id = p.id
+                WHERE DATE(m.data) BETWEEN ? AND ?
+                ORDER BY m.data DESC
+            ");
+            $stmt->execute([$inicio, $fim]);
+            echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC), JSON_UNESCAPED_UNICODE);
+        } else {
+            echo json_encode([]);
+        }
+        break;
+
+    // ✅ Ação inválida
+    default:
+        echo json_encode(["success" => false, "message" => "Ação inválida"]);
+        break;
 }
-
-$conn->close();
