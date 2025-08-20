@@ -6,17 +6,17 @@ require_once __DIR__ . '/db.php';
 $input = json_decode(file_get_contents("php://input"), true);
 
 // Suporta tanto JSON (fetch com body) quanto POST tradicional
-$action = $input['acao'] ?? ($_POST['acao'] ?? ($_GET['action'] ?? ''));
+$action = $input['acao'] ?? ($_POST['acao'] ?? ($_GET['acao'] ?? ''));
 
 function respostaErro($mensagem, $codigo = 400) {
     http_response_code($codigo);
-    echo json_encode(["status" => "erro", "mensagem" => $mensagem], JSON_UNESCAPED_UNICODE);
+    echo json_encode(["sucesso" => false, "mensagem" => $mensagem], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
 switch ($action) {
     // ------------------------------------------------------------------
-    case 'listar':
+    case 'listar': // Produtos
         $sql = "SELECT * FROM produtos ORDER BY id DESC";
         $result = $conn->query($sql);
 
@@ -33,11 +33,12 @@ switch ($action) {
         break;
 
     // ------------------------------------------------------------------
-    case 'relatorio': // <- renomeado para bater com o script.js
-    case 'movimentacoes':
-        $sql = "SELECT m.*, p.nome AS produto_nome 
-                FROM movimentacoes m 
-                LEFT JOIN produtos p ON m.produto_id = p.id 
+    case 'relatorio': // Movimentações
+        $sql = "SELECT m.id, 
+                       COALESCE(p.nome, m.produto_nome) AS produto_nome,
+                       m.tipo, m.quantidade, m.data
+                FROM movimentacoes m
+                LEFT JOIN produtos p ON m.produto_id = p.id
                 ORDER BY m.data DESC";
         $result = $conn->query($sql);
 
@@ -82,6 +83,7 @@ switch ($action) {
 
         $produto = $conn->query("SELECT * FROM produtos WHERE id=$id")->fetch_assoc();
         if ($produto) {
+            // Registra saída antes de excluir
             $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade) VALUES (?, 'saida', ?)");
             $stmt->bind_param("ii", $id, $produto['quantidade']);
             $stmt->execute();
