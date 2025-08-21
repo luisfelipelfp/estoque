@@ -1,61 +1,152 @@
-async function apiRequest(params) {
-    try {
-        const response = await fetch("../api/actions.php", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(params)
-        });
+// URL base da API (ajuste conforme seu servidor)
+const API_URL = "http://192.168.15.100/estoque/api/actions.php";
 
-        const data = await response.json();
-        if (data.erro) {
-            alert(data.erro);
-            return null;
+// Função genérica para requisições à API
+async function apiRequest(action, data = {}) {
+    try {
+        const options = {
+            method: "POST",
+            headers: { "Content-Type": "application/json" }
+        };
+
+        // Só envia body se tiver dados
+        if (Object.keys(data).length > 0) {
+            options.body = JSON.stringify(data);
         }
-        return data;
-    } catch (err) {
-        console.error("Erro na API:", err);
-        alert("Erro ao comunicar com o servidor!");
+
+        const response = await fetch(`${API_URL}?action=${action}`, options);
+
+        if (!response.ok) {
+            throw new Error(`Erro HTTP: ${response.status}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Erro na API:", error);
+        return null;
     }
 }
 
-// 📌 Listar produtos
+// ===================== PRODUTOS =====================
+
+// Listar produtos
 async function listarProdutos() {
-    const produtos = await apiRequest({ action: "listarProdutos" });
-    console.log("Produtos:", produtos);
+    const produtos = await apiRequest("listarProdutos");
+    if (!produtos) {
+        console.error("Erro ao listar produtos");
+        return;
+    }
+
+    const tabela = document.querySelector("#tabelaProdutos tbody");
+    tabela.innerHTML = "";
+
+    produtos.forEach(p => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${p.id}</td>
+            <td>${p.nome}</td>
+            <td>${p.quantidade}</td>
+            <td>
+                <button class="btn btn-sm btn-success" onclick="entradaProduto(${p.id})">Entrada</button>
+                <button class="btn btn-sm btn-warning" onclick="saidaProduto(${p.id})">Saída</button>
+                <button class="btn btn-sm btn-danger" onclick="removerProduto(${p.id})">Remover</button>
+            </td>
+        `;
+        tabela.appendChild(tr);
+    });
 }
 
-// 📌 Listar movimentações
+// Adicionar produto
+async function adicionarProduto() {
+    const nome = document.querySelector("#nomeProduto").value.trim();
+    if (!nome) {
+        alert("Digite um nome para o produto.");
+        return;
+    }
+
+    const result = await apiRequest("adicionarProduto", { nome });
+    if (result && result.sucesso) {
+        listarProdutos();
+        document.querySelector("#nomeProduto").value = "";
+    } else {
+        alert(result.erro || "Erro ao adicionar produto.");
+    }
+}
+
+// Entrada de produto
+async function entradaProduto(id) {
+    const quantidade = prompt("Quantidade de entrada:");
+    if (!quantidade || isNaN(quantidade)) return;
+
+    const result = await apiRequest("entradaProduto", { id, quantidade });
+    if (result && result.sucesso) {
+        listarProdutos();
+    } else {
+        alert(result.erro || "Erro ao registrar entrada.");
+    }
+}
+
+// Saída de produto
+async function saidaProduto(id) {
+    const quantidade = prompt("Quantidade de saída:");
+    if (!quantidade || isNaN(quantidade)) return;
+
+    const result = await apiRequest("saidaProduto", { id, quantidade });
+    if (result && result.sucesso) {
+        listarProdutos();
+    } else {
+        alert(result.erro || "Erro ao registrar saída.");
+    }
+}
+
+// Remover produto
+async function removerProduto(id) {
+    if (!confirm("Tem certeza que deseja remover este produto?")) return;
+
+    const result = await apiRequest("removerProduto", { id });
+    if (result && result.sucesso) {
+        listarProdutos();
+    } else {
+        alert(result.erro || "Erro ao remover produto.");
+    }
+}
+
+// ===================== MOVIMENTAÇÕES =====================
+
+// Listar movimentações
 async function listarMovimentacoes() {
-    const movs = await apiRequest({ action: "listarMovimentacoes" });
-    console.log("Movimentações:", movs);
+    const movimentacoes = await apiRequest("listarMovimentacoes");
+    if (!movimentacoes) {
+        console.error("Erro ao listar movimentações");
+        return;
+    }
+
+    const tabela = document.querySelector("#tabelaMovimentacoes tbody");
+    tabela.innerHTML = "";
+
+    movimentacoes.forEach(m => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${m.id}</td>
+            <td>${m.produto_nome}</td>
+            <td>${m.tipo}</td>
+            <td>${m.quantidade}</td>
+            <td>${m.data}</td>
+        `;
+        tabela.appendChild(tr);
+    });
 }
 
-// 📌 Cadastrar produto
-async function cadastrar(nome, quantidade) {
-    const res = await apiRequest({ action: "cadastrar", nome, quantidade });
-    alert(res?.mensagem);
-}
+// ===================== INICIALIZAÇÃO =====================
 
-// 📌 Movimentar produto (entrada ou saída)
-async function movimentar(nome, quantidade, tipo) {
-    const res = await apiRequest({ action: "movimentar", nome, quantidade, tipo });
-    alert(res?.mensagem);
-}
+document.addEventListener("DOMContentLoaded", () => {
+    listarProdutos();
+    listarMovimentacoes();
 
-// 📌 Remover produto
-async function remover(nome) {
-    const res = await apiRequest({ action: "remover", nome });
-    alert(res?.mensagem);
-}
-
-// 📌 Relatório por data
-async function relatorio(inicio, fim) {
-    const dados = await apiRequest({ action: "relatorio", inicio, fim });
-    console.log("Relatório:", dados);
-}
-
-// 📌 Teste conexão
-async function testeConexao() {
-    const res = await apiRequest({ action: "testeConexao" });
-    alert(res?.mensagem);
-}
+    document
+        .querySelector("#formAdicionarProduto")
+        .addEventListener("submit", (e) => {
+            e.preventDefault();
+            adicionarProduto();
+        });
+});
