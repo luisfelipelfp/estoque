@@ -1,6 +1,6 @@
 async function apiRequest(params) {
     try {
-        const response = await fetch("api/actions.php", {
+        const response = await fetch("../api/actions.php", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(params)
