@@ -1,267 +1,175 @@
 <?php
 header("Content-Type: application/json");
-require_once "db.php";
 
-/** Util: saída JSON e fim */
-function json_out($data, int $code = 200) {
-    http_response_code($code);
-    echo json_encode($data, JSON_UNESCAPED_UNICODE);
+// Conexão com o banco
+$host = "localhost";
+$db   = "estoque";
+$user = "root";
+$pass = "";
+
+try {
+    $pdo = new PDO("mysql:host=$host;dbname=$db;charset=utf8", $user, $pass);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (Exception $e) {
+    echo json_encode(["erro" => "Erro na conexão: " . $e->getMessage()]);
     exit;
 }
 
-/** Lê input de qualquer forma: JSON, POST form, GET */
-$raw   = file_get_contents("php://input");
-$body  = json_decode($raw, true);
-if (!is_array($body)) { $body = []; }
-$params = array_merge($_GET, $_POST, $body);
+// Verifica ação
+$action = $_GET["action"] ?? "";
 
-/** Captura ação por 'action' ou 'acao' */
-$action = $params['action'] ?? $params['acao'] ?? '';
-
-/** Normaliza sinônimos de ação */
-$map = [
-    'listar'              => 'listarProdutos',
-    'listarProdutos'      => 'listarProdutos',
-    'listarMovimentacoes' => 'listarMovimentacoes',
-
-    'cadastrar'           => 'adicionarProduto',
-    'adicionar'           => 'adicionarProduto',
-    'adicionarProduto'    => 'adicionarProduto',
-
-    'entrada'             => 'entradaProduto',
-    'entradaProduto'      => 'entradaProduto',
-
-    'saida'               => 'saidaProduto',
-    'saidaProduto'        => 'saidaProduto',
-
-    'remover'             => 'removerProduto',
-    'removerProduto'      => 'removerProduto',
-
-    'relatorio'           => 'relatorio',
-    'testeConexao'        => 'testeConexao',
-];
-
-if (!isset($map[$action])) {
-    json_out(['erro' => 'Ação inválida', 'recebido' => $action], 400);
-}
-$action = $map[$action];
-
-/** Helpers */
-function get_produto_nome(mysqli $conn, int $id): ?string {
-    $stmt = $conn->prepare("SELECT nome FROM produtos WHERE id = ?");
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-    $stmt->bind_result($nome);
-    $ok = $stmt->fetch();
-    $stmt->close();
-    return $ok ? $nome : null;
-}
-
-/** Rotas */
 switch ($action) {
 
-    case 'testeConexao':
-        json_out(['status' => 'ok', 'mensagem' => 'Conexão com banco funcionando!']);
+    /* ---------------------------
+       LISTAR PRODUTOS
+    --------------------------- */
+    case "listarProdutos":
+        $stmt = $pdo->query("SELECT * FROM produtos ORDER BY id DESC");
+        echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
+        break;
 
-    case 'listarProdutos': {
-        $res = $conn->query("SELECT id, nome, quantidade FROM produtos ORDER BY id ASC");
-        $out = [];
-        while ($row = $res->fetch_assoc()) { $out[] = $row; }
-        json_out($out);
-    }
+    /* ---------------------------
+       ADICIONAR PRODUTO
+    --------------------------- */
+    case "adicionarProduto":
+        $data = json_decode(file_get_contents("php://input"), true);
+        $nome = trim($data["nome"] ?? "");
 
-    case 'adicionarProduto': {
-        $nome = trim((string)($params['nome'] ?? ''));
-        $quantidade = isset($params['quantidade']) ? (int)$params['quantidade'] : 0;
-        if ($nome === '') {
-            json_out(['erro' => 'Nome é obrigatório'], 400);
+        if ($nome === "") {
+            echo json_encode(["erro" => "Nome inválido"]);
+            exit;
         }
 
-        // Evita duplicado por UNIQUE(nome)
-        $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade) VALUES (?, ?)");
-        $stmt->bind_param("si", $nome, $quantidade);
-        if (!$stmt->execute()) {
-            $erro = $conn->errno === 1062 ? 'Produto já existe' : ('Erro ao inserir: '.$conn->error);
-            $stmt->close();
-            json_out(['erro' => $erro], 400);
+        try {
+            $stmt = $pdo->prepare("INSERT INTO produtos (nome, quantidade) VALUES (?, 0)");
+            $stmt->execute([$nome]);
+            echo json_encode(["sucesso" => true]);
+        } catch (Exception $e) {
+            echo json_encode(["erro" => "Erro ao adicionar: " . $e->getMessage()]);
         }
-        $produto_id = $stmt->insert_id;
-        $stmt->close();
+        break;
 
-        // Registra movimentação inicial (entrada) se quantidade > 0
-        if ($quantidade > 0) {
-            $stmt = $conn->prepare("
-                INSERT INTO movimentacoes (produto_id, produto_nome, quantidade, tipo, data)
-                VALUES (?, ?, ?, 'entrada', NOW())
-            ");
-            $stmt->bind_param("isi", $produto_id, $nome, $quantidade);
-            $stmt->execute();
-            $stmt->close();
-        }
+    /* ---------------------------
+       ENTRADA DE PRODUTO
+    --------------------------- */
+    case "entradaProduto":
+        $data = json_decode(file_get_contents("php://input"), true);
+        $id   = (int)($data["id"] ?? 0);
+        $qtd  = (int)($data["quantidade"] ?? 0);
 
-        json_out(['sucesso' => true, 'id' => $produto_id]);
-    }
-
-    case 'entradaProduto': {
-        $id  = (int)($params['id'] ?? 0);
-        $qtd = (int)($params['quantidade'] ?? 0);
         if ($id <= 0 || $qtd <= 0) {
-            json_out(['erro' => 'ID e quantidade devem ser positivos'], 400);
+            echo json_encode(["erro" => "Dados inválidos"]);
+            exit;
         }
 
-        $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?");
-        $stmt->bind_param("ii", $qtd, $id);
-        $stmt->execute();
-        if ($stmt->affected_rows === 0) {
-            $stmt->close();
-            json_out(['erro' => 'Produto não encontrado'], 404);
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?")
+                ->execute([$qtd, $id]);
+
+            $pdo->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data) VALUES (?, 'entrada', ?, NOW())")
+                ->execute([$id, $qtd]);
+
+            $pdo->commit();
+            echo json_encode(["sucesso" => true]);
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            echo json_encode(["erro" => "Erro: " . $e->getMessage()]);
         }
-        $stmt->close();
+        break;
 
-        $nome = get_produto_nome($conn, $id) ?? '';
-        $stmt = $conn->prepare("
-            INSERT INTO movimentacoes (produto_id, produto_nome, quantidade, tipo, data)
-            VALUES (?, ?, ?, 'entrada', NOW())
-        ");
-        $stmt->bind_param("isi", $id, $nome, $qtd);
-        $stmt->execute();
-        $stmt->close();
+    /* ---------------------------
+       SAÍDA DE PRODUTO
+    --------------------------- */
+    case "saidaProduto":
+        $data = json_decode(file_get_contents("php://input"), true);
+        $id   = (int)($data["id"] ?? 0);
+        $qtd  = (int)($data["quantidade"] ?? 0);
 
-        json_out(['sucesso' => true]);
-    }
-
-    case 'saidaProduto': {
-        $id  = (int)($params['id'] ?? 0);
-        $qtd = (int)($params['quantidade'] ?? 0);
         if ($id <= 0 || $qtd <= 0) {
-            json_out(['erro' => 'ID e quantidade devem ser positivos'], 400);
+            echo json_encode(["erro" => "Dados inválidos"]);
+            exit;
         }
 
-        // Verifica saldo
-        $stmt = $conn->prepare("SELECT quantidade FROM produtos WHERE id = ?");
-        $stmt->bind_param("i", $id);
-        $stmt->execute();
-        $stmt->bind_result($estoque);
-        if (!$stmt->fetch()) {
-            $stmt->close();
-            json_out(['erro' => 'Produto não encontrado'], 404);
+        $pdo->beginTransaction();
+        try {
+            // Verifica se tem estoque suficiente
+            $stmt = $pdo->prepare("SELECT quantidade FROM produtos WHERE id = ?");
+            $stmt->execute([$id]);
+            $estoque = $stmt->fetchColumn();
+
+            if ($estoque < $qtd) {
+                throw new Exception("Estoque insuficiente.");
+            }
+
+            $pdo->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?")
+                ->execute([$qtd, $id]);
+
+            $pdo->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data) VALUES (?, 'saida', ?, NOW())")
+                ->execute([$id, $qtd]);
+
+            $pdo->commit();
+            echo json_encode(["sucesso" => true]);
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            echo json_encode(["erro" => "Erro: " . $e->getMessage()]);
         }
-        $stmt->close();
-        if ($estoque - $qtd < 0) {
-            json_out(['erro' => 'Estoque insuficiente'], 400);
-        }
+        break;
 
-        $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?");
-        $stmt->bind_param("ii", $qtd, $id);
-        $stmt->execute();
-        $stmt->close();
+    /* ---------------------------
+       REMOVER PRODUTO
+    --------------------------- */
+    case "removerProduto":
+        $data = json_decode(file_get_contents("php://input"), true);
+        $id   = (int)($data["id"] ?? 0);
 
-        $nome = get_produto_nome($conn, $id) ?? '';
-        $stmt = $conn->prepare("
-            INSERT INTO movimentacoes (produto_id, produto_nome, quantidade, tipo, data)
-            VALUES (?, ?, ?, 'saida', NOW())
-        ");
-        $stmt->bind_param("isi", $id, $nome, $qtd);
-        $stmt->execute();
-        $stmt->close();
-
-        json_out(['sucesso' => true]);
-    }
-
-    case 'removerProduto': {
-        $id = (int)($params['id'] ?? 0);
         if ($id <= 0) {
-            // Também aceita remoção por nome como fallback
-            $nome = trim((string)($params['nome'] ?? ''));
-            if ($nome === '') json_out(['erro' => 'Informe id ou nome'], 400);
-            $stmt = $conn->prepare("SELECT id FROM produtos WHERE nome = ?");
-            $stmt->bind_param("s", $nome);
-            $stmt->execute();
-            $stmt->bind_result($id_found);
-            if (!$stmt->fetch()) { $stmt->close(); json_out(['erro' => 'Produto não encontrado'], 404); }
-            $stmt->close();
-            $id = (int)$id_found;
+            echo json_encode(["erro" => "ID inválido"]);
+            exit;
         }
 
-        $nome = get_produto_nome($conn, $id) ?? '';
+        $pdo->beginTransaction();
+        try {
+            // Pega quantidade antes de remover
+            $stmt = $pdo->prepare("SELECT quantidade FROM produtos WHERE id = ?");
+            $stmt->execute([$id]);
+            $qtd = $stmt->fetchColumn();
 
-        // registra uma movimentação de “remoção” como saída de quantidade 0 (apenas marca histórico)
-        $stmt = $conn->prepare("
-            INSERT INTO movimentacoes (produto_id, produto_nome, quantidade, tipo, data)
-            VALUES (?, ?, 0, 'saida', NOW())
-        ");
-        $stmt->bind_param("is", $id, $nome);
-        $stmt->execute();
-        $stmt->close();
+            // Remove produto
+            $pdo->prepare("DELETE FROM produtos WHERE id = ?")->execute([$id]);
 
-        // remove o produto
-        $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
-        $stmt->bind_param("i", $id);
-        $stmt->execute();
-        $stmt->close();
+            // Registra movimentação de "removido"
+            $pdo->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data) VALUES (?, 'removido', ?, NOW())")
+                ->execute([$id, $qtd]);
 
-        json_out(['sucesso' => true]);
-    }
+            $pdo->commit();
+            echo json_encode(["sucesso" => true]);
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            echo json_encode(["erro" => "Erro: " . $e->getMessage()]);
+        }
+        break;
 
-    case 'listarMovimentacoes': {
-        $sql = "
-            SELECT 
-                m.id,
-                COALESCE(m.produto_nome, p.nome) AS produto_nome,
-                m.tipo,
-                m.quantidade,
-                m.data
+    /* ---------------------------
+       LISTAR MOVIMENTAÇÕES
+    --------------------------- */
+    case "listarMovimentacoes":
+        $stmt = $pdo->query("
+            SELECT m.id, 
+                   COALESCE(p.nome, 'Produto removido') AS produto_nome, 
+                   m.tipo, 
+                   m.quantidade, 
+                   m.data
             FROM movimentacoes m
             LEFT JOIN produtos p ON p.id = m.produto_id
-            ORDER BY m.data DESC, m.id DESC
-        ";
-        $res = $conn->query($sql);
-        $out = [];
-        while ($row = $res->fetch_assoc()) { $out[] = $row; }
-        json_out($out);
-    }
+            ORDER BY m.data DESC
+        ");
+        echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
+        break;
 
-    case 'relatorio': {
-        $inicio = trim((string)($params['inicio'] ?? ''));
-        $fim    = trim((string)($params['fim'] ?? ''));
-
-        if ($inicio === '' || $fim === '') {
-            // se não vierem datas, retorna últimos 90 dias
-            $sql = "
-                SELECT 
-                    m.id,
-                    COALESCE(m.produto_nome, p.nome) AS produto_nome,
-                    m.tipo, m.quantidade, m.data
-                FROM movimentacoes m
-                LEFT JOIN produtos p ON p.id = m.produto_id
-                WHERE m.data >= DATE_SUB(NOW(), INTERVAL 90 DAY)
-                ORDER BY m.data DESC, m.id DESC
-            ";
-            $res = $conn->query($sql);
-        } else {
-            $inicio_ts = $inicio . " 00:00:00";
-            $fim_ts    = $fim    . " 23:59:59";
-            $stmt = $conn->prepare("
-                SELECT 
-                    m.id,
-                    COALESCE(m.produto_nome, p.nome) AS produto_nome,
-                    m.tipo, m.quantidade, m.data
-                FROM movimentacoes m
-                LEFT JOIN produtos p ON p.id = m.produto_id
-                WHERE m.data BETWEEN ? AND ?
-                ORDER BY m.data DESC, m.id DESC
-            ");
-            $stmt->bind_param("ss", $inicio_ts, $fim_ts);
-            $stmt->execute();
-            $res = $stmt->get_result();
-        }
-
-        $out = [];
-        while ($row = $res->fetch_assoc()) { $out[] = $row; }
-        if (isset($stmt) && $stmt) { $stmt->close(); }
-        json_out($out);
-    }
-
+    /* ---------------------------
+       AÇÃO INVÁLIDA
+    --------------------------- */
     default:
-        json_out(['erro' => 'Rota não tratada.']);
+        echo json_encode(["erro" => "Ação inválida"]);
 }
