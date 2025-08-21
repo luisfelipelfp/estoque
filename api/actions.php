@@ -168,40 +168,41 @@ switch ($action) {
         json_out(['sucesso' => true]);
     }
 
-    case 'removerProduto': {
-        $id = (int)($params['id'] ?? 0);
-        if ($id <= 0) {
-            // Também aceita remoção por nome como fallback
-            $nome = trim((string)($params['nome'] ?? ''));
-            if ($nome === '') json_out(['erro' => 'Informe id ou nome'], 400);
-            $stmt = $conn->prepare("SELECT id FROM produtos WHERE nome = ?");
-            $stmt->bind_param("s", $nome);
-            $stmt->execute();
-            $stmt->bind_result($id_found);
-            if (!$stmt->fetch()) { $stmt->close(); json_out(['erro' => 'Produto não encontrado'], 404); }
-            $stmt->close();
-            $id = (int)$id_found;
-        }
-
-        $nome = get_produto_nome($conn, $id) ?? '';
-
-        // registra uma movimentação de “remoção” como saída de quantidade 0 (apenas marca histórico)
-        $stmt = $conn->prepare("
-            INSERT INTO movimentacoes (produto_id, produto_nome, quantidade, tipo, data)
-            VALUES (?, ?, 0, 'saida', NOW())
-        ");
-        $stmt->bind_param("is", $id, $nome);
+   case 'removerProduto': {
+    $id = (int)($params['id'] ?? 0);
+    if ($id <= 0) {
+        // Também aceita remoção por nome como fallback
+        $nome = trim((string)($params['nome'] ?? ''));
+        if ($nome === '') json_out(['erro' => 'Informe id ou nome'], 400);
+        $stmt = $conn->prepare("SELECT id FROM produtos WHERE nome = ?");
+        $stmt->bind_param("s", $nome);
         $stmt->execute();
+        $stmt->bind_result($id_found);
+        if (!$stmt->fetch()) { $stmt->close(); json_out(['erro' => 'Produto não encontrado'], 404); }
         $stmt->close();
-
-        // remove o produto
-        $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
-        $stmt->bind_param("i", $id);
-        $stmt->execute();
-        $stmt->close();
-
-        json_out(['sucesso' => true]);
+        $id = (int)$id_found;
     }
+
+    $nome = get_produto_nome($conn, $id) ?? '';
+
+    // registra uma movimentação de “remoção” com tipo = 'removido'
+    $stmt = $conn->prepare("
+        INSERT INTO movimentacoes (produto_id, produto_nome, quantidade, tipo, data)
+        VALUES (?, ?, 0, 'removido', NOW())
+    ");
+    $stmt->bind_param("is", $id, $nome);
+    $stmt->execute();
+    $stmt->close();
+
+    // remove o produto
+    $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $stmt->close();
+
+    json_out(['sucesso' => true]);
+}
+
 
     case 'listarMovimentacoes': {
         $sql = "
