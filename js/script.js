@@ -6,15 +6,11 @@ async function apiRequest(action, data = {}) {
     try {
         const options = {
             method: "POST",
-            headers: { "Content-Type": "application/json" }
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action, ...data }) // action agora vai junto no body
         };
 
-        // Só envia body se tiver dados
-        if (Object.keys(data).length > 0) {
-            options.body = JSON.stringify(data);
-        }
-
-        const response = await fetch(`${API_URL}?action=${action}`, options);
+        const response = await fetch(API_URL, options);
 
         if (!response.ok) {
             throw new Error(`Erro HTTP: ${response.status}`);
