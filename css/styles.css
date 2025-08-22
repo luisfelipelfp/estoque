@@ -90,9 +90,10 @@ table th {
 }
 
 /* 🔴 Linha de alerta para baixo estoque */
-.low-stock {
+.estoque-baixo {
     background-color: #f8d7da !important; /* vermelho claro */
     color: #721c24 !important;           /* texto vermelho escuro */
+    font-weight: bold;                   /* destaque extra */
 }
 
 /* Modal geral */
