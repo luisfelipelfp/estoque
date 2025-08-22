@@ -89,6 +89,12 @@ table th {
     background-color: #f1f1f1;
 }
 
+/* 🔴 Linha de alerta para baixo estoque */
+.low-stock {
+    background-color: #f8d7da !important; /* vermelho claro */
+    color: #721c24 !important;           /* texto vermelho escuro */
+}
+
 /* Modal geral */
 .modal {
     display: none;
