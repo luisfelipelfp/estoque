@@ -136,3 +136,9 @@ table th {
     border-radius: 6px;
     font-size: 14px; /* ✅ Relatório um pouco mais compacto */
 }
+/* 🔴 Destaca apenas a célula de quantidade quando estoque baixo */
+.low-stock-cell {
+  background-color: #f8d7da;   /* vermelho claro */
+  color: #842029;              /* texto vermelho escuro */
+  font-weight: 600;
+}
