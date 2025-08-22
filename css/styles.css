@@ -1,8 +1,15 @@
 body {
-    font-family: Arial, sans-serif;
+    font-family: Verdana, sans-serif;  /* ✅ Alterado para Verdana */
     background-color: #f8f9fa;
     margin: 0;
     padding: 0;
+}
+
+/* Garante Verdana em todos os textos */
+h1, h2, h3, h4, h5, h6,
+.btn, table, input, button,
+.card-header, .card-body {
+    font-family: Verdana, sans-serif !important;
 }
 
 .container {
