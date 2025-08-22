@@ -39,9 +39,9 @@ async function listarProdutos() {
     produtos.forEach(p => {
         const tr = document.createElement("tr");
 
-        // ✅ Se a quantidade for menor que 11 aplica a classe "estoque-baixo"
+        // ✅ Se a quantidade for menor que 11 aplica a classe "low-stock"
         if (p.quantidade < 11) {
-            tr.classList.add("estoque-baixo");
+            tr.classList.add("low-stock");
         }
 
         tr.innerHTML = `
