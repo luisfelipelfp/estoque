@@ -1,8 +1,10 @@
 body {
-    font-family: Verdana, sans-serif;  /* ✅ Alterado para Verdana */
+    font-family: Verdana, sans-serif;  /* ✅ Fonte Verdana */
+    font-size: 16px;                   /* ✅ Tamanho base */
     background-color: #f8f9fa;
     margin: 0;
     padding: 0;
+    line-height: 1.5;                  /* ✅ Melhor legibilidade */
 }
 
 /* Garante Verdana em todos os textos */
@@ -12,6 +14,14 @@ h1, h2, h3, h4, h5, h6,
     font-family: Verdana, sans-serif !important;
 }
 
+/* Ajusta títulos para destacar mais */
+h1 {
+    font-size: 24px;
+    text-align: center;
+    margin-bottom: 20px;
+    color: #333;
+}
+
 .container {
     max-width: 900px;
     margin: 50px auto;
@@ -19,12 +29,6 @@ h1, h2, h3, h4, h5, h6,
     background: #fff;
     border-radius: 8px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-h1 {
-    text-align: center;
-    margin-bottom: 20px;
-    color: #333;
 }
 
 .mb-3 {
@@ -42,7 +46,7 @@ h1 {
 .btn {
     display: inline-block;
     padding: 8px 16px;
-    font-size: 14px;
+    font-size: 15px;  /* ✅ Botões levemente menores */
     font-weight: bold;
     border: none;
     border-radius: 6px;
@@ -72,6 +76,7 @@ table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 20px;
+    font-size: 15px;  /* ✅ Tabelas com fonte mais compacta */
 }
 
 table th, table td {
@@ -112,6 +117,7 @@ table th {
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    font-size: 15px; /* ✅ Fonte confortável no modal */
 }
 
 /* ✅ Área do relatório com scroll sem alterar layout */
@@ -121,4 +127,5 @@ table th {
     margin-top: 10px;
     border: 1px solid #ddd;
     border-radius: 6px;
+    font-size: 14px; /* ✅ Relatório um pouco mais compacto */
 }
