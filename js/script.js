@@ -37,22 +37,24 @@ async function listarProdutos() {
     tabela.innerHTML = "";
 
     produtos.forEach(p => {
-  const tr = document.createElement("tr");
-  const qtdClass = (Number(p.quantidade) < 11) ? "low-stock-cell" : "";
+        const tr = document.createElement("tr");
+        // Se a quantidade for menor que 11 aplica a classe na linha inteira
+        if (Number(p.quantidade) < 11) {
+            tr.classList.add("estoque-baixo");
+        }
 
-  tr.innerHTML = `
-    <td>${p.id}</td>
-    <td>${p.nome}</td>
-    <td class="${qtdClass}">${p.quantidade}</td>
-    <td>
-      <button class="btn btn-sm btn-success" onclick="entradaProduto(${p.id})">Entrada</button>
-      <button class="btn btn-sm btn-warning" onclick="saidaProduto(${p.id})">Saída</button>
-      <button class="btn btn-sm btn-danger" onclick="removerProduto(${p.id})">Remover</button>
-    </td>
-  `;
-  tabela.appendChild(tr);
-});
-
+        tr.innerHTML = `
+            <td>${p.id}</td>
+            <td>${p.nome}</td>
+            <td>${p.quantidade}</td>
+            <td>
+                <button class="btn btn-sm btn-success" onclick="entradaProduto(${p.id})">Entrada</button>
+                <button class="btn btn-sm btn-warning" onclick="saidaProduto(${p.id})">Saída</button>
+                <button class="btn btn-sm btn-danger" onclick="removerProduto(${p.id})">Remover</button>
+            </td>
+        `;
+        tabela.appendChild(tr);
+    });
 }
 
 // Adicionar produto
