@@ -22,46 +22,69 @@
 
         <!-- Lista de produtos -->
         <div class="card mb-4 shadow-sm">
-            <div class="card-header">Produtos em Estoque</div>
-            <div class="card-body">
-                <table class="table table-striped" id="tabelaProdutos">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Nome</th>
-                            <th>Quantidade</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <!-- Produtos serão carregados via JS -->
-                    </tbody>
-                </table>
+            <div class="card-header">
+                <button class="btn btn-link text-decoration-none w-100 text-start" 
+                        type="button" 
+                        data-bs-toggle="collapse" 
+                        data-bs-target="#collapseProdutos" 
+                        aria-expanded="true" 
+                        aria-controls="collapseProdutos">
+                    Produtos em Estoque
+                </button>
+            </div>
+            <div id="collapseProdutos" class="collapse show">
+                <div class="card-body">
+                    <table class="table table-striped" id="tabelaProdutos">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nome</th>
+                                <th>Quantidade</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Produtos serão carregados via JS -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
         <!-- Relatório de movimentações -->
         <div class="card shadow-sm">
-            <div class="card-header">Movimentações</div>
-            <div class="card-body">
-                <table class="table table-striped" id="tabelaMovimentacoes">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Produto</th>
-                            <th>Tipo</th>
-                            <th>Quantidade</th>
-                            <th>Data</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <!-- Movimentações serão carregadas via JS -->
-                    </tbody>
-                </table>
+            <div class="card-header">
+                <button class="btn btn-link text-decoration-none w-100 text-start" 
+                        type="button" 
+                        data-bs-toggle="collapse" 
+                        data-bs-target="#collapseMovimentacoes" 
+                        aria-expanded="true" 
+                        aria-controls="collapseMovimentacoes">
+                    Movimentações
+                </button>
+            </div>
+            <div id="collapseMovimentacoes" class="collapse show">
+                <div class="card-body">
+                    <table class="table table-striped" id="tabelaMovimentacoes">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Produto</th>
+                                <th>Tipo</th>
+                                <th>Quantidade</th>
+                                <th>Data</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Movimentações serão carregadas via JS -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/script.js"></script>
 </body>
 </html>
