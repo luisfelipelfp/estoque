@@ -38,6 +38,12 @@ async function listarProdutos() {
 
     produtos.forEach(p => {
         const tr = document.createElement("tr");
+
+        // ✅ Se a quantidade for menor que 11 aplica a classe "estoque-baixo"
+        if (p.quantidade < 11) {
+            tr.classList.add("estoque-baixo");
+        }
+
         tr.innerHTML = `
             <td>${p.id}</td>
             <td>${p.nome}</td>
