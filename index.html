@@ -43,65 +43,61 @@
             </div>
         </div>
 
-        <!-- Lista de produtos -->
-        <div class="card mb-4 shadow-sm">
-            <div class="card-header">
-                <button class="btn btn-link text-decoration-none w-100 text-start" 
-                        type="button" 
-                        data-bs-toggle="collapse" 
-                        data-bs-target="#collapseProdutos" 
-                        aria-expanded="true" 
-                        aria-controls="collapseProdutos">
-                    Produtos em Estoque
+        <!-- Abas para Produtos e Movimentações -->
+        <ul class="nav nav-tabs mb-3" id="estoqueTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="produtos-tab" data-bs-toggle="tab" data-bs-target="#produtos" type="button" role="tab" aria-controls="produtos" aria-selected="true">
+                    Produtos
                 </button>
-            </div>
-            <div id="collapseProdutos" class="collapse show">
-                <div class="card-body">
-                    <table class="table table-striped" id="tabelaProdutos">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Nome</th>
-                                <th>Quantidade</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- Produtos serão carregados via JS -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- Relatório de movimentações -->
-        <div class="card shadow-sm">
-            <div class="card-header">
-                <button class="btn btn-link text-decoration-none w-100 text-start" 
-                        type="button" 
-                        data-bs-toggle="collapse" 
-                        data-bs-target="#collapseMovimentacoes" 
-                        aria-expanded="true" 
-                        aria-controls="collapseMovimentacoes">
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="movimentacoes-tab" data-bs-toggle="tab" data-bs-target="#movimentacoes" type="button" role="tab" aria-controls="movimentacoes" aria-selected="false">
                     Movimentações
                 </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="estoqueTabsContent">
+            <!-- Produtos em Estoque -->
+            <div class="tab-pane fade show active" id="produtos" role="tabpanel" aria-labelledby="produtos-tab">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <table class="table table-striped" id="tabelaProdutos">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nome</th>
+                                    <th>Quantidade</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Produtos via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
-            <div id="collapseMovimentacoes" class="collapse show">
-                <div class="card-body">
-                    <table class="table table-striped" id="tabelaMovimentacoes">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Produto</th>
-                                <th>Tipo</th>
-                                <th>Quantidade</th>
-                                <th>Data</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- Movimentações serão carregadas via JS -->
-                        </tbody>
-                    </table>
+
+            <!-- Relatório de Movimentações -->
+            <div class="tab-pane fade" id="movimentacoes" role="tabpanel" aria-labelledby="movimentacoes-tab">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <table class="table table-striped" id="tabelaMovimentacoes">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Produto</th>
+                                    <th>Tipo</th>
+                                    <th>Quantidade</th>
+                                    <th>Data</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Movimentações via JS -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
