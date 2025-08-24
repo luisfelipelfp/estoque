@@ -7,7 +7,7 @@ async function apiRequest(action, data = {}) {
         const options = {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action, ...data }) // action agora vai junto no body
+            body: JSON.stringify({ action, ...data })
         };
 
         const response = await fetch(API_URL, options);
@@ -16,10 +16,11 @@ async function apiRequest(action, data = {}) {
             throw new Error(`Erro HTTP: ${response.status}`);
         }
 
-        return await response.json();
+        const result = await response.json();
+        return result;
     } catch (error) {
         console.error("Erro na API:", error);
-        return null;
+        return { sucesso: false, erro: "Falha na comunicação com servidor" };
     }
 }
 
@@ -27,12 +28,13 @@ async function apiRequest(action, data = {}) {
 
 // Listar produtos
 async function listarProdutos() {
-    const produtos = await apiRequest("listarProdutos");
-    if (!produtos) {
-        console.error("Erro ao listar produtos");
+    const result = await apiRequest("listarProdutos");
+    if (!result.sucesso) {
+        console.error(result.erro || "Erro ao listar produtos");
         return;
     }
 
+    const produtos = result.dados || [];
     const tabela = document.querySelector("#tabelaProdutos tbody");
     tabela.innerHTML = "";
 
@@ -68,7 +70,7 @@ async function adicionarProduto() {
     }
 
     const result = await apiRequest("adicionarProduto", { nome });
-    if (result && result.sucesso) {
+    if (result.sucesso) {
         listarProdutos();
         document.querySelector("#nomeProduto").value = "";
     } else {
@@ -82,8 +84,9 @@ async function entradaProduto(id) {
     if (!quantidade || isNaN(quantidade)) return;
 
     const result = await apiRequest("entradaProduto", { id, quantidade });
-    if (result && result.sucesso) {
+    if (result.sucesso) {
         listarProdutos();
+        listarMovimentacoes();
     } else {
         alert(result.erro || "Erro ao registrar entrada.");
     }
@@ -95,8 +98,9 @@ async function saidaProduto(id) {
     if (!quantidade || isNaN(quantidade)) return;
 
     const result = await apiRequest("saidaProduto", { id, quantidade });
-    if (result && result.sucesso) {
+    if (result.sucesso) {
         listarProdutos();
+        listarMovimentacoes();
     } else {
         alert(result.erro || "Erro ao registrar saída.");
     }
@@ -107,7 +111,7 @@ async function removerProduto(id) {
     if (!confirm("Tem certeza que deseja remover este produto?")) return;
 
     const result = await apiRequest("removerProduto", { id });
-    if (result && result.sucesso) {
+    if (result.sucesso) {
         listarProdutos();
     } else {
         alert(result.erro || "Erro ao remover produto.");
@@ -118,12 +122,13 @@ async function removerProduto(id) {
 
 // Listar movimentações
 async function listarMovimentacoes() {
-    const movimentacoes = await apiRequest("listarMovimentacoes");
-    if (!movimentacoes) {
-        console.error("Erro ao listar movimentações");
+    const result = await apiRequest("listarMovimentacoes");
+    if (!result.sucesso) {
+        console.error(result.erro || "Erro ao listar movimentações");
         return;
     }
 
+    const movimentacoes = result.dados || [];
     const tabela = document.querySelector("#tabelaMovimentacoes tbody");
     tabela.innerHTML = "";
 
@@ -146,10 +151,8 @@ document.addEventListener("DOMContentLoaded", () => {
     listarProdutos();
     listarMovimentacoes();
 
-    document
-        .querySelector("#formAdicionarProduto")
-        .addEventListener("submit", (e) => {
-            e.preventDefault();
-            adicionarProduto();
-        });
+    document.querySelector("#formAdicionarProduto").addEventListener("submit", (e) => {
+        e.preventDefault();
+        adicionarProduto();
+    });
 });
