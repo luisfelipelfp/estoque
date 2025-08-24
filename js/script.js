@@ -16,8 +16,7 @@ async function apiRequest(action, data = {}) {
             throw new Error(`Erro HTTP: ${response.status}`);
         }
 
-        const result = await response.json();
-        return result;
+        return await response.json();
     } catch (error) {
         console.error("Erro na API:", error);
         return { sucesso: false, erro: "Falha na comunicação com servidor" };
@@ -81,7 +80,7 @@ async function adicionarProduto() {
 // Entrada de produto
 async function entradaProduto(id) {
     const quantidade = prompt("Quantidade de entrada:");
-    if (!quantidade || isNaN(quantidade)) return;
+    if (!quantidade || isNaN(quantidade) || Number(quantidade) <= 0) return;
 
     const result = await apiRequest("entradaProduto", { id, quantidade });
     if (result.sucesso) {
@@ -95,7 +94,7 @@ async function entradaProduto(id) {
 // Saída de produto
 async function saidaProduto(id) {
     const quantidade = prompt("Quantidade de saída:");
-    if (!quantidade || isNaN(quantidade)) return;
+    if (!quantidade || isNaN(quantidade) || Number(quantidade) <= 0) return;
 
     const result = await apiRequest("saidaProduto", { id, quantidade });
     if (result.sucesso) {
@@ -113,6 +112,7 @@ async function removerProduto(id) {
     const result = await apiRequest("removerProduto", { id });
     if (result.sucesso) {
         listarProdutos();
+        listarMovimentacoes(); // agora atualiza o relatório também
     } else {
         alert(result.erro || "Erro ao remover produto.");
     }
@@ -134,6 +134,10 @@ async function listarMovimentacoes() {
 
     movimentacoes.forEach(m => {
         const tr = document.createElement("tr");
+
+        // Destacar entradas e saídas com cores diferentes
+        tr.classList.add(m.tipo === "entrada" ? "mov-entrada" : "mov-saida");
+
         tr.innerHTML = `
             <td>${m.id}</td>
             <td>${m.produto_nome}</td>
