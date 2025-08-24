@@ -27,7 +27,7 @@ async function apiRequest(action, data = {}) {
 
 // Listar produtos
 async function listarProdutos() {
-    const result = await apiRequest("listarProdutos");
+    const result = await apiRequest("listarprodutos"); // <-- ajustado
     if (!result.sucesso) {
         console.error(result.erro || "Erro ao listar produtos");
         return;
@@ -68,7 +68,7 @@ async function adicionarProduto() {
         return;
     }
 
-    const result = await apiRequest("adicionarProduto", { nome });
+    const result = await apiRequest("adicionarproduto", { nome }); // <-- ajustado
     if (result.sucesso) {
         listarProdutos();
         document.querySelector("#nomeProduto").value = "";
@@ -82,7 +82,7 @@ async function entradaProduto(id) {
     const quantidade = prompt("Quantidade de entrada:");
     if (!quantidade || isNaN(quantidade) || Number(quantidade) <= 0) return;
 
-    const result = await apiRequest("entradaProduto", { id, quantidade });
+    const result = await apiRequest("entradaproduto", { id, quantidade }); // <-- ajustado
     if (result.sucesso) {
         listarProdutos();
         listarMovimentacoes();
@@ -96,7 +96,7 @@ async function saidaProduto(id) {
     const quantidade = prompt("Quantidade de saída:");
     if (!quantidade || isNaN(quantidade) || Number(quantidade) <= 0) return;
 
-    const result = await apiRequest("saidaProduto", { id, quantidade });
+    const result = await apiRequest("saidaproduto", { id, quantidade }); // <-- ajustado
     if (result.sucesso) {
         listarProdutos();
         listarMovimentacoes();
@@ -109,7 +109,7 @@ async function saidaProduto(id) {
 async function removerProduto(id) {
     if (!confirm("Tem certeza que deseja remover este produto?")) return;
 
-    const result = await apiRequest("removerProduto", { id });
+    const result = await apiRequest("removerproduto", { id }); // <-- ajustado
     if (result.sucesso) {
         listarProdutos();
         listarMovimentacoes(); // agora atualiza o relatório também
@@ -122,7 +122,7 @@ async function removerProduto(id) {
 
 // Listar movimentações
 async function listarMovimentacoes() {
-    const result = await apiRequest("listarMovimentacoes");
+    const result = await apiRequest("listarmovimentacoes"); // <-- ajustado
     if (!result.sucesso) {
         console.error(result.erro || "Erro ao listar movimentações");
         return;
