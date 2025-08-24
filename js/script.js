@@ -27,7 +27,7 @@ async function apiRequest(action, data = {}) {
 
 // Listar produtos
 async function listarProdutos() {
-    const result = await apiRequest("listar"); // <-- aqui era "listarProdutos"
+    const result = await apiRequest("listar"); // ação correta no PHP
     if (!result.sucesso) {
         console.error(result.erro || "Erro ao listar produtos");
         return;
@@ -60,7 +60,6 @@ async function listarProdutos() {
     });
 }
 
-
 // Adicionar produto
 async function adicionarProduto() {
     const nome = document.querySelector("#nomeProduto").value.trim();
@@ -69,7 +68,7 @@ async function adicionarProduto() {
         return;
     }
 
-    const result = await apiRequest("adicionarproduto", { nome }); // <-- ajustado
+    const result = await apiRequest("adicionar", { nome }); // ação correta
     if (result.sucesso) {
         listarProdutos();
         document.querySelector("#nomeProduto").value = "";
@@ -83,7 +82,7 @@ async function entradaProduto(id) {
     const quantidade = prompt("Quantidade de entrada:");
     if (!quantidade || isNaN(quantidade) || Number(quantidade) <= 0) return;
 
-    const result = await apiRequest("entradaproduto", { id, quantidade }); // <-- ajustado
+    const result = await apiRequest("entrada", { id, quantidade }); // ação correta
     if (result.sucesso) {
         listarProdutos();
         listarMovimentacoes();
@@ -97,7 +96,7 @@ async function saidaProduto(id) {
     const quantidade = prompt("Quantidade de saída:");
     if (!quantidade || isNaN(quantidade) || Number(quantidade) <= 0) return;
 
-    const result = await apiRequest("saidaproduto", { id, quantidade }); // <-- ajustado
+    const result = await apiRequest("saida", { id, quantidade }); // ação correta
     if (result.sucesso) {
         listarProdutos();
         listarMovimentacoes();
@@ -110,7 +109,7 @@ async function saidaProduto(id) {
 async function removerProduto(id) {
     if (!confirm("Tem certeza que deseja remover este produto?")) return;
 
-    const result = await apiRequest("removerproduto", { id }); // <-- ajustado
+    const result = await apiRequest("remover", { id }); // ação correta
     if (result.sucesso) {
         listarProdutos();
         listarMovimentacoes(); // agora atualiza o relatório também
@@ -123,7 +122,7 @@ async function removerProduto(id) {
 
 // Listar movimentações
 async function listarMovimentacoes() {
-    const result = await apiRequest("listarmovimentacoes"); // <-- ajustado
+    const result = await apiRequest("listarmovimentacoes"); // ação correta
     if (!result.sucesso) {
         console.error(result.erro || "Erro ao listar movimentações");
         return;
