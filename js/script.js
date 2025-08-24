@@ -27,7 +27,7 @@ async function apiRequest(action, data = {}) {
 
 // Listar produtos
 async function listarProdutos() {
-    const result = await apiRequest("listarprodutos"); // <-- ajustado
+    const result = await apiRequest("listar"); // <-- aqui era "listarProdutos"
     if (!result.sucesso) {
         console.error(result.erro || "Erro ao listar produtos");
         return;
@@ -59,6 +59,7 @@ async function listarProdutos() {
         tabela.appendChild(tr);
     });
 }
+
 
 // Adicionar produto
 async function adicionarProduto() {
