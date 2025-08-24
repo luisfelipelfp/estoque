@@ -17,33 +17,40 @@ $params = array_merge($_GET, $_POST, $body);
 
 /** Captura ação */
 $action = $params['action'] ?? $params['acao'] ?? '';
+$action = trim(strtolower($action));
 
 /** Normaliza sinônimos */
 $map = [
     'listar'              => 'listarProdutos',
-    'listarProdutos'      => 'listarProdutos',
-    'listarMovimentacoes' => 'listarMovimentacoes',
+    'listarprodutos'      => 'listarProdutos',
+    'listarmovimentacoes' => 'listarMovimentacoes',
 
     'cadastrar'           => 'adicionarProduto',
     'adicionar'           => 'adicionarProduto',
-    'adicionarProduto'    => 'adicionarProduto',
+    'adicionarproduto'    => 'adicionarProduto',
 
     'entrada'             => 'entradaProduto',
-    'entradaProduto'      => 'entradaProduto',
+    'entradaproduto'      => 'entradaProduto',
 
     'saida'               => 'saidaProduto',
-    'saidaProduto'        => 'saidaProduto',
+    'saidaproduto'        => 'saidaProduto',
 
     'remover'             => 'removerProduto',
-    'removerProduto'      => 'removerProduto',
+    'removerproduto'      => 'removerProduto',
 
     'relatorio'           => 'relatorioMovimentacoes',
-    'testeConexao'        => 'testeConexao',
+    'testeconexao'        => 'testeConexao',
 ];
 
-if (!isset($map[$action])) {
-    json_out(['erro' => 'Ação inválida', 'recebido' => $action], 400);
+/** Se não tiver ação ou não for conhecida */
+if ($action === '' || !isset($map[$action])) {
+    json_out([
+        'erro'     => 'Ação inválida',
+        'recebido' => $action,
+        'acoesAceitas' => array_keys($map)
+    ], 400);
 }
+
 $action = $map[$action];
 
 /** Helpers */
@@ -57,7 +64,6 @@ function get_produto_nome(mysqli $conn, int $id): ?string {
     return $ok ? $nome : null;
 }
 
-/** Aqui você pode pegar usuário logado futuramente (ex: $_SESSION['usuario']) */
 function get_usuario(): ?string {
     return $_SESSION['usuario'] ?? null;
 }
