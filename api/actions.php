@@ -46,7 +46,8 @@ $map = [
 /** Se não tiver ação ou não for conhecida */
 if ($action === '' || !isset($map[$action])) {
     json_out([
-        'erro'     => 'Ação inválida',
+        'sucesso' => false,
+        'erro'    => 'Ação inválida',
         'recebido' => $action,
         'acoesAceitas' => array_keys($map)
     ], 400);
@@ -73,27 +74,31 @@ function get_usuario(): ?string {
 switch ($action) {
 
     case 'testeConexao':
-        json_out(['status' => 'ok', 'mensagem' => 'Conexão com banco funcionando!']);
+        json_out(['sucesso' => true, 'mensagem' => 'Conexão com banco funcionando!']);
 
     case 'listarProdutos': {
         $res = $conn->query("SELECT id, nome, quantidade FROM produtos ORDER BY id ASC");
         $out = [];
         while ($row = $res->fetch_assoc()) { $out[] = $row; }
-        json_out($out);
+        json_out(['sucesso' => true, 'dados' => $out]);
     }
 
     case 'adicionarProduto': {
         $nome = trim((string)($params['nome'] ?? ''));
         $quantidade = isset($params['quantidade']) ? (int)$params['quantidade'] : 0;
-        if ($nome === '') json_out(['erro' => 'Nome é obrigatório'], 400);
+
+        if ($nome === '') {
+            json_out(['sucesso' => false, 'erro' => 'Nome é obrigatório'], 400);
+        }
 
         $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade) VALUES (?, ?)");
         $stmt->bind_param("si", $nome, $quantidade);
         if (!$stmt->execute()) {
-            $erro = $conn->errno === 1062 ? 'Produto já existe' : ('Erro ao inserir: '.$conn->error);
+            $erro = $conn->errno === 1062 ? 'Produto já existe' : ('Erro ao inserir: ' . $conn->error);
             $stmt->close();
-            json_out(['erro' => $erro], 400);
+            json_out(['sucesso' => false, 'erro' => $erro], 400);
         }
+
         $produto_id = $stmt->insert_id;
         $stmt->close();
 
@@ -114,16 +119,24 @@ switch ($action) {
     case 'entradaProduto': {
         $id  = (int)($params['id'] ?? 0);
         $qtd = (int)($params['quantidade'] ?? 0);
-        if ($id <= 0 || $qtd <= 0) json_out(['erro' => 'ID e quantidade inválidos'], 400);
+
+        if ($id <= 0 || $qtd <= 0) {
+            json_out(['sucesso' => false, 'erro' => 'ID e quantidade inválidos'], 400);
+        }
 
         $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?");
         $stmt->bind_param("ii", $qtd, $id);
         $stmt->execute();
-        if ($stmt->affected_rows === 0) json_out(['erro' => 'Produto não encontrado'], 404);
+
+        if ($stmt->affected_rows === 0) {
+            json_out(['sucesso' => false, 'erro' => 'Produto não encontrado'], 404);
+        }
+
         $stmt->close();
 
         $nome = get_produto_nome($conn, $id) ?? '';
         $usuario = get_usuario();
+
         $stmt = $conn->prepare("
             INSERT INTO movimentacoes (produto_id, produto_nome, quantidade, tipo, data, usuario)
             VALUES (?, ?, ?, 'entrada', NOW(), ?)
@@ -138,16 +151,25 @@ switch ($action) {
     case 'saidaProduto': {
         $id  = (int)($params['id'] ?? 0);
         $qtd = (int)($params['quantidade'] ?? 0);
-        if ($id <= 0 || $qtd <= 0) json_out(['erro' => 'ID e quantidade inválidos'], 400);
+
+        if ($id <= 0 || $qtd <= 0) {
+            json_out(['sucesso' => false, 'erro' => 'ID e quantidade inválidos'], 400);
+        }
 
         $stmt = $conn->prepare("SELECT quantidade FROM produtos WHERE id = ?");
         $stmt->bind_param("i", $id);
         $stmt->execute();
         $stmt->bind_result($estoque);
-        if (!$stmt->fetch()) json_out(['erro' => 'Produto não encontrado'], 404);
+
+        if (!$stmt->fetch()) {
+            json_out(['sucesso' => false, 'erro' => 'Produto não encontrado'], 404);
+        }
+
         $stmt->close();
 
-        if ($estoque - $qtd < 0) json_out(['erro' => 'Estoque insuficiente'], 400);
+        if ($estoque - $qtd < 0) {
+            json_out(['sucesso' => false, 'erro' => 'Estoque insuficiente'], 400);
+        }
 
         $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?");
         $stmt->bind_param("ii", $qtd, $id);
@@ -156,6 +178,7 @@ switch ($action) {
 
         $nome = get_produto_nome($conn, $id) ?? '';
         $usuario = get_usuario();
+
         $stmt = $conn->prepare("
             INSERT INTO movimentacoes (produto_id, produto_nome, quantidade, tipo, data, usuario)
             VALUES (?, ?, ?, 'saida', NOW(), ?)
@@ -169,7 +192,10 @@ switch ($action) {
 
     case 'removerProduto': {
         $id = (int)($params['id'] ?? 0);
-        if ($id <= 0) json_out(['erro' => 'Informe id válido'], 400);
+
+        if ($id <= 0) {
+            json_out(['sucesso' => false, 'erro' => 'Informe id válido'], 400);
+        }
 
         $nome = get_produto_nome($conn, $id) ?? '';
         $usuario = get_usuario();
@@ -228,11 +254,12 @@ switch ($action) {
         $stmt->bind_param($types, ...$binds);
         $stmt->execute();
         $res = $stmt->get_result();
+
         $out = [];
         while ($row = $res->fetch_assoc()) { $out[] = $row; }
         $stmt->close();
 
-        json_out($out);
+        json_out(['sucesso' => true, 'dados' => $out]);
     }
 
     case 'relatorioMovimentacoes': {
@@ -246,9 +273,9 @@ switch ($action) {
         ";
         $res = $conn->query($sql);
         $row = $res->fetch_assoc();
-        json_out($row);
+        json_out(['sucesso' => true, 'dados' => $row]);
     }
 
     default:
-        json_out(['erro' => 'Rota não tratada.']);
+        json_out(['sucesso' => false, 'erro' => 'Rota não tratada.']);
 }
