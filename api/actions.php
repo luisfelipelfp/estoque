@@ -1,4 +1,5 @@
 <?php
+session_start();
 header("Content-Type: application/json");
 require_once "db.php";
 
@@ -65,7 +66,7 @@ function get_produto_nome(mysqli $conn, int $id): ?string {
 }
 
 function get_usuario(): ?string {
-    return $_SESSION['usuario'] ?? null;
+    return $_SESSION['usuario'] ?? 'sistema';
 }
 
 /** Rotas */
@@ -208,7 +209,8 @@ switch ($action) {
         }
 
         $sql = "
-            SELECT m.id, COALESCE(m.produto_nome, p.nome) AS produto_nome, m.tipo, m.quantidade, m.data, m.usuario
+            SELECT m.id, COALESCE(m.produto_nome, p.nome) AS produto_nome, 
+                   m.tipo, m.quantidade, m.data, m.usuario
             FROM movimentacoes m
             LEFT JOIN produtos p ON p.id = m.produto_id
         ";
