@@ -27,7 +27,7 @@ async function apiRequest(action, data = {}) {
 
 // Listar produtos
 async function listarProdutos() {
-    const result = await apiRequest("listar"); // ação correta no PHP
+    const result = await apiRequest("listarProdutos"); // corrigido
     if (!result.sucesso) {
         console.error(result.erro || "Erro ao listar produtos");
         return;
@@ -68,7 +68,7 @@ async function adicionarProduto() {
         return;
     }
 
-    const result = await apiRequest("adicionar", { nome }); // ação correta
+    const result = await apiRequest("adicionarProduto", { nome }); // corrigido
     if (result.sucesso) {
         listarProdutos();
         document.querySelector("#nomeProduto").value = "";
@@ -82,7 +82,7 @@ async function entradaProduto(id) {
     const quantidade = prompt("Quantidade de entrada:");
     if (!quantidade || isNaN(quantidade) || Number(quantidade) <= 0) return;
 
-    const result = await apiRequest("entrada", { id, quantidade }); // ação correta
+    const result = await apiRequest("entradaProduto", { id, quantidade }); // corrigido
     if (result.sucesso) {
         listarProdutos();
         listarMovimentacoes();
@@ -96,7 +96,7 @@ async function saidaProduto(id) {
     const quantidade = prompt("Quantidade de saída:");
     if (!quantidade || isNaN(quantidade) || Number(quantidade) <= 0) return;
 
-    const result = await apiRequest("saida", { id, quantidade }); // ação correta
+    const result = await apiRequest("saidaProduto", { id, quantidade }); // corrigido
     if (result.sucesso) {
         listarProdutos();
         listarMovimentacoes();
@@ -109,7 +109,7 @@ async function saidaProduto(id) {
 async function removerProduto(id) {
     if (!confirm("Tem certeza que deseja remover este produto?")) return;
 
-    const result = await apiRequest("remover", { id }); // ação correta
+    const result = await apiRequest("removerProduto", { id }); // corrigido
     if (result.sucesso) {
         listarProdutos();
         listarMovimentacoes(); // agora atualiza o relatório também
@@ -122,7 +122,7 @@ async function removerProduto(id) {
 
 // Listar movimentações
 async function listarMovimentacoes() {
-    const result = await apiRequest("listarmovimentacoes"); // ação correta
+    const result = await apiRequest("listarMovimentacoes"); // corrigido
     if (!result.sucesso) {
         console.error(result.erro || "Erro ao listar movimentações");
         return;
