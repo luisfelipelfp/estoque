@@ -33,8 +33,8 @@ $acoesAceitas = [
     "relatorio", "testeconexao"
 ];
 
-// 🔹 Normaliza a ação recebida
-$acao = strtolower($_GET['acao'] ?? $_POST['acao'] ?? '');
+// 🔹 Normaliza a ação recebida (aceita 'acao' OU 'action')
+$acao = strtolower($_GET['acao'] ?? $_GET['action'] ?? $_POST['acao'] ?? $_POST['action'] ?? '');
 debugLog("Ação recebida: ".$acao);
 
 // 🔹 Se ação inválida → erro
