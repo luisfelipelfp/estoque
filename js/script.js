@@ -1,162 +1,142 @@
-// URL base da API (ajuste conforme seu servidor)
-const API_URL = "http://192.168.15.100/estoque/api/actions.php";
-
-// Função genérica para requisições à API
-async function apiRequest(action, data = {}) {
+// ===============================
+// Função genérica para chamar API
+// ===============================
+async function apiRequest(acao, dados = {}) {
     try {
-        const options = {
+        const resp = await fetch(`api/actions.php?acao=${acao}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ acao: action, ...data }) // <<< corrigido
-        };
+            body: Object.keys(dados).length > 0 ? JSON.stringify(dados) : null
+        });
 
-        const response = await fetch(API_URL, options);
-
-        if (!response.ok) {
-            throw new Error(`Erro HTTP: ${response.status}`);
+        if (!resp.ok) {
+            throw new Error(`Erro HTTP ${resp.status}`);
         }
 
-        return await response.json();
-    } catch (error) {
-        console.error("Erro na API:", error);
-        return { sucesso: false, erro: "Falha na comunicação com servidor" };
+        const json = await resp.json();
+        if (json.erro) {
+            throw new Error(json.erro);
+        }
+        return json;
+    } catch (e) {
+        console.error("Erro na API:", e);
+        throw e;
     }
 }
 
-// ===================== PRODUTOS =====================
-
-// Listar produtos
+// ===============================
+// Listar Produtos
+// ===============================
 async function listarProdutos() {
-    const result = await apiRequest("listarProdutos"); 
-    if (!result.sucesso) {
-        console.error(result.erro || "Erro ao listar produtos");
-        return;
-    }
-
-    const produtos = result.dados || [];
-    const tabela = document.querySelector("#tabelaProdutos tbody");
-    tabela.innerHTML = "";
-
-    produtos.forEach(p => {
-        const tr = document.createElement("tr");
-
-        // Aplica a classe na linha toda se quantidade < 11
-        if (Number(p.quantidade) < 11) {
-            tr.classList.add("estoque-baixo");
+    try {
+        const res = await apiRequest("listarprodutos");
+        if (res.sucesso) {
+            const tabela = document.getElementById("tabelaProdutos").querySelector("tbody");
+            tabela.innerHTML = "";
+            res.dados.forEach(p => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td>${p.id}</td>
+                    <td>${p.nome}</td>
+                    <td>${p.quantidade}</td>
+                    <td>
+                        <button onclick="entradaProduto(${p.id})">Entrada</button>
+                        <button onclick="saidaProduto(${p.id})">Saída</button>
+                        <button onclick="removerProduto(${p.id})">Remover</button>
+                    </td>`;
+                tabela.appendChild(tr);
+            });
         }
-
-        tr.innerHTML = `
-            <td>${p.id}</td>
-            <td>${p.nome}</td>
-            <td>${p.quantidade}</td>
-            <td>
-                <button class="btn btn-sm btn-success" onclick="entradaProduto(${p.id})">Entrada</button>
-                <button class="btn btn-sm btn-warning" onclick="saidaProduto(${p.id})">Saída</button>
-                <button class="btn btn-sm btn-danger" onclick="removerProduto(${p.id})">Remover</button>
-            </td>
-        `;
-
-        tabela.appendChild(tr);
-    });
-}
-
-// Adicionar produto
-async function adicionarProduto() {
-    const nome = document.querySelector("#nomeProduto").value.trim();
-    if (!nome) {
-        alert("Digite um nome para o produto.");
-        return;
-    }
-
-    const result = await apiRequest("adicionarProduto", { nome });
-    if (result.sucesso) {
-        listarProdutos();
-        document.querySelector("#nomeProduto").value = "";
-    } else {
-        alert(result.erro || "Erro ao adicionar produto.");
+    } catch (e) {
+        console.error("Erro ao listar produtos");
     }
 }
 
-// Entrada de produto
+// ===============================
+// Listar Movimentações
+// ===============================
+async function listarMovimentacoes(filtros = {}) {
+    try {
+        const res = await apiRequest("listarmovimentacoes", filtros);
+        if (res.sucesso) {
+            const tabela = document.getElementById("tabelaMovimentacoes").querySelector("tbody");
+            tabela.innerHTML = "";
+            res.dados.forEach(m => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td>${m.id}</td>
+                    <td>${m.produto_nome ?? "(Removido)"}</td>
+                    <td>${m.tipo}</td>
+                    <td>${m.quantidade}</td>
+                    <td>${m.data}</td>`;
+                tabela.appendChild(tr);
+            });
+        }
+    } catch (e) {
+        console.error("Erro ao listar movimentações");
+    }
+}
+
+// ===============================
+// Operações: Entrada / Saída / Remover
+// ===============================
 async function entradaProduto(id) {
-    const quantidade = prompt("Quantidade de entrada:");
-    if (!quantidade || isNaN(quantidade) || Number(quantidade) <= 0) return;
-
-    const result = await apiRequest("entradaProduto", { id, quantidade });
-    if (result.sucesso) {
-        listarProdutos();
-        listarMovimentacoes();
-    } else {
-        alert(result.erro || "Erro ao registrar entrada.");
-    }
+    const qtd = prompt("Quantidade de entrada:");
+    if (!qtd) return;
+    await apiRequest("entrada", { id: id, quantidade: parseInt(qtd) });
+    listarProdutos();
+    listarMovimentacoes();
 }
 
-// Saída de produto
 async function saidaProduto(id) {
-    const quantidade = prompt("Quantidade de saída:");
-    if (!quantidade || isNaN(quantidade) || Number(quantidade) <= 0) return;
-
-    const result = await apiRequest("saidaProduto", { id, quantidade });
-    if (result.sucesso) {
-        listarProdutos();
-        listarMovimentacoes();
-    } else {
-        alert(result.erro || "Erro ao registrar saída.");
-    }
+    const qtd = prompt("Quantidade de saída:");
+    if (!qtd) return;
+    await apiRequest("saida", { id: id, quantidade: parseInt(qtd) });
+    listarProdutos();
+    listarMovimentacoes();
 }
 
-// Remover produto
 async function removerProduto(id) {
     if (!confirm("Tem certeza que deseja remover este produto?")) return;
-
-    const result = await apiRequest("removerProduto", { id });
-    if (result.sucesso) {
-        listarProdutos();
-        listarMovimentacoes(); // agora atualiza o relatório também
-    } else {
-        alert(result.erro || "Erro ao remover produto.");
-    }
+    await apiRequest("remover", { id: id });
+    listarProdutos();
+    listarMovimentacoes();
 }
 
-// ===================== MOVIMENTAÇÕES =====================
-
-// Listar movimentações
-async function listarMovimentacoes() {
-    const result = await apiRequest("listarMovimentacoes");
-    if (!result.sucesso) {
-        console.error(result.erro || "Erro ao listar movimentações");
+// ===============================
+// Cadastro de novo produto
+// ===============================
+async function cadastrarProduto() {
+    const nome = document.getElementById("nome").value;
+    const qtd = document.getElementById("quantidade").value;
+    if (!nome) {
+        alert("Nome é obrigatório!");
         return;
     }
-
-    const movimentacoes = result.dados || [];
-    const tabela = document.querySelector("#tabelaMovimentacoes tbody");
-    tabela.innerHTML = "";
-
-    movimentacoes.forEach(m => {
-        const tr = document.createElement("tr");
-
-        // Destacar entradas e saídas com cores diferentes
-        tr.classList.add(m.tipo === "entrada" ? "mov-entrada" : "mov-saida");
-
-        tr.innerHTML = `
-            <td>${m.id}</td>
-            <td>${m.produto_nome}</td>
-            <td>${m.tipo}</td>
-            <td>${m.quantidade}</td>
-            <td>${m.data}</td>
-        `;
-        tabela.appendChild(tr);
-    });
+    await apiRequest("adicionar", { nome: nome, quantidade: parseInt(qtd) || 0 });
+    listarProdutos();
 }
 
-// ===================== INICIALIZAÇÃO =====================
-
+// ===============================
+// Inicialização
+// ===============================
 document.addEventListener("DOMContentLoaded", () => {
     listarProdutos();
     listarMovimentacoes();
 
-    document.querySelector("#formAdicionarProduto").addEventListener("submit", (e) => {
+    document.getElementById("formCadastro")?.addEventListener("submit", async e => {
         e.preventDefault();
-        adicionarProduto();
+        cadastrarProduto();
+    });
+
+    document.getElementById("formFiltroMov")?.addEventListener("submit", async e => {
+        e.preventDefault();
+        const filtros = {
+            produto: document.getElementById("filtroProduto").value,
+            tipo: document.getElementById("filtroTipo").value,
+            de: document.getElementById("filtroDe").value,
+            ate: document.getElementById("filtroAte").value
+        };
+        listarMovimentacoes(filtros);
     });
 });
