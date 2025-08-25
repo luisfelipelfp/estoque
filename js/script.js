@@ -84,27 +84,28 @@ async function listarMovimentacoes(filtros = {}) {
 // Operações: Entrada / Saída / Remover
 // ===============================
 async function entradaProduto(id) {
-    const qtd = parseInt(prompt("Quantidade de entrada:"));
-    if (!qtd || qtd <= 0) return;
-    await apiRequest("entrada", { id, quantidade: qtd });
+    const qtd = prompt("Quantidade de entrada:");
+    if (!qtd) return;
+    await apiRequest("entrada", { produto_id: id, quantidade: parseInt(qtd) });
     listarProdutos();
     listarMovimentacoes();
 }
 
 async function saidaProduto(id) {
-    const qtd = parseInt(prompt("Quantidade de saída:"));
-    if (!qtd || qtd <= 0) return;
-    await apiRequest("saida", { id, quantidade: qtd });
+    const qtd = prompt("Quantidade de saída:");
+    if (!qtd) return;
+    await apiRequest("saida", { produto_id: id, quantidade: parseInt(qtd) });
     listarProdutos();
     listarMovimentacoes();
 }
 
 async function removerProduto(id) {
     if (!confirm("Tem certeza que deseja remover este produto?")) return;
-    await apiRequest("remover", { id });
+    await apiRequest("remover", { produto_id: id });
     listarProdutos();
     listarMovimentacoes();
 }
+
 
 // ===============================
 // Cadastro de novo produto
