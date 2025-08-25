@@ -106,7 +106,7 @@ try {
 
         case "entrada":
         case "entradaproduto":
-            $produtoId = intval($_POST['produto_id'] ?? 0);
+            $produtoId = intval($_POST['produto_id'] ?? $_POST['id'] ?? 0);
             $quantidade = intval($_POST['quantidade'] ?? 0);
             if ($produtoId <= 0 || $quantidade <= 0) throw new Exception("Dados inválidos para entrada");
 
@@ -123,7 +123,7 @@ try {
 
         case "saida":
         case "saidaproduto":
-            $produtoId = intval($_POST['produto_id'] ?? 0);
+            $produtoId = intval($_POST['produto_id'] ?? $_POST['id'] ?? 0);
             $quantidade = intval($_POST['quantidade'] ?? 0);
             if ($produtoId <= 0 || $quantidade <= 0) throw new Exception("Dados inválidos para saída");
 
@@ -142,7 +142,7 @@ try {
 
         case "remover":
         case "removerproduto":
-            $produtoId = intval($_POST['produto_id'] ?? 0);
+            $produtoId = intval($_POST['produto_id'] ?? $_POST['id'] ?? 0);
             if ($produtoId <= 0) throw new Exception("ID inválido para remoção");
 
             $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
