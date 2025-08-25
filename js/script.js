@@ -1,35 +1,35 @@
-// Função genérica para chamadas à API
-async function apiRequest(acao, params = {}) {
+// URL base da API (ajuste conforme seu servidor)
+const API_URL = "http://192.168.15.100/estoque/api/actions.php";
+
+// Função genérica para requisições à API
+async function apiRequest(action, data = {}) {
     try {
-        const formData = new FormData();
-        formData.append("acao", acao);
-        for (const k in params) formData.append(k, params[k]);
-
-        const res = await fetch("api/actions.php", {
+        const options = {
             method: "POST",
-            body: formData
-        });
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action, ...data })
+        };
 
-        if (!res.ok) throw new Error("Erro HTTP " + res.status);
+        const response = await fetch(API_URL, options);
 
-        const text = await res.text();
-        try {
-            return JSON.parse(text);
-        } catch {
-            console.error("Resposta não é JSON:", text);
-            return { sucesso: false, erro: "Resposta inválida" };
+        if (!response.ok) {
+            throw new Error(`Erro HTTP: ${response.status}`);
         }
-    } catch (e) {
-        console.error("Erro na API:", e);
-        return { sucesso: false, erro: e.message };
+
+        return await response.json();
+    } catch (error) {
+        console.error("Erro na API:", error);
+        return { sucesso: false, erro: "Falha na comunicação com servidor" };
     }
 }
 
-// ================= PRODUTOS =================
+// ===================== PRODUTOS =====================
+
+// Listar produtos
 async function listarProdutos() {
-    const result = await apiRequest("listarprodutos");
+    const result = await apiRequest("listar"); // ação correta no PHP
     if (!result.sucesso) {
-        console.error("Erro ao listar produtos");
+        console.error(result.erro || "Erro ao listar produtos");
         return;
     }
 
@@ -39,22 +39,92 @@ async function listarProdutos() {
 
     produtos.forEach(p => {
         const tr = document.createElement("tr");
-        if (p.quantidade <= 5) tr.classList.add("estoque-baixo");
+
+        // Aplica a classe na linha toda se quantidade < 11
+        if (Number(p.quantidade) < 11) {
+            tr.classList.add("estoque-baixo");
+        }
 
         tr.innerHTML = `
             <td>${p.id}</td>
             <td>${p.nome}</td>
             <td>${p.quantidade}</td>
+            <td>
+                <button class="btn btn-sm btn-success" onclick="entradaProduto(${p.id})">Entrada</button>
+                <button class="btn btn-sm btn-warning" onclick="saidaProduto(${p.id})">Saída</button>
+                <button class="btn btn-sm btn-danger" onclick="removerProduto(${p.id})">Remover</button>
+            </td>
         `;
+
         tabela.appendChild(tr);
     });
 }
 
-// ================= MOVIMENTAÇÕES =================
-async function listarMovimentacoes(filtros = {}) {
-    const result = await apiRequest("listarmovimentacoes", filtros);
+// Adicionar produto
+async function adicionarProduto() {
+    const nome = document.querySelector("#nomeProduto").value.trim();
+    if (!nome) {
+        alert("Digite um nome para o produto.");
+        return;
+    }
+
+    const result = await apiRequest("adicionar", { nome }); // ação correta
+    if (result.sucesso) {
+        listarProdutos();
+        document.querySelector("#nomeProduto").value = "";
+    } else {
+        alert(result.erro || "Erro ao adicionar produto.");
+    }
+}
+
+// Entrada de produto
+async function entradaProduto(id) {
+    const quantidade = prompt("Quantidade de entrada:");
+    if (!quantidade || isNaN(quantidade) || Number(quantidade) <= 0) return;
+
+    const result = await apiRequest("entrada", { id, quantidade }); // ação correta
+    if (result.sucesso) {
+        listarProdutos();
+        listarMovimentacoes();
+    } else {
+        alert(result.erro || "Erro ao registrar entrada.");
+    }
+}
+
+// Saída de produto
+async function saidaProduto(id) {
+    const quantidade = prompt("Quantidade de saída:");
+    if (!quantidade || isNaN(quantidade) || Number(quantidade) <= 0) return;
+
+    const result = await apiRequest("saida", { id, quantidade }); // ação correta
+    if (result.sucesso) {
+        listarProdutos();
+        listarMovimentacoes();
+    } else {
+        alert(result.erro || "Erro ao registrar saída.");
+    }
+}
+
+// Remover produto
+async function removerProduto(id) {
+    if (!confirm("Tem certeza que deseja remover este produto?")) return;
+
+    const result = await apiRequest("remover", { id }); // ação correta
+    if (result.sucesso) {
+        listarProdutos();
+        listarMovimentacoes(); // agora atualiza o relatório também
+    } else {
+        alert(result.erro || "Erro ao remover produto.");
+    }
+}
+
+// ===================== MOVIMENTAÇÕES =====================
+
+// Listar movimentações
+async function listarMovimentacoes() {
+    const result = await apiRequest("listarmovimentacoes"); // ação correta
     if (!result.sucesso) {
-        console.error("Erro ao listar movimentações");
+        console.error(result.erro || "Erro ao listar movimentações");
         return;
     }
 
@@ -64,7 +134,10 @@ async function listarMovimentacoes(filtros = {}) {
 
     movimentacoes.forEach(m => {
         const tr = document.createElement("tr");
+
+        // Destacar entradas e saídas com cores diferentes
         tr.classList.add(m.tipo === "entrada" ? "mov-entrada" : "mov-saida");
+
         tr.innerHTML = `
             <td>${m.id}</td>
             <td>${m.produto_nome}</td>
@@ -76,45 +149,14 @@ async function listarMovimentacoes(filtros = {}) {
     });
 }
 
-// ================= FILTROS =================
-function aplicarFiltros() {
-    const produto = document.querySelector("#filtroProduto").value.trim();
-    const tipo = document.querySelector("#filtroTipo").value;
-    const inicio = document.querySelector("#filtroInicio").value;
-    const fim = document.querySelector("#filtroFim").value;
+// ===================== INICIALIZAÇÃO =====================
 
-    const filtros = {};
-    if (produto) filtros.produto = produto;
-    if (tipo) filtros.tipo = tipo;
-    if (inicio && fim) {
-        filtros.inicio = inicio;
-        filtros.fim = fim;
-    }
-
-    listarMovimentacoes(filtros);
-}
-
-// ================= EXPORTAÇÃO =================
-function exportar(tipo) {
-    const produto = document.querySelector("#filtroProduto").value.trim();
-    const filtroTipo = document.querySelector("#filtroTipo").value;
-    const inicio = document.querySelector("#filtroInicio").value;
-    const fim = document.querySelector("#filtroFim").value;
-
-    const params = new URLSearchParams();
-    params.append("acao", tipo === "pdf" ? "exportarpdf" : "exportarexcel");
-    if (produto) params.append("produto", produto);
-    if (filtroTipo) params.append("tipo", filtroTipo);
-    if (inicio && fim) {
-        params.append("inicio", inicio);
-        params.append("fim", fim);
-    }
-
-    window.open("api/actions.php?" + params.toString(), "_blank");
-}
-
-// ================= INIT =================
 document.addEventListener("DOMContentLoaded", () => {
     listarProdutos();
     listarMovimentacoes();
+
+    document.querySelector("#formAdicionarProduto").addEventListener("submit", (e) => {
+        e.preventDefault();
+        adicionarProduto();
+    });
 });
