@@ -1,4 +1,9 @@
 <?php
+// Exibir erros para debug
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 session_start();
 header("Content-Type: application/json");
 require_once "db.php";
@@ -25,20 +30,15 @@ $map = [
     'listar'              => 'listarProdutos',
     'listarprodutos'      => 'listarProdutos',
     'listarmovimentacoes' => 'listarMovimentacoes',
-
     'cadastrar'           => 'adicionarProduto',
     'adicionar'           => 'adicionarProduto',
     'adicionarproduto'    => 'adicionarProduto',
-
     'entrada'             => 'entradaProduto',
     'entradaproduto'      => 'entradaProduto',
-
     'saida'               => 'saidaProduto',
     'saidaproduto'        => 'saidaProduto',
-
     'remover'             => 'removerProduto',
     'removerproduto'      => 'removerProduto',
-
     'relatorio'           => 'relatorioMovimentacoes',
     'testeconexao'        => 'testeConexao',
 ];
@@ -75,13 +75,16 @@ switch ($action) {
 
     case 'testeConexao':
         json_out(['sucesso' => true, 'mensagem' => 'Conexão com banco funcionando!']);
+        break;
 
     case 'listarProdutos': {
         $res = $conn->query("SELECT id, nome, quantidade FROM produtos ORDER BY id ASC");
         $out = [];
-        while ($row = $res->fetch_assoc()) { $out[] = $row; }
+        while ($row = $res->fetch_assoc()) {
+            $out[] = $row;
+        }
         json_out(['sucesso' => true, 'dados' => $out]);
-    }
+    } break;
 
     case 'adicionarProduto': {
         $nome = trim((string)($params['nome'] ?? ''));
@@ -114,7 +117,7 @@ switch ($action) {
         }
 
         json_out(['sucesso' => true, 'id' => $produto_id]);
-    }
+    } break;
 
     case 'entradaProduto': {
         $id  = (int)($params['id'] ?? 0);
@@ -146,7 +149,7 @@ switch ($action) {
         $stmt->close();
 
         json_out(['sucesso' => true]);
-    }
+    } break;
 
     case 'saidaProduto': {
         $id  = (int)($params['id'] ?? 0);
@@ -188,7 +191,7 @@ switch ($action) {
         $stmt->close();
 
         json_out(['sucesso' => true]);
-    }
+    } break;
 
     case 'removerProduto': {
         $id = (int)($params['id'] ?? 0);
@@ -214,7 +217,7 @@ switch ($action) {
         $stmt->close();
 
         json_out(['sucesso' => true]);
-    }
+    } break;
 
     case 'listarMovimentacoes': {
         $where = [];
@@ -256,11 +259,13 @@ switch ($action) {
         $res = $stmt->get_result();
 
         $out = [];
-        while ($row = $res->fetch_assoc()) { $out[] = $row; }
+        while ($row = $res->fetch_assoc()) {
+            $out[] = $row;
+        }
         $stmt->close();
 
         json_out(['sucesso' => true, 'dados' => $out]);
-    }
+    } break;
 
     case 'relatorioMovimentacoes': {
         $sql = "
@@ -274,8 +279,9 @@ switch ($action) {
         $res = $conn->query($sql);
         $row = $res->fetch_assoc();
         json_out(['sucesso' => true, 'dados' => $row]);
-    }
+    } break;
 
     default:
         json_out(['sucesso' => false, 'erro' => 'Rota não tratada.']);
+        break;
 }
