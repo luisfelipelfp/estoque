@@ -1,6 +1,6 @@
 <?php
 header("Content-Type: application/json; charset=utf-8");
-require_once __DIR__ . "db.php";
+require_once __DIR__ . "/db.php";
 
 // 🔹 Lê JSON cru no corpo e mescla no $_POST
 $raw = file_get_contents("php://input");
@@ -124,9 +124,8 @@ switch ($acao) {
         $id = intval($_POST['id'] ?? 0);
         if ($id) {
             $conn->query("DELETE FROM produtos WHERE id = $id");
-            // Para não dar erro no ENUM, registramos a remoção como 'saida' de quantidade atual = 0
             $conn->query("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data) 
-                          VALUES ($id, 'saida', 0, NOW())");
+                          VALUES ($id, 'remocao', 0, NOW())");
             echo json_encode(["sucesso" => true, "mensagem" => "Produto removido"]);
         } else {
             echo json_encode(["sucesso" => false, "erro" => "ID inválido"]);
