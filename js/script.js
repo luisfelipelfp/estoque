@@ -3,10 +3,12 @@
 // ===============================
 async function apiRequest(acao, dados = {}) {
     try {
-        const resp = await fetch(`api/actions.php?acao=${acao}`, {
+        const payload = { acao, ...dados };
+
+        const resp = await fetch("api/actions.php", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: Object.keys(dados).length > 0 ? JSON.stringify(dados) : null
+            body: JSON.stringify(payload)
         });
 
         if (!resp.ok) {
@@ -20,6 +22,7 @@ async function apiRequest(acao, dados = {}) {
         return json;
     } catch (e) {
         console.error("Erro na API:", e);
+        alert("Erro na API: " + e.message);
         throw e;
     }
 }
@@ -48,7 +51,7 @@ async function listarProdutos() {
             });
         }
     } catch (e) {
-        console.error("Erro ao listar produtos");
+        console.error("Erro ao listar produtos", e);
     }
 }
 
@@ -73,7 +76,7 @@ async function listarMovimentacoes(filtros = {}) {
             });
         }
     } catch (e) {
-        console.error("Erro ao listar movimentações");
+        console.error("Erro ao listar movimentações", e);
     }
 }
 
@@ -81,24 +84,24 @@ async function listarMovimentacoes(filtros = {}) {
 // Operações: Entrada / Saída / Remover
 // ===============================
 async function entradaProduto(id) {
-    const qtd = prompt("Quantidade de entrada:");
-    if (!qtd) return;
-    await apiRequest("entrada", { id: id, quantidade: parseInt(qtd) });
+    const qtd = parseInt(prompt("Quantidade de entrada:"));
+    if (!qtd || qtd <= 0) return;
+    await apiRequest("entrada", { id, quantidade: qtd });
     listarProdutos();
     listarMovimentacoes();
 }
 
 async function saidaProduto(id) {
-    const qtd = prompt("Quantidade de saída:");
-    if (!qtd) return;
-    await apiRequest("saida", { id: id, quantidade: parseInt(qtd) });
+    const qtd = parseInt(prompt("Quantidade de saída:"));
+    if (!qtd || qtd <= 0) return;
+    await apiRequest("saida", { id, quantidade: qtd });
     listarProdutos();
     listarMovimentacoes();
 }
 
 async function removerProduto(id) {
     if (!confirm("Tem certeza que deseja remover este produto?")) return;
-    await apiRequest("remover", { id: id });
+    await apiRequest("remover", { id });
     listarProdutos();
     listarMovimentacoes();
 }
@@ -107,13 +110,14 @@ async function removerProduto(id) {
 // Cadastro de novo produto
 // ===============================
 async function cadastrarProduto() {
-    const nome = document.getElementById("nome").value;
-    const qtd = document.getElementById("quantidade").value;
+    const nome = document.getElementById("nome").value.trim();
+    const qtd = parseInt(document.getElementById("quantidade").value) || 0;
+
     if (!nome) {
         alert("Nome é obrigatório!");
         return;
     }
-    await apiRequest("adicionar", { nome: nome, quantidade: parseInt(qtd) || 0 });
+    await apiRequest("adicionar", { nome, quantidade: qtd });
     listarProdutos();
 }
 
