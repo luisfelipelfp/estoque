@@ -4,19 +4,29 @@ const API_URL = "http://192.168.15.100/estoque/api/actions.php";
 // Função utilitária para requisições
 // =====================
 async function apiRequest(acao, dados = null, metodo = "GET") {
-    let url = `${API_URL}?acao=${acao}`;
+    let url = `${API_URL}?acao=${encodeURIComponent(acao)}`;
     let options = { method: metodo };
 
     if (dados && metodo === "POST") {
         const formData = new FormData();
         for (let key in dados) {
-            formData.append(key, dados[key]);
+            if (dados[key] !== undefined && dados[key] !== null) {
+                formData.append(key, dados[key]);
+            }
         }
         options.body = formData;
     }
 
     try {
         const response = await fetch(url, options);
+        // Pode retornar um array (listarprodutos/listarmovimentacoes) ou objeto {sucesso,...}
+        const ct = response.headers.get("content-type") || "";
+        if (!ct.includes("application/json")) {
+            // tenta ler texto para debugar
+            const texto = await response.text();
+            console.error("Resposta não-JSON:", texto);
+            return { sucesso: false, mensagem: "Resposta inesperada do servidor" };
+        }
         return await response.json();
     } catch (error) {
         console.error("Erro na requisição:", error);
@@ -33,17 +43,17 @@ async function carregarProdutos() {
 
     const produtos = await apiRequest("listarprodutos");
 
-    if (!produtos || produtos.length === 0) {
+    if (!Array.isArray(produtos) || produtos.length === 0) {
         tabela.innerHTML = "<tr><td colspan='4'>Nenhum produto encontrado</td></tr>";
         return;
     }
 
     tabela.innerHTML = "";
     produtos.forEach(p => {
-        let tr = document.createElement("tr");
+        const tr = document.createElement("tr");
 
         // destaque se estoque for baixo
-        if (p.quantidade <= 2) {
+        if (Number(p.quantidade) <= 2) {
             tr.classList.add("estoque-baixo");
         }
 
@@ -70,17 +80,17 @@ async function carregarMovimentacoes() {
 
     const movs = await apiRequest("listarmovimentacoes");
 
-    if (!movs || movs.length === 0) {
+    if (!Array.isArray(movs) || movs.length === 0) {
         tabela.innerHTML = "<tr><td colspan='5'>Nenhuma movimentação encontrada</td></tr>";
         return;
     }
 
     tabela.innerHTML = "";
     movs.forEach(m => {
-        let tr = document.createElement("tr");
+        const tr = document.createElement("tr");
         tr.innerHTML = `
             <td>${m.id}</td>
-            <td>${m.produto}</td>   <!-- corrigido -->
+            <td>${m.produto_nome}</td>
             <td>${m.tipo}</td>
             <td>${m.quantidade}</td>
             <td>${m.data}</td>
@@ -96,7 +106,7 @@ async function adicionarProduto(nome, quantidade = 0) {
     if (!nome) return;
 
     const res = await apiRequest("adicionar", { nome, quantidade }, "POST");
-    alert(res.mensagem);
+    alert(res.mensagem || (res.sucesso ? "OK" : "Erro ao adicionar"));
     carregarProdutos();
     carregarMovimentacoes();
 }
@@ -105,8 +115,14 @@ async function entradaProduto(id) {
     const quantidade = prompt("Quantidade de entrada:");
     if (!quantidade) return;
 
-    const res = await apiRequest("entrada", { id, quantidade }, "POST");
-    alert(res.mensagem);
+    const qtd = parseInt(quantidade, 10);
+    if (isNaN(qtd) || qtd <= 0) {
+        alert("Informe uma quantidade válida.");
+        return;
+    }
+
+    const res = await apiRequest("entrada", { id, quantidade: qtd }, "POST");
+    alert(res.mensagem || (res.sucesso ? "OK" : "Erro ao registrar entrada"));
     carregarProdutos();
     carregarMovimentacoes();
 }
@@ -115,8 +131,14 @@ async function saidaProduto(id) {
     const quantidade = prompt("Quantidade de saída:");
     if (!quantidade) return;
 
-    const res = await apiRequest("saida", { id, quantidade }, "POST");
-    alert(res.mensagem);
+    const qtd = parseInt(quantidade, 10);
+    if (isNaN(qtd) || qtd <= 0) {
+        alert("Informe uma quantidade válida.");
+        return;
+    }
+
+    const res = await apiRequest("saida", { id, quantidade: qtd }, "POST");
+    alert(res.mensagem || (res.sucesso ? "OK" : "Erro ao registrar saída"));
     carregarProdutos();
     carregarMovimentacoes();
 }
@@ -125,7 +147,7 @@ async function removerProduto(id) {
     if (!confirm("Tem certeza que deseja remover este produto?")) return;
 
     const res = await apiRequest("remover", { id }, "POST");
-    alert(res.mensagem);
+    alert(res.mensagem || (res.sucesso ? "OK" : "Erro ao remover"));
     carregarProdutos();
     carregarMovimentacoes();
 }
@@ -133,17 +155,20 @@ async function removerProduto(id) {
 // =====================
 // Inicialização
 // =====================
-window.onload = function() {
+window.onload = function () {
     carregarProdutos();
     carregarMovimentacoes();
 
-    // agora o evento é no formulário, não no botão
-    document.getElementById("formAdicionarProduto").addEventListener("submit", async function(e) {
-        e.preventDefault();
-        const nome = document.getElementById("nomeProduto").value.trim();
-        if (nome) {
-            await adicionarProduto(nome, 0);
-            this.reset();
-        }
-    });
+    // evento no formulário de adicionar produto
+    const form = document.getElementById("formAdicionarProduto");
+    if (form) {
+        form.addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const nome = document.getElementById("nomeProduto").value.trim();
+            if (nome) {
+                await adicionarProduto(nome, 0);
+                this.reset();
+            }
+        });
+    }
 };
