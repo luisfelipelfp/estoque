@@ -28,14 +28,14 @@ switch ($acao) {
 
     case "listarmovimentacoes":
         $sql = "SELECT m.id, 
-                       p.nome AS produto_nome, 
+                       COALESCE(p.nome, 'Produto removido') AS produto_nome, 
                        m.tipo, 
                        m.quantidade, 
                        m.data, 
                        m.usuario, 
                        m.responsavel
                 FROM movimentacoes m
-                JOIN produtos p ON m.produto_id = p.id
+                LEFT JOIN produtos p ON m.produto_id = p.id
                 ORDER BY m.data DESC";
         $res = $conn->query($sql);
         $movs = [];
