@@ -95,7 +95,7 @@ async function saidaProduto(id) {
 
 async function removerProduto(id) {
     if (!confirm("Tem certeza que deseja remover este produto?")) return;
-    const resp = await apiRequest("removerproduto", { id }, "POST");
+    const resp = await apiRequest("remover", { id }, "POST");
     if (resp.sucesso) {
         carregarProdutos();
         carregarMovimentacoes();
