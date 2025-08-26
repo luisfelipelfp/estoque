@@ -1,146 +1,68 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <title>Estoque da Gordinha e do Careca</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body, table, button, input {
-            font-family: Verdana, sans-serif;
-        }
-        .estoque-baixo {
-            background-color: #f8d7da !important;
-        }
-        .estoque-baixo td {
-            color: #842029 !important;
-            font-weight: bold;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Estoque da Gordinha e do Careca</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <style>
+    .estoque-baixo { background-color: #f8d7da !important; }
+  </style>
 </head>
-<body class="bg-light">
-    <div class="container py-4">
-        <h1 class="mb-4 text-center">Estoque da Gordinha e do Careca</h1>
+<body class="container py-4">
+  <h1 class="mb-4">📦 Estoque da Gordinha e do Careca</h1>
 
-        <!-- Formulário de adicionar produto -->
-        <div class="card mb-4 shadow-sm">
-            <div class="card-header">
-                <button class="btn btn-link text-decoration-none w-100 text-start" 
-                        type="button" 
-                        data-bs-toggle="collapse" 
-                        data-bs-target="#collapseAdicionarProduto" 
-                        aria-expanded="true" 
-                        aria-controls="collapseAdicionarProduto">
-                    Adicionar Produto
-                </button>
-            </div>
-            <div id="collapseAdicionarProduto" class="collapse show">
-                <div class="card-body">
-                    <form id="formAdicionarProduto" class="d-flex gap-2">
-                        <input type="text" id="nomeProduto" class="form-control" placeholder="Nome do produto" required>
-                        <button type="submit" class="btn btn-primary">Adicionar</button>
-                    </form>
-                </div>
-            </div>
-        </div>
+  <!-- Formulário adicionar produto -->
+  <form id="formAdicionarProduto" class="mb-3 d-flex gap-2">
+    <input type="text" id="nomeProduto" class="form-control" placeholder="Nome do produto" required>
+    <button type="submit" class="btn btn-primary">Adicionar Produto</button>
+  </form>
 
-        <!-- Abas -->
-        <ul class="nav nav-tabs mb-3" id="estoqueTabs" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="produtos-tab" data-bs-toggle="tab" data-bs-target="#produtos" type="button" role="tab">Produtos</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="movimentacoes-tab" data-bs-toggle="tab" data-bs-target="#movimentacoes" type="button" role="tab">Movimentações</button>
-            </li>
-        </ul>
+  <!-- Tabela produtos -->
+  <h3>Produtos</h3>
+  <table id="tabelaProdutos" class="table table-bordered table-striped">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Nome</th>
+        <th>Quantidade</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
-        <div class="tab-content" id="estoqueTabsContent">
-            <!-- Produtos -->
-            <div class="tab-pane fade show active" id="produtos" role="tabpanel">
-                <div class="card shadow-sm">
-                    <div class="card-body">
-                        <table class="table table-striped" id="tabelaProdutos">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Nome</th>
-                                    <th>Quantidade</th>
-                                    <th>Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Produtos via JS -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
+  <!-- Filtro movimentações -->
+  <h3>Movimentações</h3>
+  <form id="formFiltroMovs" class="mb-3 d-flex gap-2">
+    <input type="date" name="data_inicio" class="form-control">
+    <input type="date" name="data_fim" class="form-control">
+    <select name="tipo" class="form-control">
+      <option value="">Todos</option>
+      <option value="entrada">Entrada</option>
+      <option value="saida">Saída</option>
+      <option value="remocao">Remoção</option>
+    </select>
+    <button type="submit" class="btn btn-secondary">Filtrar</button>
+  </form>
 
-            <!-- Movimentações -->
-            <div class="tab-pane fade" id="movimentacoes" role="tabpanel">
-                <div class="card shadow-sm">
-                    <div class="card-body">
-                        <!-- Filtros -->
-                        <form id="formFiltros" class="row g-3 mb-3">
-                            <div class="col-md-3">
-                                <input type="text" id="filtroProduto" class="form-control" placeholder="Produto">
-                            </div>
-                            <div class="col-md-2">
-                                <select id="filtroTipo" class="form-select">
-                                    <option value="">Todos</option>
-                                    <option value="entrada">Entrada</option>
-                                    <option value="saida">Saída</option>
-                                    <option value="remocao">Remoção</option>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <input type="date" id="filtroDataInicio" class="form-control">
-                            </div>
-                            <div class="col-md-2">
-                                <input type="date" id="filtroDataFim" class="form-control">
-                            </div>
-                            <div class="col-md-2">
-                                <input type="text" id="filtroUsuario" class="form-control" placeholder="Usuário">
-                            </div>
-                            <div class="col-md-2">
-                                <input type="text" id="filtroResponsavel" class="form-control" placeholder="Responsável">
-                            </div>
-                            <div class="col-md-1">
-                                <button type="submit" class="btn btn-primary w-100">Filtrar</button>
-                            </div>
-                        </form>
+  <!-- Tabela movimentações -->
+  <table id="tabelaMovimentacoes" class="table table-bordered table-striped">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Produto</th>
+        <th>Tipo</th>
+        <th>Quantidade</th>
+        <th>Data</th>
+        <th>Usuário</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
-                        <!-- Tabela -->
-                        <table class="table table-striped" id="tabelaMovimentacoes">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Produto</th>
-                                    <th>Tipo</th>
-                                    <th>Quantidade</th>
-                                    <th>Usuário</th>
-                                    <th>Responsável</th>
-                                    <th>Data</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Movimentações via JS -->
-                            </tbody>
-                        </table>
+  <!-- Paginação movimentações -->
+  <div id="paginacaoMovs" class="mt-2"></div>
 
-                        <!-- Paginação -->
-                        <div class="d-flex justify-content-between align-items-center mt-3">
-                            <button id="btnAnterior" class="btn btn-secondary">Anterior</button>
-                            <span id="infoPagina"></span>
-                            <button id="btnProximo" class="btn btn-secondary">Próximo</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="js/script.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>

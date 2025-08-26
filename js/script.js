@@ -28,6 +28,8 @@ async function apiRequest(acao, dados = null, metodo = "GET") {
     }
 }
 
+// -------------------- PRODUTOS --------------------
+
 async function carregarProdutos() {
     const tabela = document.getElementById("tabelaProdutos").querySelector("tbody");
     tabela.innerHTML = "<tr><td colspan='4'>Carregando...</td></tr>";
@@ -58,6 +60,52 @@ async function carregarProdutos() {
     });
 }
 
+async function adicionarProduto(nome, quantidade = 0) {
+    const resp = await apiRequest("adicionarproduto", { nome, quantidade }, "POST");
+    if (resp.sucesso) {
+        carregarProdutos();
+    } else {
+        alert(resp.mensagem || "Erro ao adicionar produto");
+    }
+}
+
+async function entradaProduto(id) {
+    const qtd = prompt("Quantidade de entrada:");
+    if (!qtd || isNaN(qtd)) return;
+    const resp = await apiRequest("entrada", { id, quantidade: qtd }, "POST");
+    if (resp.sucesso) {
+        carregarProdutos();
+        carregarMovimentacoes();
+    } else {
+        alert(resp.mensagem || "Erro na entrada de produto");
+    }
+}
+
+async function saidaProduto(id) {
+    const qtd = prompt("Quantidade de saída:");
+    if (!qtd || isNaN(qtd)) return;
+    const resp = await apiRequest("saida", { id, quantidade: qtd }, "POST");
+    if (resp.sucesso) {
+        carregarProdutos();
+        carregarMovimentacoes();
+    } else {
+        alert(resp.mensagem || "Erro na saída de produto");
+    }
+}
+
+async function removerProduto(id) {
+    if (!confirm("Tem certeza que deseja remover este produto?")) return;
+    const resp = await apiRequest("removerproduto", { id }, "POST");
+    if (resp.sucesso) {
+        carregarProdutos();
+        carregarMovimentacoes();
+    } else {
+        alert(resp.mensagem || "Erro ao remover produto");
+    }
+}
+
+// -------------------- MOVIMENTAÇÕES --------------------
+
 let paginaAtual = 1;
 let ultimaBusca = {};
 
@@ -78,11 +126,11 @@ async function carregarMovimentacoes(filtros = {}) {
         const tr = document.createElement("tr");
         tr.innerHTML = `
             <td>${m.id}</td>
-            <td>${m.produto_nome}</td>
+            <td>${m.produto_nome || "-"}</td>
             <td>${m.tipo}</td>
             <td>${m.quantidade}</td>
             <td>${m.data}</td>
-            <td>${m.usuario}</td>
+            <td>${m.usuario || "-"}</td>
         `;
         tabela.appendChild(tr);
     });
@@ -97,7 +145,7 @@ async function carregarMovimentacoes(filtros = {}) {
     `;
 }
 
-// (funções adicionarProduto, entradaProduto, saidaProduto, removerProduto ficam iguais às que você já tinha)
+// -------------------- INIT --------------------
 
 window.onload = function () {
     carregarProdutos();
