@@ -27,7 +27,13 @@ switch ($acao) {
         break;
 
     case "listarmovimentacoes":
-        $sql = "SELECT m.id, m.tipo, m.quantidade, m.data, p.nome as produto
+        $sql = "SELECT m.id, 
+                       p.nome AS produto_nome, 
+                       m.tipo, 
+                       m.quantidade, 
+                       m.data, 
+                       m.usuario, 
+                       m.responsavel
                 FROM movimentacoes m
                 JOIN produtos p ON m.produto_id = p.id
                 ORDER BY m.data DESC";
@@ -42,6 +48,8 @@ switch ($acao) {
     case "adicionar":
         $nome = $_POST["nome"] ?? null;
         $quantidade = (int) ($_POST["quantidade"] ?? 0);
+        $usuario = $_POST["usuario"] ?? "sistema";
+        $responsavel = $_POST["responsavel"] ?? "admin";
 
         if (!$nome || $quantidade <= 0) {
             echo json_encode(["sucesso" => false, "mensagem" => "Dados inválidos"]);
@@ -52,10 +60,9 @@ switch ($acao) {
                                 ON DUPLICATE KEY UPDATE quantidade = quantidade + VALUES(quantidade)");
         $stmt->bind_param("si", $nome, $quantidade);
         if ($stmt->execute()) {
-            // registra movimentação
             $produto_id = $conn->insert_id ?: $conn->query("SELECT id FROM produtos WHERE nome='$nome'")->fetch_assoc()["id"];
-            $conn->query("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data) 
-                          VALUES ($produto_id, 'entrada', $quantidade, NOW())");
+            $conn->query("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario, responsavel) 
+                          VALUES ($produto_id, 'entrada', $quantidade, NOW(), '$usuario', '$responsavel')");
 
             echo json_encode(["sucesso" => true, "mensagem" => "Produto adicionado com sucesso"]);
         } else {
@@ -66,19 +73,20 @@ switch ($acao) {
     case "saida":
         $id = (int) ($_POST["id"] ?? 0);
         $quantidade = (int) ($_POST["quantidade"] ?? 0);
+        $usuario = $_POST["usuario"] ?? "sistema";
+        $responsavel = $_POST["responsavel"] ?? "admin";
 
         if ($id <= 0 || $quantidade <= 0) {
             echo json_encode(["sucesso" => false, "mensagem" => "Dados inválidos"]);
             exit;
         }
 
-        // Atualiza o estoque
         $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ? AND quantidade >= ?");
         $stmt->bind_param("iii", $quantidade, $id, $quantidade);
 
         if ($stmt->execute() && $stmt->affected_rows > 0) {
-            $conn->query("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data) 
-                          VALUES ($id, 'saida', $quantidade, NOW())");
+            $conn->query("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario, responsavel) 
+                          VALUES ($id, 'saida', $quantidade, NOW(), '$usuario', '$responsavel')");
 
             echo json_encode(["sucesso" => true, "mensagem" => "Saída registrada"]);
         } else {
@@ -88,20 +96,20 @@ switch ($acao) {
 
     case "remover":
         $id = (int) ($_POST["id"] ?? $_GET["id"] ?? 0);
+        $usuario = $_POST["usuario"] ?? "sistema";
+        $responsavel = $_POST["responsavel"] ?? "admin";
 
         if ($id <= 0) {
             echo json_encode(["sucesso" => false, "mensagem" => "ID inválido"]);
             exit;
         }
 
-        // registra movimentação ANTES de remover
         $produto = $conn->query("SELECT nome, quantidade FROM produtos WHERE id=$id")->fetch_assoc();
         if ($produto) {
-            $conn->query("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data) 
-                          VALUES ($id, 'remocao', {$produto['quantidade']}, NOW())");
+            $conn->query("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario, responsavel) 
+                          VALUES ($id, 'remocao', {$produto['quantidade']}, NOW(), '$usuario', '$responsavel')");
         }
 
-        // remove produto
         $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
         $stmt->bind_param("i", $id);
 

@@ -29,26 +29,32 @@ async function apiRequest(acao, dados = null, metodo = "GET") {
 // =====================
 async function carregarProdutos() {
     const tabela = document.getElementById("tabelaProdutos").querySelector("tbody");
-    tabela.innerHTML = "<tr><td colspan='3'>Carregando...</td></tr>";
+    tabela.innerHTML = "<tr><td colspan='4'>Carregando...</td></tr>";
 
     const produtos = await apiRequest("listarprodutos");
 
     if (!produtos || produtos.length === 0) {
-        tabela.innerHTML = "<tr><td colspan='3'>Nenhum produto encontrado</td></tr>";
+        tabela.innerHTML = "<tr><td colspan='4'>Nenhum produto encontrado</td></tr>";
         return;
     }
 
     tabela.innerHTML = "";
     produtos.forEach(p => {
         let tr = document.createElement("tr");
+
+        // destaque se estoque for baixo
+        if (p.quantidade <= 2) {
+            tr.classList.add("estoque-baixo");
+        }
+
         tr.innerHTML = `
             <td>${p.id}</td>
             <td>${p.nome}</td>
             <td>${p.quantidade}</td>
             <td>
-                <button onclick="entradaProduto(${p.id})">Entrada</button>
-                <button onclick="saidaProduto(${p.id})">Saída</button>
-                <button onclick="removerProduto(${p.id})">Remover</button>
+                <button class="btn btn-success btn-sm" onclick="entradaProduto(${p.id})">Entrada</button>
+                <button class="btn btn-warning btn-sm" onclick="saidaProduto(${p.id})">Saída</button>
+                <button class="btn btn-danger btn-sm" onclick="removerProduto(${p.id})">Remover</button>
             </td>
         `;
         tabela.appendChild(tr);
@@ -60,12 +66,12 @@ async function carregarProdutos() {
 // =====================
 async function carregarMovimentacoes() {
     const tabela = document.getElementById("tabelaMovimentacoes").querySelector("tbody");
-    tabela.innerHTML = "<tr><td colspan='6'>Carregando...</td></tr>";
+    tabela.innerHTML = "<tr><td colspan='5'>Carregando...</td></tr>";
 
     const movs = await apiRequest("listarmovimentacoes");
 
     if (!movs || movs.length === 0) {
-        tabela.innerHTML = "<tr><td colspan='6'>Nenhuma movimentação encontrada</td></tr>";
+        tabela.innerHTML = "<tr><td colspan='5'>Nenhuma movimentação encontrada</td></tr>";
         return;
     }
 
@@ -78,7 +84,6 @@ async function carregarMovimentacoes() {
             <td>${m.tipo}</td>
             <td>${m.quantidade}</td>
             <td>${m.data}</td>
-            <td>${m.usuario} / ${m.responsavel}</td>
         `;
         tabela.appendChild(tr);
     });
@@ -87,11 +92,8 @@ async function carregarMovimentacoes() {
 // =====================
 // Ações de produto
 // =====================
-async function adicionarProduto() {
-    const nome = prompt("Digite o nome do produto:");
-    const quantidade = prompt("Digite a quantidade inicial:");
-
-    if (!nome || !quantidade) return;
+async function adicionarProduto(nome, quantidade = 0) {
+    if (!nome) return;
 
     const res = await apiRequest("adicionar", { nome, quantidade }, "POST");
     alert(res.mensagem);
@@ -109,7 +111,7 @@ async function entradaProduto(id) {
     carregarMovimentacoes();
 }
 
-async function saiaProduto(id) {
+async function saidaProduto(id) {
     const quantidade = prompt("Quantidade de saída:");
     if (!quantidade) return;
 
@@ -135,5 +137,13 @@ window.onload = function() {
     carregarProdutos();
     carregarMovimentacoes();
 
-    document.getElementById("btnAdicionar").addEventListener("click", adicionarProduto);
+    // agora o evento é no formulário, não no botão
+    document.getElementById("formAdicionarProduto").addEventListener("submit", async function(e) {
+        e.preventDefault();
+        const nome = document.getElementById("nomeProduto").value.trim();
+        if (nome) {
+            await adicionarProduto(nome, 0);
+            this.reset();
+        }
+    });
 };
