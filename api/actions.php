@@ -124,8 +124,79 @@ try {
             ]);
             break;
 
-        // 🔽 os demais cases (adicionar, entrada, saida, remover) ficam iguais ao que você já me mandou
-        // (não alterei nada neles)
+        // ✅ adicionar produto
+        case "adicionarproduto":
+            $nome = $_POST["nome"] ?? null;
+            if (!$nome) {
+                echo json_encode(["sucesso" => false, "mensagem" => "Nome do produto não informado"]);
+                exit;
+            }
+            $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade) VALUES (?, 0)");
+            $stmt->bind_param("s", $nome);
+            $stmt->execute();
+            echo json_encode(["sucesso" => true, "mensagem" => "Produto adicionado"]);
+            break;
+
+        // ✅ entrada de produto
+        case "entradaproduto":
+            $id = (int)($_POST["id"] ?? 0);
+            $qtd = (int)($_POST["quantidade"] ?? 0);
+            if ($id <= 0 || $qtd <= 0) {
+                echo json_encode(["sucesso" => false, "mensagem" => "Dados inválidos"]);
+                exit;
+            }
+            $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?");
+            $stmt->bind_param("ii", $qtd, $id);
+            $stmt->execute();
+
+            $nome = obterNomeProduto($conn, $id);
+            $stmtMov = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data) VALUES (?, ?, 'entrada', ?, NOW())");
+            $stmtMov->bind_param("isi", $id, $nome, $qtd);
+            $stmtMov->execute();
+
+            echo json_encode(["sucesso" => true, "mensagem" => "Entrada registrada"]);
+            break;
+
+        // ✅ saída de produto
+        case "saidaproduto":
+            $id = (int)($_POST["id"] ?? 0);
+            $qtd = (int)($_POST["quantidade"] ?? 0);
+            if ($id <= 0 || $qtd <= 0) {
+                echo json_encode(["sucesso" => false, "mensagem" => "Dados inválidos"]);
+                exit;
+            }
+            $stmt = $conn->prepare("UPDATE produtos SET quantidade = GREATEST(quantidade - ?, 0) WHERE id = ?");
+            $stmt->bind_param("ii", $qtd, $id);
+            $stmt->execute();
+
+            $nome = obterNomeProduto($conn, $id);
+            $stmtMov = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data) VALUES (?, ?, 'saida', ?, NOW())");
+            $stmtMov->bind_param("isi", $id, $nome, $qtd);
+            $stmtMov->execute();
+
+            echo json_encode(["sucesso" => true, "mensagem" => "Saída registrada"]);
+            break;
+
+        // ✅ remover produto
+        case "removerproduto":
+            $id = (int)($_POST["id"] ?? 0);
+            if ($id <= 0) {
+                echo json_encode(["sucesso" => false, "mensagem" => "ID inválido"]);
+                exit;
+            }
+
+            $nome = obterNomeProduto($conn, $id);
+
+            $stmtMov = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data) VALUES (?, ?, 'remocao', 0, NOW())");
+            $stmtMov->bind_param("is", $id, $nome);
+            $stmtMov->execute();
+
+            $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
+            $stmt->bind_param("i", $id);
+            $stmt->execute();
+
+            echo json_encode(["sucesso" => true, "mensagem" => "Produto removido"]);
+            break;
 
         default:
             echo json_encode(["sucesso" => false, "mensagem" => "Ação inválida"]);
