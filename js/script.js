@@ -80,7 +80,7 @@ async function carregarMovimentacoes() {
         let tr = document.createElement("tr");
         tr.innerHTML = `
             <td>${m.id}</td>
-            <td>${m.produto_nome}</td>
+            <td>${m.produto}</td>   <!-- corrigido -->
             <td>${m.tipo}</td>
             <td>${m.quantidade}</td>
             <td>${m.data}</td>
