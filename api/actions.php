@@ -94,7 +94,7 @@ switch ($acao) {
         }
         break;
 
-    case "remover":
+        case "remover":
         $id = (int) ($_POST["id"] ?? $_GET["id"] ?? 0);
         $usuario = $_POST["usuario"] ?? "sistema";
         $responsavel = $_POST["responsavel"] ?? "admin";
@@ -104,12 +104,17 @@ switch ($acao) {
             exit;
         }
 
+        // Pega os dados do produto antes de remover
         $produto = $conn->query("SELECT nome, quantidade FROM produtos WHERE id=$id")->fetch_assoc();
         if ($produto) {
-            $conn->query("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario, responsavel) 
-                          VALUES ($id, 'remocao', {$produto['quantidade']}, NOW(), '$usuario', '$responsavel')");
+            // Registra movimentação do tipo "remocao"
+            $stmtMov = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario, responsavel) 
+                                       VALUES (?, 'remocao', ?, NOW(), ?, ?)");
+            $stmtMov->bind_param("iiss", $id, $produto['quantidade'], $usuario, $responsavel);
+            $stmtMov->execute();
         }
 
+        // Remove o produto
         $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
         $stmt->bind_param("i", $id);
 
@@ -119,6 +124,7 @@ switch ($acao) {
             echo json_encode(["sucesso" => false, "mensagem" => "Erro ao remover produto ou produto inexistente"]);
         }
         break;
+
 
     default:
         echo json_encode(["sucesso" => false, "mensagem" => "Ação inválida"]);
