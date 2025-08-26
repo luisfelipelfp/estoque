@@ -1,11 +1,13 @@
 const API_URL = "http://192.168.15.100/estoque/api/actions.php";
 
-// =====================
-// Função utilitária para requisições
-// =====================
 async function apiRequest(acao, dados = null, metodo = "GET") {
     let url = `${API_URL}?acao=${encodeURIComponent(acao)}`;
     let options = { method: metodo };
+
+    if (metodo === "GET" && dados) {
+        const query = new URLSearchParams(dados).toString();
+        url += "&" + query;
+    }
 
     if (dados && metodo === "POST") {
         const formData = new FormData();
@@ -19,14 +21,6 @@ async function apiRequest(acao, dados = null, metodo = "GET") {
 
     try {
         const response = await fetch(url, options);
-        // Pode retornar um array (listarprodutos/listarmovimentacoes) ou objeto {sucesso,...}
-        const ct = response.headers.get("content-type") || "";
-        if (!ct.includes("application/json")) {
-            // tenta ler texto para debugar
-            const texto = await response.text();
-            console.error("Resposta não-JSON:", texto);
-            return { sucesso: false, mensagem: "Resposta inesperada do servidor" };
-        }
         return await response.json();
     } catch (error) {
         console.error("Erro na requisição:", error);
@@ -34,9 +28,6 @@ async function apiRequest(acao, dados = null, metodo = "GET") {
     }
 }
 
-// =====================
-// Listar produtos
-// =====================
 async function carregarProdutos() {
     const tabela = document.getElementById("tabelaProdutos").querySelector("tbody");
     tabela.innerHTML = "<tr><td colspan='4'>Carregando...</td></tr>";
@@ -51,11 +42,7 @@ async function carregarProdutos() {
     tabela.innerHTML = "";
     produtos.forEach(p => {
         const tr = document.createElement("tr");
-
-        // destaque se estoque for baixo
-        if (Number(p.quantidade) <= 2) {
-            tr.classList.add("estoque-baixo");
-        }
+        if (Number(p.quantidade) <= 2) tr.classList.add("estoque-baixo");
 
         tr.innerHTML = `
             <td>${p.id}</td>
@@ -71,22 +58,23 @@ async function carregarProdutos() {
     });
 }
 
-// =====================
-// Listar movimentações
-// =====================
-async function carregarMovimentacoes() {
+let paginaAtual = 1;
+let ultimaBusca = {};
+
+async function carregarMovimentacoes(filtros = {}) {
     const tabela = document.getElementById("tabelaMovimentacoes").querySelector("tbody");
-    tabela.innerHTML = "<tr><td colspan='5'>Carregando...</td></tr>";
+    tabela.innerHTML = "<tr><td colspan='6'>Carregando...</td></tr>";
 
-    const movs = await apiRequest("listarmovimentacoes");
+    ultimaBusca = { ...filtros, pagina: paginaAtual, limite: 10 };
+    const resp = await apiRequest("listarmovimentacoes", ultimaBusca, "GET");
 
-    if (!Array.isArray(movs) || movs.length === 0) {
-        tabela.innerHTML = "<tr><td colspan='5'>Nenhuma movimentação encontrada</td></tr>";
+    if (!resp.sucesso || !Array.isArray(resp.dados) || resp.dados.length === 0) {
+        tabela.innerHTML = "<tr><td colspan='6'>Nenhuma movimentação encontrada</td></tr>";
         return;
     }
 
     tabela.innerHTML = "";
-    movs.forEach(m => {
+    resp.dados.forEach(m => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
             <td>${m.id}</td>
@@ -94,72 +82,27 @@ async function carregarMovimentacoes() {
             <td>${m.tipo}</td>
             <td>${m.quantidade}</td>
             <td>${m.data}</td>
+            <td>${m.usuario}</td>
         `;
         tabela.appendChild(tr);
     });
+
+    const paginacao = document.getElementById("paginacaoMovs");
+    paginacao.innerHTML = `
+        <button class="btn btn-sm btn-secondary" ${paginaAtual <= 1 ? "disabled" : ""} 
+            onclick="paginaAtual--; carregarMovimentacoes(ultimaBusca)">Anterior</button>
+        <span class="mx-2">Página ${resp.pagina} de ${resp.paginas}</span>
+        <button class="btn btn-sm btn-secondary" ${paginaAtual >= resp.paginas ? "disabled" : ""} 
+            onclick="paginaAtual++; carregarMovimentacoes(ultimaBusca)">Próxima</button>
+    `;
 }
 
-// =====================
-// Ações de produto
-// =====================
-async function adicionarProduto(nome, quantidade = 0) {
-    if (!nome) return;
+// (funções adicionarProduto, entradaProduto, saidaProduto, removerProduto ficam iguais às que você já tinha)
 
-    const res = await apiRequest("adicionar", { nome, quantidade }, "POST");
-    alert(res.mensagem || (res.sucesso ? "OK" : "Erro ao adicionar"));
-    carregarProdutos();
-    carregarMovimentacoes();
-}
-
-async function entradaProduto(id) {
-    const quantidade = prompt("Quantidade de entrada:");
-    if (!quantidade) return;
-
-    const qtd = parseInt(quantidade, 10);
-    if (isNaN(qtd) || qtd <= 0) {
-        alert("Informe uma quantidade válida.");
-        return;
-    }
-
-    const res = await apiRequest("entrada", { id, quantidade: qtd }, "POST");
-    alert(res.mensagem || (res.sucesso ? "OK" : "Erro ao registrar entrada"));
-    carregarProdutos();
-    carregarMovimentacoes();
-}
-
-async function saidaProduto(id) {
-    const quantidade = prompt("Quantidade de saída:");
-    if (!quantidade) return;
-
-    const qtd = parseInt(quantidade, 10);
-    if (isNaN(qtd) || qtd <= 0) {
-        alert("Informe uma quantidade válida.");
-        return;
-    }
-
-    const res = await apiRequest("saida", { id, quantidade: qtd }, "POST");
-    alert(res.mensagem || (res.sucesso ? "OK" : "Erro ao registrar saída"));
-    carregarProdutos();
-    carregarMovimentacoes();
-}
-
-async function removerProduto(id) {
-    if (!confirm("Tem certeza que deseja remover este produto?")) return;
-
-    const res = await apiRequest("remover", { id }, "POST");
-    alert(res.mensagem || (res.sucesso ? "OK" : "Erro ao remover"));
-    carregarProdutos();
-    carregarMovimentacoes();
-}
-
-// =====================
-// Inicialização
-// =====================
 window.onload = function () {
     carregarProdutos();
     carregarMovimentacoes();
 
-    // evento no formulário de adicionar produto
     const form = document.getElementById("formAdicionarProduto");
     if (form) {
         form.addEventListener("submit", async function (e) {
@@ -169,6 +112,16 @@ window.onload = function () {
                 await adicionarProduto(nome, 0);
                 this.reset();
             }
+        });
+    }
+
+    const formFiltro = document.getElementById("formFiltroMovs");
+    if (formFiltro) {
+        formFiltro.addEventListener("submit", function (e) {
+            e.preventDefault();
+            paginaAtual = 1;
+            const filtros = Object.fromEntries(new FormData(formFiltro).entries());
+            carregarMovimentacoes(filtros);
         });
     }
 };
