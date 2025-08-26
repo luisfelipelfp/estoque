@@ -9,10 +9,10 @@
             font-family: Verdana, sans-serif;
         }
         .estoque-baixo {
-            background-color: #f8d7da !important; /* Vermelho claro */
+            background-color: #f8d7da !important;
         }
         .estoque-baixo td {
-            color: #842029 !important; /* Texto vermelho mais forte */
+            color: #842029 !important;
             font-weight: bold;
         }
     </style>
@@ -43,23 +43,19 @@
             </div>
         </div>
 
-        <!-- Abas para Produtos e Movimentações -->
+        <!-- Abas -->
         <ul class="nav nav-tabs mb-3" id="estoqueTabs" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="produtos-tab" data-bs-toggle="tab" data-bs-target="#produtos" type="button" role="tab" aria-controls="produtos" aria-selected="true">
-                    Produtos
-                </button>
+                <button class="nav-link active" id="produtos-tab" data-bs-toggle="tab" data-bs-target="#produtos" type="button" role="tab">Produtos</button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="movimentacoes-tab" data-bs-toggle="tab" data-bs-target="#movimentacoes" type="button" role="tab" aria-controls="movimentacoes" aria-selected="false">
-                    Movimentações
-                </button>
+                <button class="nav-link" id="movimentacoes-tab" data-bs-toggle="tab" data-bs-target="#movimentacoes" type="button" role="tab">Movimentações</button>
             </li>
         </ul>
 
         <div class="tab-content" id="estoqueTabsContent">
-            <!-- Produtos em Estoque -->
-            <div class="tab-pane fade show active" id="produtos" role="tabpanel" aria-labelledby="produtos-tab">
+            <!-- Produtos -->
+            <div class="tab-pane fade show active" id="produtos" role="tabpanel">
                 <div class="card shadow-sm">
                     <div class="card-body">
                         <table class="table table-striped" id="tabelaProdutos">
@@ -79,10 +75,41 @@
                 </div>
             </div>
 
-            <!-- Relatório de Movimentações -->
-            <div class="tab-pane fade" id="movimentacoes" role="tabpanel" aria-labelledby="movimentacoes-tab">
+            <!-- Movimentações -->
+            <div class="tab-pane fade" id="movimentacoes" role="tabpanel">
                 <div class="card shadow-sm">
                     <div class="card-body">
+                        <!-- Filtros -->
+                        <form id="formFiltros" class="row g-3 mb-3">
+                            <div class="col-md-3">
+                                <input type="text" id="filtroProduto" class="form-control" placeholder="Produto">
+                            </div>
+                            <div class="col-md-2">
+                                <select id="filtroTipo" class="form-select">
+                                    <option value="">Todos</option>
+                                    <option value="entrada">Entrada</option>
+                                    <option value="saida">Saída</option>
+                                    <option value="remocao">Remoção</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <input type="date" id="filtroDataInicio" class="form-control">
+                            </div>
+                            <div class="col-md-2">
+                                <input type="date" id="filtroDataFim" class="form-control">
+                            </div>
+                            <div class="col-md-2">
+                                <input type="text" id="filtroUsuario" class="form-control" placeholder="Usuário">
+                            </div>
+                            <div class="col-md-2">
+                                <input type="text" id="filtroResponsavel" class="form-control" placeholder="Responsável">
+                            </div>
+                            <div class="col-md-1">
+                                <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+                            </div>
+                        </form>
+
+                        <!-- Tabela -->
                         <table class="table table-striped" id="tabelaMovimentacoes">
                             <thead>
                                 <tr>
@@ -90,6 +117,8 @@
                                     <th>Produto</th>
                                     <th>Tipo</th>
                                     <th>Quantidade</th>
+                                    <th>Usuário</th>
+                                    <th>Responsável</th>
                                     <th>Data</th>
                                 </tr>
                             </thead>
@@ -97,6 +126,13 @@
                                 <!-- Movimentações via JS -->
                             </tbody>
                         </table>
+
+                        <!-- Paginação -->
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <button id="btnAnterior" class="btn btn-secondary">Anterior</button>
+                            <span id="infoPagina"></span>
+                            <button id="btnProximo" class="btn btn-secondary">Próximo</button>
+                        </div>
                     </div>
                 </div>
             </div>
