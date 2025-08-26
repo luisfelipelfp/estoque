@@ -27,12 +27,12 @@ switch ($acao) {
         break;
 
     case "listarmovimentacoes":
-        $sql = "SELECT m.id, 
-                       COALESCE(p.nome, 'Produto removido') AS produto_nome, 
-                       m.tipo, 
-                       m.quantidade, 
-                       m.data, 
-                       m.usuario, 
+        $sql = "SELECT m.id,
+                       COALESCE(m.produto_nome, p.nome, 'Produto removido') AS produto_nome,
+                       m.tipo,
+                       m.quantidade,
+                       m.data,
+                       m.usuario,
                        m.responsavel
                 FROM movimentacoes m
                 LEFT JOIN produtos p ON m.produto_id = p.id
@@ -61,8 +61,10 @@ switch ($acao) {
         $stmt->bind_param("si", $nome, $quantidade);
         if ($stmt->execute()) {
             $produto_id = $conn->insert_id ?: $conn->query("SELECT id FROM produtos WHERE nome='$nome'")->fetch_assoc()["id"];
-            $conn->query("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario, responsavel) 
-                          VALUES ($produto_id, 'entrada', $quantidade, NOW(), '$usuario', '$responsavel')");
+            $stmtMov = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel) 
+                                       VALUES (?, ?, 'entrada', ?, NOW(), ?, ?)");
+            $stmtMov->bind_param("isiss", $produto_id, $nome, $quantidade, $usuario, $responsavel);
+            $stmtMov->execute();
 
             echo json_encode(["sucesso" => true, "mensagem" => "Produto adicionado com sucesso"]);
         } else {
@@ -85,8 +87,13 @@ switch ($acao) {
         $stmt->bind_param("iii", $quantidade, $id, $quantidade);
 
         if ($stmt->execute() && $stmt->affected_rows > 0) {
-            $conn->query("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario, responsavel) 
-                          VALUES ($id, 'saida', $quantidade, NOW(), '$usuario', '$responsavel')");
+            $produto = $conn->query("SELECT nome FROM produtos WHERE id=$id")->fetch_assoc();
+            $nomeProduto = $produto ? $produto['nome'] : "Produto removido";
+
+            $stmtMov = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel) 
+                                       VALUES (?, ?, 'saida', ?, NOW(), ?, ?)");
+            $stmtMov->bind_param("isiss", $id, $nomeProduto, $quantidade, $usuario, $responsavel);
+            $stmtMov->execute();
 
             echo json_encode(["sucesso" => true, "mensagem" => "Saída registrada"]);
         } else {
@@ -94,7 +101,7 @@ switch ($acao) {
         }
         break;
 
-        case "remover":
+    case "remover":
         $id = (int) ($_POST["id"] ?? $_GET["id"] ?? 0);
         $usuario = $_POST["usuario"] ?? "sistema";
         $responsavel = $_POST["responsavel"] ?? "admin";
@@ -104,17 +111,14 @@ switch ($acao) {
             exit;
         }
 
-        // Pega os dados do produto antes de remover
         $produto = $conn->query("SELECT nome, quantidade FROM produtos WHERE id=$id")->fetch_assoc();
         if ($produto) {
-            // Registra movimentação do tipo "remocao"
-            $stmtMov = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario, responsavel) 
-                                       VALUES (?, 'remocao', ?, NOW(), ?, ?)");
-            $stmtMov->bind_param("iiss", $id, $produto['quantidade'], $usuario, $responsavel);
+            $stmtMov = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel) 
+                                       VALUES (?, ?, 'remocao', ?, NOW(), ?, ?)");
+            $stmtMov->bind_param("isiss", $id, $produto['nome'], $produto['quantidade'], $usuario, $responsavel);
             $stmtMov->execute();
         }
 
-        // Remove o produto
         $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
         $stmt->bind_param("i", $id);
 
@@ -124,7 +128,6 @@ switch ($acao) {
             echo json_encode(["sucesso" => false, "mensagem" => "Erro ao remover produto ou produto inexistente"]);
         }
         break;
-
 
     default:
         echo json_encode(["sucesso" => false, "mensagem" => "Ação inválida"]);
