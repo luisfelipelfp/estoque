@@ -2,9 +2,6 @@
 header("Content-Type: application/json; charset=UTF-8");
 require_once __DIR__ . "/db.php";
 
-// (opcional) debug local
-// error_reporting(E_ALL); ini_set('display_errors', 1);
-
 $conn = db();
 
 /** Helper: pega nome do produto (ou "Produto removido") */
@@ -49,68 +46,45 @@ try {
             break;
 
         case "listarmovimentacoes":
-            // paginação
             $pagina = max(1, (int)($_GET["pagina"] ?? $_POST["pagina"] ?? 1));
             $limite = max(1, (int)($_GET["limite"] ?? $_POST["limite"] ?? 20));
             $offset = ($pagina - 1) * $limite;
 
-            // filtros
             $cond = [];
             $bindVals = [];
             $bindTypes = "";
 
-            $tipo = $_GET["tipo"] ?? $_POST["tipo"] ?? "";
-            if ($tipo !== "") {
-                $cond[] = "m.tipo = ?";
-                $bindVals[] = $tipo;
-                $bindTypes .= "s";
-            }
-
-            $produto = $_GET["produto"] ?? $_POST["produto"] ?? "";
-            if ($produto !== "") {
-                $cond[] = "m.produto_nome LIKE ?";
-                $bindVals[] = "%".$produto."%";
-                $bindTypes .= "s";
-            }
-
-            $usuario = $_GET["usuario"] ?? $_POST["usuario"] ?? "";
-            if ($usuario !== "") {
-                $cond[] = "m.usuario = ?";
-                $bindVals[] = $usuario;
-                $bindTypes .= "s";
-            }
-
-            $responsavel = $_GET["responsavel"] ?? $_POST["responsavel"] ?? "";
-            if ($responsavel !== "") {
-                $cond[] = "m.responsavel = ?";
-                $bindVals[] = $responsavel;
-                $bindTypes .= "s";
-            }
-
-            $data_inicio = $_GET["data_inicio"] ?? $_POST["data_inicio"] ?? "";
-            if ($data_inicio !== "") {
-                $cond[] = "m.data >= ?";
-                $bindVals[] = $data_inicio;
-                $bindTypes .= "s";
-            }
-
-            $data_fim = $_GET["data_fim"] ?? $_POST["data_fim"] ?? "";
-            if ($data_fim !== "") {
-                $cond[] = "m.data <= ?";
-                $bindVals[] = $data_fim;
-                $bindTypes .= "s";
+            foreach (["tipo","produto","usuario","responsavel","data_inicio","data_fim"] as $campo) {
+                $val = $_GET[$campo] ?? $_POST[$campo] ?? "";
+                if ($val !== "") {
+                    if ($campo === "produto") {
+                        $cond[] = "m.produto_nome LIKE ?";
+                        $bindVals[] = "%".$val."%";
+                        $bindTypes .= "s";
+                    } elseif ($campo === "data_inicio") {
+                        $cond[] = "m.data >= ?";
+                        $bindVals[] = $val;
+                        $bindTypes .= "s";
+                    } elseif ($campo === "data_fim") {
+                        $cond[] = "m.data <= ?";
+                        $bindVals[] = $val;
+                        $bindTypes .= "s";
+                    } else {
+                        $cond[] = "m.$campo = ?";
+                        $bindVals[] = $val;
+                        $bindTypes .= "s";
+                    }
+                }
             }
 
             $where = $cond ? ("WHERE ".implode(" AND ", $cond)) : "";
 
-            // total
             $sqlTotal = "SELECT COUNT(*) AS total FROM movimentacoes m $where";
             $stmtTotal = $conn->prepare($sqlTotal);
             if ($bindVals) $stmtTotal->bind_param($bindTypes, ...$bindVals);
             $stmtTotal->execute();
             $total = (int)($stmtTotal->get_result()->fetch_assoc()['total'] ?? 0);
 
-            // dados paginados
             $sql = "SELECT 
                         m.id,
                         COALESCE(m.produto_nome, 'Produto removido') AS produto_nome,
@@ -148,7 +122,6 @@ try {
             break;
 
         case "adicionar":
-            // permite cadastrar com quantidade 0
             $nome = trim($_POST["nome"] ?? "");
             $quantidade = isset($_POST["quantidade"]) ? (int)$_POST["quantidade"] : 0;
             $usuario = $_POST["usuario"] ?? "sistema";
@@ -159,7 +132,6 @@ try {
                 break;
             }
 
-            // Se existir UNIQUE em nome, isso soma estoque; se não existir UNIQUE, apenas insere um novo
             $stmt = $conn->prepare("
                 INSERT INTO produtos (nome, quantidade) VALUES (?, ?)
                 ON DUPLICATE KEY UPDATE quantidade = quantidade + VALUES(quantidade)
@@ -172,7 +144,6 @@ try {
 
             $produto_id = $conn->insert_id;
             if ($produto_id === 0) {
-                // caiu no UPDATE (produto já existia); buscar id
                 $stmt2 = $conn->prepare("SELECT id FROM produtos WHERE nome = ? LIMIT 1");
                 $stmt2->bind_param("s", $nome);
                 $stmt2->execute();
@@ -180,7 +151,6 @@ try {
                 $produto_id = (int)($r['id'] ?? 0);
             }
 
-            // registra movimentação apenas se entrou estoque > 0
             if ($quantidade > 0 && $produto_id > 0) {
                 $stmt3 = $conn->prepare("
                     INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel)
@@ -233,7 +203,6 @@ try {
                 break;
             }
 
-            // só permite saída se tiver saldo suficiente
             $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ? AND quantidade >= ?");
             $stmt->bind_param("iii", $quantidade, $id, $quantidade);
             $stmt->execute();
@@ -264,7 +233,6 @@ try {
                 break;
             }
 
-            // pega dados antes de remover
             $stmtSel = $conn->prepare("SELECT nome, quantidade FROM produtos WHERE id = ?");
             $stmtSel->bind_param("i", $id);
             $stmtSel->execute();
@@ -278,15 +246,13 @@ try {
             $nome = $prod['nome'] ?? "Produto removido";
             $qtdRemovida = (int)($prod['quantidade'] ?? 0);
 
-            // registra a remoção com a quantidade atual
             $stmtMov = $conn->prepare("
                 INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel)
-                VALUES (?, ?, 'remocao', ?, NOW(), ?, ?)
+                VALUES (?, ?, 'remover', ?, NOW(), ?, ?)
             ");
             $stmtMov->bind_param("isiss", $id, $nome, $qtdRemovida, $usuario, $responsavel);
             $stmtMov->execute();
 
-            // remove o produto
             $stmtDel = $conn->prepare("DELETE FROM produtos WHERE id = ?");
             $stmtDel->bind_param("i", $id);
             $stmtDel->execute();
