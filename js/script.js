@@ -61,7 +61,7 @@ async function carregarProdutos() {
 }
 
 async function adicionarProduto(nome, quantidade = 0) {
-    const resp = await apiRequest("adicionarproduto", { nome, quantidade }, "POST");
+    const resp = await apiRequest("adicionar", { nome, quantidade }, "POST");
     if (resp.sucesso) {
         carregarProdutos();
     } else {
