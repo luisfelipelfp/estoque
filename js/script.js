@@ -73,6 +73,7 @@ async function carregarProdutos() {
         });
     });
 
+    // Atualiza o filtro de produtos com os nomes carregados
     atualizarFiltroProdutos(produtos);
 }
 
@@ -91,7 +92,7 @@ async function entradaProduto(id) {
     const resp = await apiRequest("entrada", { id, quantidade: qtd }, "POST");
     if (resp.sucesso) {
         carregarProdutos();
-        carregarMovimentacoes();
+        carregarMovimentacoes(ultimaBusca);
     } else {
         alert(resp.mensagem || "Erro na entrada de produto");
     }
@@ -103,7 +104,7 @@ async function saidaProduto(id) {
     const resp = await apiRequest("saida", { id, quantidade: qtd }, "POST");
     if (resp.sucesso) {
         carregarProdutos();
-        carregarMovimentacoes();
+        carregarMovimentacoes(ultimaBusca);
     } else {
         alert(resp.mensagem || "Erro na saída de produto");
     }
@@ -114,7 +115,7 @@ async function removerProduto(id) {
     const resp = await apiRequest("remover", { id }, "POST");
     if (resp.sucesso) {
         carregarProdutos();
-        carregarMovimentacoes();
+        carregarMovimentacoes(ultimaBusca);
     } else {
         alert(resp.mensagem || "Erro ao remover produto");
     }
