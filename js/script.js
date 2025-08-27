@@ -1,16 +1,19 @@
+// URL base da API (ajuste conforme seu servidor)
 const API_URL = "http://192.168.15.100/estoque/api/actions.php";
 
-async function apiRequest(acao, dados = null, metodo = "GET") {
-    let url = `${API_URL}?acao=${encodeURIComponent(acao)}`;
+// Função genérica para requisições à API
+async function apiRequest(acao, dados = {}, metodo = "GET") {
+    let url = API_URL;
     let options = { method: metodo };
 
-    if (metodo === "GET" && dados) {
-        const query = new URLSearchParams(dados).toString();
-        url += "&" + query;
-    }
-
-    if (dados && metodo === "POST") {
+    if (metodo === "GET") {
+        // GET → envia acao + dados via querystring
+        const query = new URLSearchParams({ acao, ...dados }).toString();
+        url += "?" + query;
+    } else if (metodo === "POST") {
+        // POST → envia acao + dados no corpo (FormData)
         const formData = new FormData();
+        formData.append("acao", acao);
         for (let key in dados) {
             if (dados[key] !== undefined && dados[key] !== null) {
                 formData.append(key, dados[key]);
@@ -28,148 +31,95 @@ async function apiRequest(acao, dados = null, metodo = "GET") {
     }
 }
 
-// -------------------- PRODUTOS --------------------
+// ----------------------------
+// Listar produtos
+// ----------------------------
+async function listarProdutos() {
+    const data = await apiRequest("listar");
+    const tabela = document.getElementById("produtos-body");
+    tabela.innerHTML = "";
 
-async function carregarProdutos() {
-    const tabela = document.getElementById("tabelaProdutos").querySelector("tbody");
-    tabela.innerHTML = "<tr><td colspan='4'>Carregando...</td></tr>";
+    if (data.sucesso && Array.isArray(data.dados)) {
+        data.dados.forEach(prod => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td>${prod.id}</td>
+                <td>${prod.nome}</td>
+                <td>${prod.quantidade}</td>
+                <td>
+                    <button onclick="entrada(${prod.id})">Entrada</button>
+                    <button onclick="saida(${prod.id})">Saída</button>
+                    <button onclick="remover(${prod.id})">Remover</button>
+                </td>
+            `;
+            tabela.appendChild(tr);
+        });
+    } else {
+        tabela.innerHTML = `<tr><td colspan="4">${data.mensagem || "Erro ao carregar produtos"}</td></tr>`;
+    }
+}
 
-    const produtos = await apiRequest("listarprodutos");
+// ----------------------------
+// Adicionar produto
+// ----------------------------
+async function adicionarProduto() {
+    const nome = document.getElementById("nome").value.trim();
+    const quantidade = document.getElementById("quantidade").value;
 
-    if (!Array.isArray(produtos) || produtos.length === 0) {
-        tabela.innerHTML = "<tr><td colspan='4'>Nenhum produto encontrado</td></tr>";
+    if (!nome || !quantidade) {
+        alert("Preencha todos os campos!");
         return;
     }
 
-    tabela.innerHTML = "";
-    produtos.forEach(p => {
-        const tr = document.createElement("tr");
-        if (Number(p.quantidade) <= 2) tr.classList.add("estoque-baixo");
+    const data = await apiRequest("adicionar", { nome, quantidade }, "POST");
 
-        tr.innerHTML = `
-            <td>${p.id}</td>
-            <td>${p.nome}</td>
-            <td>${p.quantidade}</td>
-            <td>
-                <button class="btn btn-success btn-sm" onclick="entradaProduto(${p.id})">Entrada</button>
-                <button class="btn btn-warning btn-sm" onclick="saidaProduto(${p.id})">Saída</button>
-                <button class="btn btn-danger btn-sm" onclick="removerProduto(${p.id})">Remover</button>
-            </td>
-        `;
-        tabela.appendChild(tr);
-    });
-}
-
-async function adicionarProduto(nome, quantidade = 0) {
-    const resp = await apiRequest("adicionarproduto", { nome, quantidade }, "POST");
-    if (resp.sucesso) {
-        carregarProdutos();
-    } else {
-        alert(resp.mensagem || "Erro ao adicionar produto");
+    alert(data.mensagem);
+    if (data.sucesso) {
+        document.getElementById("nome").value = "";
+        document.getElementById("quantidade").value = "";
+        listarProdutos();
     }
 }
 
-async function entradaProduto(id) {
-    const qtd = prompt("Quantidade de entrada:");
-    if (!qtd || isNaN(qtd)) return;
-    const resp = await apiRequest("entradaproduto", { id, quantidade: qtd }, "POST");
-    if (resp.sucesso) {
-        carregarProdutos();
-        carregarMovimentacoes();
-    } else {
-        alert(resp.mensagem || "Erro na entrada de produto");
-    }
+// ----------------------------
+// Entrada de produto
+// ----------------------------
+async function entrada(id) {
+    const quantidade = prompt("Quantidade de entrada:");
+    if (!quantidade) return;
+
+    const data = await apiRequest("entrada", { id, quantidade }, "POST");
+
+    alert(data.mensagem);
+    if (data.sucesso) listarProdutos();
 }
 
-async function saidaProduto(id) {
-    const qtd = prompt("Quantidade de saída:");
-    if (!qtd || isNaN(qtd)) return;
-    const resp = await apiRequest("saidaproduto", { id, quantidade: qtd }, "POST");
-    if (resp.sucesso) {
-        carregarProdutos();
-        carregarMovimentacoes();
-    } else {
-        alert(resp.mensagem || "Erro na saída de produto");
-    }
+// ----------------------------
+// Saída de produto
+// ----------------------------
+async function saída(id) {
+    const quantidade = prompt("Quantidade de saída:");
+    if (!quantidade) return;
+
+    const data = await apiRequest("saida", { id, quantidade }, "POST");
+
+    alert(data.mensagem);
+    if (data.sucesso) listarProdutos();
 }
 
-async function removerProduto(id) {
+// ----------------------------
+// Remover produto
+// ----------------------------
+async function remover(id) {
     if (!confirm("Tem certeza que deseja remover este produto?")) return;
-    const resp = await apiRequest("removerproduto", { id }, "POST");
-    if (resp.sucesso) {
-        carregarProdutos();
-        carregarMovimentacoes();
-    } else {
-        alert(resp.mensagem || "Erro ao remover produto");
-    }
+
+    const data = await apiRequest("remover", { id }, "POST");
+
+    alert(data.mensagem);
+    if (data.sucesso) listarProdutos();
 }
 
-// -------------------- MOVIMENTAÇÕES --------------------
-
-let paginaAtual = 1;
-let ultimaBusca = {};
-
-async function carregarMovimentacoes(filtros = {}) {
-    const tabela = document.getElementById("tabelaMovimentacoes").querySelector("tbody");
-    tabela.innerHTML = "<tr><td colspan='6'>Carregando...</td></tr>";
-
-    ultimaBusca = { ...filtros, pagina: paginaAtual, limite: 10 };
-    const resp = await apiRequest("listarmovimentacoes", ultimaBusca, "GET");
-
-    if (!resp.sucesso || !Array.isArray(resp.dados) || resp.dados.length === 0) {
-        tabela.innerHTML = "<tr><td colspan='6'>Nenhuma movimentação encontrada</td></tr>";
-        return;
-    }
-
-    tabela.innerHTML = "";
-    resp.dados.forEach(m => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-            <td>${m.id}</td>
-            <td>${m.produto_nome || "-"}</td>
-            <td>${m.tipo}</td>
-            <td>${m.quantidade}</td>
-            <td>${m.data}</td>
-            <td>${m.usuario || "-"}</td>
-        `;
-        tabela.appendChild(tr);
-    });
-
-    const paginacao = document.getElementById("paginacaoMovs");
-    paginacao.innerHTML = `
-        <button class="btn btn-sm btn-secondary" ${paginaAtual <= 1 ? "disabled" : ""} 
-            onclick="paginaAtual--; carregarMovimentacoes(ultimaBusca)">Anterior</button>
-        <span class="mx-2">Página ${resp.pagina} de ${resp.paginas}</span>
-        <button class="btn btn-sm btn-secondary" ${paginaAtual >= resp.paginas ? "disabled" : ""} 
-            onclick="paginaAtual++; carregarMovimentacoes(ultimaBusca)">Próxima</button>
-    `;
-}
-
-// -------------------- INIT --------------------
-
-window.onload = function () {
-    carregarProdutos();
-    carregarMovimentacoes();
-
-    const form = document.getElementById("formAdicionarProduto");
-    if (form) {
-        form.addEventListener("submit", async function (e) {
-            e.preventDefault();
-            const nome = document.getElementById("nomeProduto").value.trim();
-            if (nome) {
-                await adicionarProduto(nome, 0);
-                this.reset();
-            }
-        });
-    }
-
-    const formFiltro = document.getElementById("formFiltroMovs");
-    if (formFiltro) {
-        formFiltro.addEventListener("submit", function (e) {
-            e.preventDefault();
-            paginaAtual = 1;
-            const filtros = Object.fromEntries(new FormData(formFiltro).entries());
-            carregarMovimentacoes(filtros);
-        });
-    }
-};
+// ----------------------------
+// Carregar lista ao abrir a página
+// ----------------------------
+document.addEventListener("DOMContentLoaded", listarProdutos);
