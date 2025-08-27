@@ -127,13 +127,13 @@ let ultimaBusca = {};
 
 async function carregarMovimentacoes(filtros = {}) {
     const tabela = document.querySelector("#tabelaMovimentacoes tbody");
-    tabela.innerHTML = "<tr><td colspan='7'>Carregando...</td></tr>";
+    tabela.innerHTML = "<tr><td colspan='6'>Carregando...</td></tr>";
 
     ultimaBusca = { ...filtros, pagina: paginaAtual, limite: 10 };
     const resp = await apiRequest("listarmovimentacoes", ultimaBusca, "GET");
 
     if (!resp?.sucesso || !Array.isArray(resp.dados) || !resp.dados.length) {
-        tabela.innerHTML = "<tr><td colspan='7'>Nenhuma movimentação encontrada</td></tr>";
+        tabela.innerHTML = "<tr><td colspan='6'>Nenhuma movimentação encontrada</td></tr>";
         document.getElementById("paginacaoMovs")?.innerHTML = "";
         return;
     }
@@ -148,7 +148,6 @@ async function carregarMovimentacoes(filtros = {}) {
             <td>${m.quantidade}</td>
             <td>${m.data}</td>
             <td>${m.usuario || "-"}</td>
-            <td>${m.responsavel || "-"}</td>
         `;
         tabela.appendChild(tr);
     });
