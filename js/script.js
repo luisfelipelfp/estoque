@@ -3,8 +3,6 @@ const API_URL = "http://192.168.15.100/estoque/api/actions.php";
 
 /**
  * Faz requisição à API.
- * - GET -> envia acao + dados na querystring
- * - POST -> envia acao + dados no body como JSON
  */
 async function apiRequest(acao, dados = {}, metodo = "GET") {
     let url = API_URL;
@@ -51,20 +49,30 @@ async function carregarProdutos() {
     produtos.forEach(p => {
         const tr = document.createElement("tr");
         if (Number(p.quantidade) <= 2) tr.classList.add("estoque-baixo");
+
+        const btnEntrada = `<button class="btn btn-success btn-sm" data-acao="entrada" data-id="${p.id}">Entrada</button>`;
+        const btnSaida   = `<button class="btn btn-warning btn-sm" data-acao="saida" data-id="${p.id}">Saída</button>`;
+        const btnRemover = `<button class="btn btn-danger btn-sm" data-acao="remover" data-id="${p.id}">Remover</button>`;
+
         tr.innerHTML = `
             <td>${p.id}</td>
             <td>${p.nome}</td>
             <td>${p.quantidade}</td>
-            <td>
-                <button class="btn btn-success btn-sm" onclick="entradaProduto(${p.id})">Entrada</button>
-                <button class="btn btn-warning btn-sm" onclick="saidaProduto(${p.id})">Saída</button>
-                <button class="btn btn-danger btn-sm" onclick="removerProduto(${p.id})">Remover</button>
-            </td>
+            <td>${btnEntrada} ${btnSaida} ${btnRemover}</td>
         `;
         tbody.appendChild(tr);
     });
 
-    // Atualiza o select de filtro de produto
+    // Eventos dos botões
+    tbody.querySelectorAll("button[data-acao]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const id = btn.dataset.id;
+            if (btn.dataset.acao === "entrada") entradaProduto(id);
+            if (btn.dataset.acao === "saida")   saidaProduto(id);
+            if (btn.dataset.acao === "remover") removerProduto(id);
+        });
+    });
+
     atualizarFiltroProdutos(produtos);
 }
 
@@ -148,12 +156,23 @@ async function carregarMovimentacoes(filtros = {}) {
     const paginacao = document.getElementById("paginacaoMovs");
     if (paginacao) {
         paginacao.innerHTML = `
-            <button class="btn btn-sm btn-secondary" ${paginaAtual <= 1 ? "disabled" : ""} 
-                onclick="paginaAtual--; carregarMovimentacoes(ultimaBusca)">Anterior</button>
+            <button id="btnAnterior" class="btn btn-sm btn-secondary" ${paginaAtual <= 1 ? "disabled" : ""}>Anterior</button>
             <span class="mx-2">Página ${resp.pagina} de ${resp.paginas}</span>
-            <button class="btn btn-sm btn-secondary" ${paginaAtual >= resp.paginas ? "disabled" : ""} 
-                onclick="paginaAtual++; carregarMovimentacoes(ultimaBusca)">Próxima</button>
+            <button id="btnProxima" class="btn btn-sm btn-secondary" ${paginaAtual >= resp.paginas ? "disabled" : ""}>Próxima</button>
         `;
+
+        paginacao.querySelector("#btnAnterior")?.addEventListener("click", () => {
+            if (paginaAtual > 1) {
+                paginaAtual--;
+                carregarMovimentacoes(ultimaBusca);
+            }
+        });
+        paginacao.querySelector("#btnProxima")?.addEventListener("click", () => {
+            if (paginaAtual < resp.paginas) {
+                paginaAtual++;
+                carregarMovimentacoes(ultimaBusca);
+            }
+        });
     }
 }
 
@@ -163,7 +182,6 @@ function atualizarFiltroProdutos(produtos) {
     const select = document.getElementById("filtroProduto");
     if (!select) return;
 
-    // limpa opções e adiciona "todos"
     select.innerHTML = `<option value="">Todos os produtos</option>`;
     produtos.forEach(p => {
         const opt = document.createElement("option");
