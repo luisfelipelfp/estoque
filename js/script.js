@@ -1,125 +1,194 @@
-// URL base da API (ajuste conforme seu servidor)
+// js/script.js
 const API_URL = "http://192.168.15.100/estoque/api/actions.php";
 
-// Função genérica para requisições à API
+/**
+ * Faz requisição à API.
+ * - GET -> envia acao + dados na querystring
+ * - POST -> envia acao + dados no body como JSON (o actions.php aceita JSON no corpo)
+ */
 async function apiRequest(acao, dados = {}, metodo = "GET") {
     let url = API_URL;
-    let options = { method: metodo };
+    const options = { method: metodo, headers: {} };
 
     if (metodo === "GET") {
-        // GET → envia acao + dados via querystring
         const query = new URLSearchParams({ acao, ...dados }).toString();
         url += "?" + query;
-    } else if (metodo === "POST") {
-        // POST → envia acao + dados no corpo (FormData)
-        const formData = new FormData();
-        formData.append("acao", acao);
-        for (let key in dados) {
-            if (dados[key] !== undefined && dados[key] !== null) {
-                formData.append(key, dados[key]);
-            }
-        }
-        options.body = formData;
+    } else {
+        // Envia JSON no body (actions.php já lida com JSON no corpo)
+        options.headers["Content-Type"] = "application/json";
+        options.body = JSON.stringify({ acao, ...dados });
     }
+
+    console.debug("API Request:", metodo, url, options.body ?? null);
 
     try {
         const response = await fetch(url, options);
-        return await response.json();
+        const text = await response.text();
+        try {
+            const json = JSON.parse(text);
+            console.debug("API Response:", json);
+            return json;
+        } catch (err) {
+            console.error("Resposta da API não é JSON:", text);
+            return { sucesso: false, mensagem: "Resposta inválida do servidor", raw: text };
+        }
     } catch (error) {
         console.error("Erro na requisição:", error);
         return { sucesso: false, mensagem: "Erro na comunicação com o servidor" };
     }
 }
 
-// ----------------------------
-// Listar produtos
-// ----------------------------
-async function listarProdutos() {
-    const data = await apiRequest("listar");
-    const tabela = document.getElementById("produtos-body");
-    tabela.innerHTML = "";
+// -------------------- PRODUTOS --------------------
 
-    if (data.sucesso && Array.isArray(data.dados)) {
-        data.dados.forEach(prod => {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `
-                <td>${prod.id}</td>
-                <td>${prod.nome}</td>
-                <td>${prod.quantidade}</td>
-                <td>
-                    <button onclick="entrada(${prod.id})">Entrada</button>
-                    <button onclick="saida(${prod.id})">Saída</button>
-                    <button onclick="remover(${prod.id})">Remover</button>
-                </td>
-            `;
-            tabela.appendChild(tr);
-        });
-    } else {
-        tabela.innerHTML = `<tr><td colspan="4">${data.mensagem || "Erro ao carregar produtos"}</td></tr>`;
-    }
-}
+async function carregarProdutos() {
+    const tbody = document.querySelector("#tabelaProdutos tbody");
+    tbody.innerHTML = "<tr><td colspan='4'>Carregando...</td></tr>";
 
-// ----------------------------
-// Adicionar produto
-// ----------------------------
-async function adicionarProduto() {
-    const nome = document.getElementById("nome").value.trim();
-    const quantidade = document.getElementById("quantidade").value;
+    const resp = await apiRequest("listarprodutos", {}, "GET");
 
-    if (!nome || !quantidade) {
-        alert("Preencha todos os campos!");
+    // o listarprodutos no PHP retorna um array simples; adaptamos pra ambos os casos
+    let produtos = [];
+    if (Array.isArray(resp)) produtos = resp;
+    else if (resp && Array.isArray(resp.dados)) produtos = resp.dados;
+    else if (resp && resp.sucesso && resp.dados && Array.isArray(resp.dados)) produtos = resp.dados;
+
+    if (!produtos || produtos.length === 0) {
+        tbody.innerHTML = "<tr><td colspan='4'>Nenhum produto encontrado</td></tr>";
         return;
     }
 
-    const data = await apiRequest("adicionar", { nome, quantidade }, "POST");
+    tbody.innerHTML = "";
+    produtos.forEach(p => {
+        const tr = document.createElement("tr");
+        if (Number(p.quantidade) <= 2) tr.classList.add("estoque-baixo");
+        tr.innerHTML = `
+            <td>${p.id}</td>
+            <td>${p.nome}</td>
+            <td>${p.quantidade}</td>
+            <td>
+                <button class="btn btn-success btn-sm" onclick="entradaProduto(${p.id})">Entrada</button>
+                <button class="btn btn-warning btn-sm" onclick="saidaProduto(${p.id})">Saída</button>
+                <button class="btn btn-danger btn-sm" onclick="removerProduto(${p.id})">Remover</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
 
-    alert(data.mensagem);
-    if (data.sucesso) {
-        document.getElementById("nome").value = "";
-        document.getElementById("quantidade").value = "";
-        listarProdutos();
+async function adicionarProduto(nome, quantidade = 0) {
+    const resp = await apiRequest("adicionar", { nome, quantidade }, "POST");
+    if (resp.sucesso) {
+        carregarProdutos();
+    } else {
+        alert(resp.mensagem || "Erro ao adicionar produto");
     }
 }
 
-// ----------------------------
-// Entrada de produto
-// ----------------------------
-async function entrada(id) {
-    const quantidade = prompt("Quantidade de entrada:");
-    if (!quantidade) return;
-
-    const data = await apiRequest("entrada", { id, quantidade }, "POST");
-
-    alert(data.mensagem);
-    if (data.sucesso) listarProdutos();
+async function entradaProduto(id) {
+    const qtd = prompt("Quantidade de entrada:");
+    if (!qtd || isNaN(qtd)) return;
+    const resp = await apiRequest("entrada", { id, quantidade: qtd }, "POST");
+    if (resp.sucesso) {
+        carregarProdutos();
+        carregarMovimentacoes();
+    } else {
+        alert(resp.mensagem || "Erro na entrada de produto");
+    }
 }
 
-// ----------------------------
-// Saída de produto
-// ----------------------------
-async function saída(id) {
-    const quantidade = prompt("Quantidade de saída:");
-    if (!quantidade) return;
-
-    const data = await apiRequest("saida", { id, quantidade }, "POST");
-
-    alert(data.mensagem);
-    if (data.sucesso) listarProdutos();
+async function saidaProduto(id) {
+    const qtd = prompt("Quantidade de saída:");
+    if (!qtd || isNaN(qtd)) return;
+    const resp = await apiRequest("saida", { id, quantidade: qtd }, "POST");
+    if (resp.sucesso) {
+        carregarProdutos();
+        carregarMovimentacoes();
+    } else {
+        alert(resp.mensagem || "Erro na saída de produto");
+    }
 }
 
-// ----------------------------
-// Remover produto
-// ----------------------------
-async function remover(id) {
+async function removerProduto(id) {
     if (!confirm("Tem certeza que deseja remover este produto?")) return;
-
-    const data = await apiRequest("remover", { id }, "POST");
-
-    alert(data.mensagem);
-    if (data.sucesso) listarProdutos();
+    const resp = await apiRequest("remover", { id }, "POST");
+    if (resp.sucesso) {
+        carregarProdutos();
+        carregarMovimentacoes();
+    } else {
+        alert(resp.mensagem || "Erro ao remover produto");
+    }
 }
 
-// ----------------------------
-// Carregar lista ao abrir a página
-// ----------------------------
-document.addEventListener("DOMContentLoaded", listarProdutos);
+// -------------------- MOVIMENTAÇÕES --------------------
+
+let paginaAtual = 1;
+let ultimaBusca = {};
+
+async function carregarMovimentacoes(filtros = {}) {
+    const tabela = document.querySelector("#tabelaMovimentacoes tbody");
+    tabela.innerHTML = "<tr><td colspan='7'>Carregando...</td></tr>";
+
+    ultimaBusca = { ...filtros, pagina: paginaAtual, limite: 10 };
+    const resp = await apiRequest("listarmovimentacoes", ultimaBusca, "GET");
+
+    if (!resp || !resp.sucesso || !Array.isArray(resp.dados) || resp.dados.length === 0) {
+        tabela.innerHTML = "<tr><td colspan='7'>Nenhuma movimentação encontrada</td></tr>";
+        document.getElementById("paginacaoMovs") && (document.getElementById("paginacaoMovs").innerHTML = "");
+        return;
+    }
+
+    tabela.innerHTML = "";
+    resp.dados.forEach(m => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${m.id}</td>
+            <td>${m.produto_nome || "-"}</td>
+            <td>${m.tipo}</td>
+            <td>${m.quantidade}</td>
+            <td>${m.data}</td>
+            <td>${m.usuario || "-"}</td>
+            <td>${m.responsavel || "-"}</td>
+        `;
+        tabela.appendChild(tr);
+    });
+
+    const paginacao = document.getElementById("paginacaoMovs");
+    if (paginacao) {
+        paginacao.innerHTML = `
+            <button class="btn btn-sm btn-secondary" ${paginaAtual <= 1 ? "disabled" : ""} 
+                onclick="paginaAtual--; carregarMovimentacoes(ultimaBusca)">Anterior</button>
+            <span class="mx-2">Página ${resp.pagina} de ${resp.paginas}</span>
+            <button class="btn btn-sm btn-secondary" ${paginaAtual >= resp.paginas ? "disabled" : ""} 
+                onclick="paginaAtual++; carregarMovimentacoes(ultimaBusca)">Próxima</button>
+        `;
+    }
+}
+
+// -------------------- INIT --------------------
+
+window.addEventListener("DOMContentLoaded", () => {
+    carregarProdutos();
+    carregarMovimentacoes();
+
+    const form = document.getElementById("formAdicionarProduto");
+    if (form) {
+        form.addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const nome = document.getElementById("nomeProduto").value.trim();
+            if (nome) {
+                await adicionarProduto(nome, 0);
+                this.reset();
+            }
+        });
+    }
+
+    const formFiltro = document.getElementById("formFiltroMovs");
+    if (formFiltro) {
+        formFiltro.addEventListener("submit", function (e) {
+            e.preventDefault();
+            paginaAtual = 1;
+            const filtros = Object.fromEntries(new FormData(formFiltro).entries());
+            carregarMovimentacoes(filtros);
+        });
+    }
+});
