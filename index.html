@@ -3,23 +3,69 @@
 <head>
   <meta charset="UTF-8">
   <title>Estoque da Gordinha e do Careca</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Ícones do Bootstrap (opcional) -->
+  <!-- <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet"> -->
   <style>
-    .estoque-baixo { background-color: #f8d7da !important; }
+    body {
+      background-color: #f8f9fa;
+    }
+
+    h1 {
+      background-color: #0d6efd;
+      color: white;
+      padding: 20px;
+      border-radius: 10px;
+      font-size: 1.8rem;
+    }
+
+    .estoque-baixo {
+      background-color: #f8d7da !important;
+    }
+
+    table th {
+      background-color: #e9ecef;
+    }
+
+    .table td, .table th {
+      vertical-align: middle;
+    }
+
+    #formAdicionarProduto input,
+    #formAdicionarProduto button {
+      height: 45px;
+    }
+
+    .btn-entrada {
+      background-color: #198754;
+      color: white;
+    }
+
+    .btn-saida {
+      background-color: #ffc107;
+      color: black;
+    }
+
+    .btn-remover {
+      background-color: #dc3545;
+      color: white;
+    }
   </style>
 </head>
 <body class="container py-4">
-  <h1 class="mb-4">📦 Estoque da Gordinha e do Careca</h1>
+
+  <h1 class="mb-4 text-center">📦 Estoque da Gordinha e do Careca</h1>
 
   <!-- Formulário adicionar produto -->
-  <form id="formAdicionarProduto" class="mb-3 d-flex gap-2">
+  <form id="formAdicionarProduto" class="mb-4 d-flex gap-2">
     <input type="text" id="nomeProduto" class="form-control" placeholder="Nome do produto" required>
-    <button type="submit" class="btn btn-primary">Adicionar Produto</button>
+    <button type="submit" class="btn btn-primary">➕ Adicionar Produto</button>
   </form>
 
   <!-- Tabela produtos -->
-  <h3>Produtos</h3>
-  <table id="tabelaProdutos" class="table table-bordered table-striped">
+  <h3 class="mt-4 mb-3">🛒 Produtos</h3>
+  <table id="tabelaProdutos" class="table table-bordered table-striped shadow-sm">
     <thead>
       <tr>
         <th>ID</th>
@@ -32,8 +78,8 @@
   </table>
 
   <!-- Filtro movimentações -->
-  <h3>Movimentações</h3>
-  <form id="formFiltroMovs" class="mb-3 d-flex gap-2">
+  <h3 class="mt-5 mb-3">📈 Movimentações</h3>
+  <form id="formFiltroMovs" class="mb-3 d-flex flex-wrap gap-2">
     <input type="date" name="data_inicio" class="form-control">
     <input type="date" name="data_fim" class="form-control">
     <select name="tipo" class="form-control">
@@ -42,16 +88,14 @@
       <option value="saida">Saída</option>
       <option value="remocao">Remoção</option>
     </select>
-    <!-- Novo filtro por produto -->
     <select name="produto" id="filtroProduto" class="form-control">
       <option value="">Todos os Produtos</option>
-      <!-- script.js irá preencher dinamicamente -->
     </select>
-    <button type="submit" class="btn btn-secondary">Filtrar</button>
+    <button type="submit" class="btn btn-secondary">🔍 Filtrar</button>
   </form>
 
   <!-- Tabela movimentações -->
-  <table id="tabelaMovimentacoes" class="table table-bordered table-striped">
+  <table id="tabelaMovimentacoes" class="table table-bordered table-striped shadow-sm">
     <thead>
       <tr>
         <th>ID</th>
@@ -71,4 +115,3 @@
   <script src="js/script.js"></script>
 </body>
 </html>
-
