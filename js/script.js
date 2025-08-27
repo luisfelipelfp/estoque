@@ -61,7 +61,7 @@ async function carregarProdutos() {
 }
 
 async function adicionarProduto(nome, quantidade = 0) {
-    const resp = await apiRequest("adicionar", { nome, quantidade }, "POST");
+    const resp = await apiRequest("adicionarproduto", { nome, quantidade }, "POST");
     if (resp.sucesso) {
         carregarProdutos();
     } else {
@@ -72,7 +72,7 @@ async function adicionarProduto(nome, quantidade = 0) {
 async function entradaProduto(id) {
     const qtd = prompt("Quantidade de entrada:");
     if (!qtd || isNaN(qtd)) return;
-    const resp = await apiRequest("entrada", { id, quantidade: qtd }, "POST");
+    const resp = await apiRequest("entradaproduto", { id, quantidade: qtd }, "POST");
     if (resp.sucesso) {
         carregarProdutos();
         carregarMovimentacoes();
@@ -84,7 +84,7 @@ async function entradaProduto(id) {
 async function saidaProduto(id) {
     const qtd = prompt("Quantidade de saída:");
     if (!qtd || isNaN(qtd)) return;
-    const resp = await apiRequest("saida", { id, quantidade: qtd }, "POST");
+    const resp = await apiRequest("saidaproduto", { id, quantidade: qtd }, "POST");
     if (resp.sucesso) {
         carregarProdutos();
         carregarMovimentacoes();
@@ -95,7 +95,7 @@ async function saidaProduto(id) {
 
 async function removerProduto(id) {
     if (!confirm("Tem certeza que deseja remover este produto?")) return;
-    const resp = await apiRequest("remover", { id }, "POST");
+    const resp = await apiRequest("removerproduto", { id }, "POST");
     if (resp.sucesso) {
         carregarProdutos();
         carregarMovimentacoes();
