@@ -42,7 +42,7 @@ try {
             $res = $conn->query($sql);
             $produtos = [];
             while ($row = $res->fetch_assoc()) $produtos[] = $row;
-            echo json_encode($produtos);
+            echo json_encode(["sucesso" => true, "dados" => $produtos]);
             break;
 
         case "listarmovimentacoes":
@@ -54,27 +54,28 @@ try {
             $bindVals = [];
             $bindTypes = "";
 
+            // filtros suportados
             foreach (["tipo","produto","usuario","responsavel","data_inicio","data_fim"] as $campo) {
                 $val = $_GET[$campo] ?? $_POST[$campo] ?? "";
                 if ($val !== "") {
                     if ($campo === "produto") {
                         if (is_numeric($val)) {
-                            // Filtro por ID
+                            // filtro por ID
                             $cond[] = "m.produto_id = ?";
                             $bindVals[] = (int)$val;
                             $bindTypes .= "i";
                         } else {
-                            // Filtro por nome
+                            // filtro por nome
                             $cond[] = "m.produto_nome LIKE ?";
                             $bindVals[] = "%".$val."%";
                             $bindTypes .= "s";
                         }
                     } elseif ($campo === "data_inicio") {
-                        $cond[] = "m.data >= ?";
+                        $cond[] = "DATE(m.data) >= ?";
                         $bindVals[] = $val;
                         $bindTypes .= "s";
                     } elseif ($campo === "data_fim") {
-                        $cond[] = "m.data <= ?";
+                        $cond[] = "DATE(m.data) <= ?";
                         $bindVals[] = $val;
                         $bindTypes .= "s";
                     } else {
@@ -87,12 +88,14 @@ try {
 
             $where = $cond ? ("WHERE ".implode(" AND ", $cond)) : "";
 
+            // total de registros
             $sqlTotal = "SELECT COUNT(*) AS total FROM movimentacoes m $where";
             $stmtTotal = $conn->prepare($sqlTotal);
             if ($bindVals) $stmtTotal->bind_param($bindTypes, ...$bindVals);
             $stmtTotal->execute();
             $total = (int)($stmtTotal->get_result()->fetch_assoc()['total'] ?? 0);
 
+            // registros filtrados
             $sql = "SELECT 
                         m.id,
                         COALESCE(m.produto_nome, 'Produto removido') AS produto_nome,
