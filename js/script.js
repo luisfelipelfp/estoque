@@ -78,23 +78,17 @@ async function entrada(id) {
         alert("Quantidade inválida.");
         return;
     }
-    const usuario = prompt("Usuário:");
-    const responsavel = prompt("Responsável:");
 
-    if (usuario && responsavel) {
-        await apiRequest("registrar_movimentacao", {
-            produto_id: id,
-            tipo: "entrada",
-            quantidade,
-            usuario,
-            responsavel
-        }, "POST");
+    await apiRequest("registrar_movimentacao", {
+        produto_id: id,
+        tipo: "entrada",
+        quantidade,
+        usuario: "",       // enviando vazio
+        responsavel: ""    // enviando vazio
+    }, "POST");
 
-        listarProdutos();
-        listarMovimentacoes();
-    } else {
-        alert("Usuário e responsável são obrigatórios.");
-    }
+    listarProdutos();
+    listarMovimentacoes();
 }
 
 async function saida(id) {
@@ -103,37 +97,24 @@ async function saida(id) {
         alert("Quantidade inválida.");
         return;
     }
-    const usuario = prompt("Usuário:");
-    const responsavel = prompt("Responsável:");
 
-    if (usuario && responsavel) {
-        await apiRequest("registrar_movimentacao", {
-            produto_id: id,
-            tipo: "saida",
-            quantidade,
-            usuario,
-            responsavel
-        }, "POST");
+    await apiRequest("registrar_movimentacao", {
+        produto_id: id,
+        tipo: "saida",
+        quantidade,
+        usuario: "",       // enviando vazio
+        responsavel: ""    // enviando vazio
+    }, "POST");
 
-        listarProdutos();
-        listarMovimentacoes();
-    } else {
-        alert("Usuário e responsável são obrigatórios.");
-    }
+    listarProdutos();
+    listarMovimentacoes();
 }
 
 async function remover(id) {
     if (confirm("Deseja remover este produto?")) {
-        const usuario = prompt("Usuário:");
-        const responsavel = prompt("Responsável:");
-
-        if (usuario && responsavel) {
-            await apiRequest("remover_produto", { id, usuario, responsavel }, "POST");
-            listarProdutos();
-            listarMovimentacoes();
-        } else {
-            alert("Usuário e responsável são obrigatórios para remover.");
-        }
+        await apiRequest("remover_produto", { id }, "GET");
+        listarProdutos();
+        listarMovimentacoes();
     }
 }
 
