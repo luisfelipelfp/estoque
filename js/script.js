@@ -8,10 +8,10 @@ async function apiRequest(acao, dados = null, metodo = "GET") {
         const query = new URLSearchParams(dados).toString();
         url += "&" + query;
     } else if (metodo === "POST" && dados) {
-        options.body = new FormData();
-        for (let key in dados) {
-            options.body.append(key, dados[key]);
-        }
+        options.headers = {
+            "Content-Type": "application/json"
+        };
+        options.body = JSON.stringify(dados);
     }
 
     const resp = await fetch(url, options);
@@ -21,7 +21,7 @@ async function apiRequest(acao, dados = null, metodo = "GET") {
 // ---------------- Produtos ----------------
 async function listarProdutos() {
     try {
-        const resp = await apiRequest("listarprodutos");
+        const resp = await apiRequest("listar_produtos");
         let produtos = Array.isArray(resp) ? resp : (resp?.dados || []);
         const tabela = document.querySelector("#tabelaProdutos tbody");
         tabela.innerHTML = "";
@@ -48,7 +48,7 @@ async function listarProdutos() {
 // ---------------- Movimentações ----------------
 async function listarMovimentacoes() {
     try {
-        const resp = await apiRequest("listarmovimentacoes");
+        const resp = await apiRequest("listar_movimentacoes");
         let movimentacoes = Array.isArray(resp) ? resp : (resp?.dados || []);
         const tabela = document.querySelector("#tabelaMovimentacoes tbody");
         tabela.innerHTML = "";
@@ -73,32 +73,46 @@ async function listarMovimentacoes() {
 
 // ---------------- Ações ----------------
 async function entrada(id) {
-    const qtd = prompt("Quantidade de entrada:");
+    const quantidade = prompt("Quantidade de entrada:");
     const usuario = prompt("Usuário:");
     const responsavel = prompt("Responsável:");
-    if (qtd) {
-        await apiRequest("entrada", { id, quantidade: qtd, usuario, responsavel }, "POST");
+
+    if (quantidade) {
+        await apiRequest("registrar_movimentacao", {
+            produto_id: id,
+            tipo: "entrada",
+            quantidade,
+            usuario,
+            responsavel
+        }, "POST");
+
         listarProdutos();
         listarMovimentacoes();
     }
 }
 
 async function saida(id) {
-    const qtd = prompt("Quantidade de saída:");
+    const quantidade = prompt("Quantidade de saída:");
     const usuario = prompt("Usuário:");
     const responsavel = prompt("Responsável:");
-    if (qtd) {
-        await apiRequest("saida", { id, quantidade: qtd, usuario, responsavel }, "POST");
+
+    if (quantidade) {
+        await apiRequest("registrar_movimentacao", {
+            produto_id: id,
+            tipo: "saida",
+            quantidade,
+            usuario,
+            responsavel
+        }, "POST");
+
         listarProdutos();
         listarMovimentacoes();
     }
 }
 
 async function remover(id) {
-    const usuario = prompt("Usuário:");
-    const responsavel = prompt("Responsável:");
     if (confirm("Deseja remover este produto?")) {
-        await apiRequest("remover", { id, usuario, responsavel }, "POST");
+        await apiRequest("remover_produto", { id }, "GET");
         listarProdutos();
         listarMovimentacoes();
     }
