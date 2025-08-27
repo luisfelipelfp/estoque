@@ -1,296 +1,142 @@
 <?php
-header("Content-Type: application/json; charset=UTF-8");
-require_once __DIR__ . "/db.php";
+header("Content-Type: application/json; charset=utf-8");
+$host = "localhost";
+$user = "root";
+$pass = "";
+$db = "estoque";
 
-$conn = db();
-
-/** Helper: pega nome do produto (ou "Produto removido") */
-function obterNomeProduto(mysqli $conn, int $id): string {
-    $stmt = $conn->prepare("SELECT nome FROM produtos WHERE id = ?");
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-    $res = $stmt->get_result();
-    $row = $res ? $res->fetch_assoc() : null;
-    return $row && !empty($row['nome']) ? $row['nome'] : "Produto removido";
+$conn = new mysqli($host, $user, $pass, $db);
+if ($conn->connect_error) {
+    die(json_encode(["sucesso" => false, "mensagem" => "Erro na conexão: " . $conn->connect_error]));
 }
 
-/** Aceita JSON no corpo também */
-$raw = file_get_contents("php://input");
-if ($raw && ($raw[0] === '{' || $raw[0] === '[')) {
-    $json = json_decode($raw, true);
-    if (is_array($json)) {
-        $_POST = array_merge($_POST, $json);
-    }
-}
+$acao = $_REQUEST["acao"] ?? "";
 
-/** Normaliza ação */
-$acao = strtolower(trim($_GET['acao'] ?? $_POST['acao'] ?? $_GET['action'] ?? $_POST['action'] ?? ''));
+switch ($acao) {
+    case "listarprodutos":
+        $result = $conn->query("SELECT * FROM produtos ORDER BY nome ASC");
+        $produtos = [];
+        while ($row = $result->fetch_assoc()) {
+            $produtos[] = $row;
+        }
+        echo json_encode(["sucesso" => true, "dados" => $produtos]);
+        break;
 
-if ($acao === '') {
-    echo json_encode(["sucesso" => false, "mensagem" => "Nenhuma ação especificada"]);
-    exit;
-}
+    case "listarmovimentacoes":
+        $result = $conn->query("SELECT * FROM movimentacoes ORDER BY data DESC");
+        $movs = [];
+        while ($row = $result->fetch_assoc()) {
+            $movs[] = $row;
+        }
+        echo json_encode(["sucesso" => true, "dados" => $movs]);
+        break;
 
-try {
-    switch ($acao) {
-        case "testeconexao":
-            echo json_encode(["sucesso" => true, "mensagem" => "Conexão OK"]);
-            break;
+    case "entrada":
+        $id = $_POST["id"] ?? null;
+        $qtd = intval($_POST["quantidade"] ?? 0);
+        $usuario = $_POST["usuario"] ?? "";
+        $responsavel = $_POST["responsavel"] ?? "";
 
-        case "listarprodutos":
-            $sql = "SELECT * FROM produtos ORDER BY nome ASC";
-            $res = $conn->query($sql);
-            $produtos = [];
-            while ($row = $res->fetch_assoc()) $produtos[] = $row;
-            echo json_encode(["sucesso" => true, "dados" => $produtos]);
-            break;
-
-        case "listarmovimentacoes":
-            $pagina = max(1, (int)($_GET["pagina"] ?? $_POST["pagina"] ?? 1));
-            $limite = max(1, (int)($_GET["limite"] ?? $_POST["limite"] ?? 20));
-            $offset = ($pagina - 1) * $limite;
-
-            $cond = [];
-            $bindVals = [];
-            $bindTypes = "";
-
-            // filtros suportados
-            foreach (["tipo","produto","usuario","responsavel","data_inicio","data_fim"] as $campo) {
-                $val = $_GET[$campo] ?? $_POST[$campo] ?? "";
-                if ($val !== "") {
-                    if ($campo === "produto") {
-                        if (is_numeric($val)) {
-                            // filtro por ID
-                            $cond[] = "m.produto_id = ?";
-                            $bindVals[] = (int)$val;
-                            $bindTypes .= "i";
-                        } else {
-                            // filtro por nome
-                            $cond[] = "m.produto_nome LIKE ?";
-                            $bindVals[] = "%".$val."%";
-                            $bindTypes .= "s";
-                        }
-                    } elseif ($campo === "data_inicio") {
-                        $cond[] = "DATE(m.data) >= ?";
-                        $bindVals[] = $val;
-                        $bindTypes .= "s";
-                    } elseif ($campo === "data_fim") {
-                        $cond[] = "DATE(m.data) <= ?";
-                        $bindVals[] = $val;
-                        $bindTypes .= "s";
-                    } else {
-                        $cond[] = "m.$campo = ?";
-                        $bindVals[] = $val;
-                        $bindTypes .= "s";
-                    }
-                }
-            }
-
-            $where = $cond ? ("WHERE ".implode(" AND ", $cond)) : "";
-
-            // total de registros
-            $sqlTotal = "SELECT COUNT(*) AS total FROM movimentacoes m $where";
-            $stmtTotal = $conn->prepare($sqlTotal);
-            if ($bindVals) $stmtTotal->bind_param($bindTypes, ...$bindVals);
-            $stmtTotal->execute();
-            $total = (int)($stmtTotal->get_result()->fetch_assoc()['total'] ?? 0);
-
-            // registros filtrados
-            $sql = "SELECT 
-                        m.id,
-                        COALESCE(m.produto_nome, 'Produto removido') AS produto_nome,
-                        m.tipo,
-                        m.quantidade,
-                        m.data,
-                        m.usuario,
-                        m.responsavel
-                    FROM movimentacoes m
-                    $where
-                    ORDER BY m.data DESC
-                    LIMIT ? OFFSET ?";
-            $stmt = $conn->prepare($sql);
-            if ($bindVals) {
-                $types = $bindTypes . "ii";
-                $vals = array_merge($bindVals, [$limite, $offset]);
-                $stmt->bind_param($types, ...$vals);
-            } else {
-                $stmt->bind_param("ii", $limite, $offset);
-            }
-            $stmt->execute();
-            $res = $stmt->get_result();
-
-            $movs = [];
-            while ($row = $res->fetch_assoc()) $movs[] = $row;
-
-            echo json_encode([
-                "sucesso" => true,
-                "total"   => $total,
-                "pagina"  => $pagina,
-                "limite"  => $limite,
-                "paginas" => (int)ceil($total / $limite),
-                "dados"   => $movs
-            ]);
-            break;
-
-        case "adicionar":
-            $nome = trim($_POST["nome"] ?? "");
-            $quantidade = isset($_POST["quantidade"]) ? (int)$_POST["quantidade"] : 0;
-            $usuario = $_POST["usuario"] ?? "sistema";
-            $responsavel = $_POST["responsavel"] ?? "admin";
-
-            if ($nome === "") {
-                echo json_encode(["sucesso" => false, "mensagem" => "Nome do produto é obrigatório"]);
-                break;
-            }
-
-            $stmt = $conn->prepare("
-                INSERT INTO produtos (nome, quantidade) VALUES (?, ?)
-                ON DUPLICATE KEY UPDATE quantidade = quantidade + VALUES(quantidade)
-            ");
-            $stmt->bind_param("si", $nome, $quantidade);
-            if (!$stmt->execute()) {
-                echo json_encode(["sucesso" => false, "mensagem" => "Erro ao adicionar: ".$stmt->error]);
-                break;
-            }
-
-            $produto_id = $conn->insert_id;
-            if ($produto_id === 0) {
-                $stmt2 = $conn->prepare("SELECT id FROM produtos WHERE nome = ? LIMIT 1");
-                $stmt2->bind_param("s", $nome);
-                $stmt2->execute();
-                $r = $stmt2->get_result()->fetch_assoc();
-                $produto_id = (int)($r['id'] ?? 0);
-            }
-
-            if ($quantidade > 0 && $produto_id > 0) {
-                $stmt3 = $conn->prepare("
-                    INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel)
-                    VALUES (?, ?, 'entrada', ?, NOW(), ?, ?)
-                ");
-                $stmt3->bind_param("isiss", $produto_id, $nome, $quantidade, $usuario, $responsavel);
-                $stmt3->execute();
-            }
-
-            echo json_encode(["sucesso" => true, "mensagem" => "Produto cadastrado/atualizado"]);
-            break;
-
-        case "entrada":
-            $id = (int)($_POST["id"] ?? 0);
-            $quantidade = (int)($_POST["quantidade"] ?? 0);
-            $usuario = $_POST["usuario"] ?? "sistema";
-            $responsavel = $_POST["responsavel"] ?? "admin";
-
-            if ($id <= 0 || $quantidade <= 0) {
-                echo json_encode(["sucesso" => false, "mensagem" => "Dados inválidos"]);
-                break;
-            }
-
+        if ($id && $qtd > 0) {
             $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?");
-            $stmt->bind_param("ii", $quantidade, $id);
-            if (!$stmt->execute()) {
-                echo json_encode(["sucesso" => false, "mensagem" => "Erro ao atualizar estoque"]);
-                break;
-            }
+            $stmt->bind_param("ii", $qtd, $id);
+            $stmt->execute();
 
-            $nome = obterNomeProduto($conn, $id);
-            $stmt2 = $conn->prepare("
-                INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel)
-                VALUES (?, ?, 'entrada', ?, NOW(), ?, ?)
-            ");
-            $stmt2->bind_param("isiss", $id, $nome, $quantidade, $usuario, $responsavel);
-            $stmt2->execute();
+            $stmtNome = $conn->prepare("SELECT nome FROM produtos WHERE id = ?");
+            $stmtNome->bind_param("i", $id);
+            $stmtNome->execute();
+            $resNome = $stmtNome->get_result();
+            $produto = $resNome->fetch_assoc();
+
+            $stmtMov = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel) VALUES (?, ?, 'entrada', ?, NOW(), ?, ?)");
+            $stmtMov->bind_param("isiss", $id, $produto['nome'], $qtd, $usuario, $responsavel);
+            $stmtMov->execute();
 
             echo json_encode(["sucesso" => true, "mensagem" => "Entrada registrada"]);
-            break;
+        } else {
+            echo json_encode(["sucesso" => false, "mensagem" => "Dados inválidos"]);
+        }
+        break;
 
-        case "saida":
-            $id = (int)($_POST["id"] ?? 0);
-            $quantidade = (int)($_POST["quantidade"] ?? 0);
-            $usuario = $_POST["usuario"] ?? "sistema";
-            $responsavel = $_POST["responsavel"] ?? "admin";
+    case "saida":
+        $id = $_POST["id"] ?? null;
+        $qtd = intval($_POST["quantidade"] ?? 0);
+        $usuario = $_POST["usuario"] ?? "";
+        $responsavel = $_POST["responsavel"] ?? "";
 
-            if ($id <= 0 || $quantidade <= 0) {
-                echo json_encode(["sucesso" => false, "mensagem" => "Dados inválidos"]);
-                break;
-            }
-
+        if ($id && $qtd > 0) {
             $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ? AND quantidade >= ?");
-            $stmt->bind_param("iii", $quantidade, $id, $quantidade);
+            $stmt->bind_param("iii", $qtd, $id, $qtd);
             $stmt->execute();
 
-            if ($stmt->affected_rows <= 0) {
-                echo json_encode(["sucesso" => false, "mensagem" => "Estoque insuficiente ou produto inexistente"]);
-                break;
-            }
+            if ($stmt->affected_rows > 0) {
+                $stmtNome = $conn->prepare("SELECT nome FROM produtos WHERE id = ?");
+                $stmtNome->bind_param("i", $id);
+                $stmtNome->execute();
+                $resNome = $stmtNome->get_result();
+                $produto = $resNome->fetch_assoc();
 
-            $nome = obterNomeProduto($conn, $id);
-            $stmt2 = $conn->prepare("
-                INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel)
-                VALUES (?, ?, 'saida', ?, NOW(), ?, ?)
-            ");
-            $stmt2->bind_param("isiss", $id, $nome, $quantidade, $usuario, $responsavel);
-            $stmt2->execute();
+                $stmtMov = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel) VALUES (?, ?, 'saida', ?, NOW(), ?, ?)");
+                $stmtMov->bind_param("isiss", $id, $produto['nome'], $qtd, $usuario, $responsavel);
+                $stmtMov->execute();
 
-            echo json_encode(["sucesso" => true, "mensagem" => "Saída registrada"]);
-            break;
-
-        case "remover":
-            $id = (int)($_POST["id"] ?? $_GET["id"] ?? 0);
-            $usuario = $_POST["usuario"] ?? "sistema";
-            $responsavel = $_POST["responsavel"] ?? "admin";
-
-            if ($id <= 0) {
-                echo json_encode(["sucesso" => false, "mensagem" => "ID inválido"]);
-                break;
-            }
-
-            $stmtSel = $conn->prepare("SELECT nome, quantidade FROM produtos WHERE id = ?");
-            $stmtSel->bind_param("i", $id);
-            $stmtSel->execute();
-            $prod = $stmtSel->get_result()->fetch_assoc();
-            $stmtSel->close();
-
-            if (!$prod) {
-                echo json_encode(["sucesso" => false, "mensagem" => "Produto inexistente"]);
-                break;
-            }
-
-            $nome = $prod['nome'] ?? "Produto removido";
-            $qtdRemovida = (int)($prod['quantidade'] ?? 0);
-
-            // grava como "remocao"
-            $stmtMov = $conn->prepare("
-                INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel)
-                VALUES (?, ?, 'remocao', ?, NOW(), ?, ?)
-            ");
-            $stmtMov->bind_param("isiss", $id, $nome, $qtdRemovida, $usuario, $responsavel);
-            $stmtMov->execute();
-            $stmtMov->close();
-
-            // deleta o produto
-            $stmtDel = $conn->prepare("DELETE FROM produtos WHERE id = ?");
-            $stmtDel->bind_param("i", $id);
-            $stmtDel->execute();
-
-            if ($stmtDel->affected_rows > 0) {
-                echo json_encode(["sucesso" => true, "mensagem" => "Produto removido com sucesso"]);
+                echo json_encode(["sucesso" => true, "mensagem" => "Saída registrada"]);
             } else {
-                echo json_encode(["sucesso" => false, "mensagem" => "Erro ao remover produto"]);
+                echo json_encode(["sucesso" => false, "mensagem" => "Quantidade insuficiente"]);
             }
-            $stmtDel->close();
-            break;
+        } else {
+            echo json_encode(["sucesso" => false, "mensagem" => "Dados inválidos"]);
+        }
+        break;
 
-        default:
-            echo json_encode([
-                "sucesso" => false,
-                "mensagem" => "Ação inválida",
-                "acao_recebida" => $acao
-            ]);
-            break;
-    }
-} catch (Throwable $e) {
-    http_response_code(500);
-    echo json_encode(["sucesso" => false, "mensagem" => "Erro interno: " . $e->getMessage()]);
-} finally {
-    $conn->close();
+    case "adicionar":
+        $nome = $_POST["nome"] ?? "";
+        $qtd = intval($_POST["quantidade"] ?? 0);
+
+        if ($nome !== "") {
+            $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade) VALUES (?, ?)");
+            $stmt->bind_param("si", $nome, $qtd);
+            if ($stmt->execute()) {
+                echo json_encode(["sucesso" => true, "mensagem" => "Produto adicionado"]);
+            } else {
+                echo json_encode(["sucesso" => false, "mensagem" => "Erro ao adicionar produto"]);
+            }
+        } else {
+            echo json_encode(["sucesso" => false, "mensagem" => "Nome inválido"]);
+        }
+        break;
+
+    case "remover":
+        $id = $_POST["id"] ?? null;
+        $usuario = $_POST["usuario"] ?? "";
+        $responsavel = $_POST["responsavel"] ?? "";
+
+        if ($id) {
+            $stmtNome = $conn->prepare("SELECT nome, quantidade FROM produtos WHERE id = ?");
+            $stmtNome->bind_param("i", $id);
+            $stmtNome->execute();
+            $resNome = $stmtNome->get_result();
+            $produto = $resNome->fetch_assoc();
+
+            if ($produto) {
+                $stmtMov = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel) VALUES (?, ?, 'remocao', ?, NOW(), ?, ?)");
+                $stmtMov->bind_param("isiss", $id, $produto['nome'], $produto['quantidade'], $usuario, $responsavel);
+                $stmtMov->execute();
+
+                $stmtDel = $conn->prepare("DELETE FROM produtos WHERE id = ?");
+                $stmtDel->bind_param("i", $id);
+                $stmtDel->execute();
+
+                echo json_encode(["sucesso" => true, "mensagem" => "Produto removido"]);
+            } else {
+                echo json_encode(["sucesso" => false, "mensagem" => "Produto não encontrado"]);
+            }
+        } else {
+            echo json_encode(["sucesso" => false, "mensagem" => "ID inválido"]);
+        }
+        break;
+
+    default:
+        echo json_encode(["sucesso" => false, "mensagem" => "Ação inválida"]);
+        break;
 }
