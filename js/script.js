@@ -32,10 +32,10 @@ async function listarProdutos() {
                 <td>${prod.id}</td>
                 <td>${prod.nome}</td>
                 <td>${prod.quantidade}</td>
-                <td>
-                    <button onclick="entrada(${prod.id})">Entrada</button>
-                    <button onclick="saida(${prod.id})">Saída</button>
-                    <button onclick="remover(${prod.id})">Remover</button>
+                <td class="d-flex gap-2">
+                    <button class="btn btn-success btn-sm" onclick="entrada(${prod.id})">Entrada</button>
+                    <button class="btn btn-warning btn-sm" onclick="saida(${prod.id})">Saída</button>
+                    <button class="btn btn-danger btn-sm" onclick="remover(${prod.id})">Remover</button>
                 </td>
             `;
             tabela.appendChild(tr);
@@ -74,10 +74,14 @@ async function listarMovimentacoes() {
 // ---------------- Ações ----------------
 async function entrada(id) {
     const quantidade = prompt("Quantidade de entrada:");
+    if (!quantidade || isNaN(quantidade) || quantidade <= 0) {
+        alert("Quantidade inválida.");
+        return;
+    }
     const usuario = prompt("Usuário:");
     const responsavel = prompt("Responsável:");
 
-    if (quantidade) {
+    if (usuario && responsavel) {
         await apiRequest("registrar_movimentacao", {
             produto_id: id,
             tipo: "entrada",
@@ -88,15 +92,21 @@ async function entrada(id) {
 
         listarProdutos();
         listarMovimentacoes();
+    } else {
+        alert("Usuário e responsável são obrigatórios.");
     }
 }
 
 async function saida(id) {
     const quantidade = prompt("Quantidade de saída:");
+    if (!quantidade || isNaN(quantidade) || quantidade <= 0) {
+        alert("Quantidade inválida.");
+        return;
+    }
     const usuario = prompt("Usuário:");
     const responsavel = prompt("Responsável:");
 
-    if (quantidade) {
+    if (usuario && responsavel) {
         await apiRequest("registrar_movimentacao", {
             produto_id: id,
             tipo: "saida",
@@ -107,14 +117,23 @@ async function saida(id) {
 
         listarProdutos();
         listarMovimentacoes();
+    } else {
+        alert("Usuário e responsável são obrigatórios.");
     }
 }
 
 async function remover(id) {
     if (confirm("Deseja remover este produto?")) {
-        await apiRequest("remover_produto", { id }, "GET");
-        listarProdutos();
-        listarMovimentacoes();
+        const usuario = prompt("Usuário:");
+        const responsavel = prompt("Responsável:");
+
+        if (usuario && responsavel) {
+            await apiRequest("remover_produto", { id, usuario, responsavel }, "POST");
+            listarProdutos();
+            listarMovimentacoes();
+        } else {
+            alert("Usuário e responsável são obrigatórios para remover.");
+        }
     }
 }
 
@@ -136,7 +155,7 @@ document.querySelector("#formAdicionarProduto").addEventListener("submit", async
     }, "POST");
 
     if (resposta.sucesso) {
-        document.querySelector("#formAdicionarProduto").reset();
+        this.reset();
         listarProdutos();
     } else {
         alert(resposta.mensagem || "Erro ao adicionar produto.");
