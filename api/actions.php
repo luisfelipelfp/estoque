@@ -58,9 +58,17 @@ try {
                 $val = $_GET[$campo] ?? $_POST[$campo] ?? "";
                 if ($val !== "") {
                     if ($campo === "produto") {
-                        $cond[] = "m.produto_nome LIKE ?";
-                        $bindVals[] = "%".$val."%";
-                        $bindTypes .= "s";
+                        if (is_numeric($val)) {
+                            // Filtro por ID
+                            $cond[] = "m.produto_id = ?";
+                            $bindVals[] = (int)$val;
+                            $bindTypes .= "i";
+                        } else {
+                            // Filtro por nome
+                            $cond[] = "m.produto_nome LIKE ?";
+                            $bindVals[] = "%".$val."%";
+                            $bindTypes .= "s";
+                        }
                     } elseif ($campo === "data_inicio") {
                         $cond[] = "m.data >= ?";
                         $bindVals[] = $val;
@@ -224,51 +232,50 @@ try {
             break;
 
         case "remover":
-    $id = (int)($_POST["id"] ?? $_GET["id"] ?? 0);
-    $usuario = $_POST["usuario"] ?? "sistema";
-    $responsavel = $_POST["responsavel"] ?? "admin";
+            $id = (int)($_POST["id"] ?? $_GET["id"] ?? 0);
+            $usuario = $_POST["usuario"] ?? "sistema";
+            $responsavel = $_POST["responsavel"] ?? "admin";
 
-    if ($id <= 0) {
-        echo json_encode(["sucesso" => false, "mensagem" => "ID inválido"]);
-        break;
-    }
+            if ($id <= 0) {
+                echo json_encode(["sucesso" => false, "mensagem" => "ID inválido"]);
+                break;
+            }
 
-    $stmtSel = $conn->prepare("SELECT nome, quantidade FROM produtos WHERE id = ?");
-    $stmtSel->bind_param("i", $id);
-    $stmtSel->execute();
-    $prod = $stmtSel->get_result()->fetch_assoc();
-    $stmtSel->close();
+            $stmtSel = $conn->prepare("SELECT nome, quantidade FROM produtos WHERE id = ?");
+            $stmtSel->bind_param("i", $id);
+            $stmtSel->execute();
+            $prod = $stmtSel->get_result()->fetch_assoc();
+            $stmtSel->close();
 
-    if (!$prod) {
-        echo json_encode(["sucesso" => false, "mensagem" => "Produto inexistente"]);
-        break;
-    }
+            if (!$prod) {
+                echo json_encode(["sucesso" => false, "mensagem" => "Produto inexistente"]);
+                break;
+            }
 
-    $nome = $prod['nome'] ?? "Produto removido";
-    $qtdRemovida = (int)($prod['quantidade'] ?? 0);
+            $nome = $prod['nome'] ?? "Produto removido";
+            $qtdRemovida = (int)($prod['quantidade'] ?? 0);
 
-    // grava como "remocao" (compatível com ENUM atualizado)
-    $stmtMov = $conn->prepare("
-        INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel)
-        VALUES (?, ?, 'remocao', ?, NOW(), ?, ?)
-    ");
-    $stmtMov->bind_param("isiss", $id, $nome, $qtdRemovida, $usuario, $responsavel);
-    $stmtMov->execute();
-    $stmtMov->close();
+            // grava como "remocao"
+            $stmtMov = $conn->prepare("
+                INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel)
+                VALUES (?, ?, 'remocao', ?, NOW(), ?, ?)
+            ");
+            $stmtMov->bind_param("isiss", $id, $nome, $qtdRemovida, $usuario, $responsavel);
+            $stmtMov->execute();
+            $stmtMov->close();
 
-    // deleta o produto
-    $stmtDel = $conn->prepare("DELETE FROM produtos WHERE id = ?");
-    $stmtDel->bind_param("i", $id);
-    $stmtDel->execute();
+            // deleta o produto
+            $stmtDel = $conn->prepare("DELETE FROM produtos WHERE id = ?");
+            $stmtDel->bind_param("i", $id);
+            $stmtDel->execute();
 
-    if ($stmtDel->affected_rows > 0) {
-        echo json_encode(["sucesso" => true, "mensagem" => "Produto removido com sucesso"]);
-    } else {
-        echo json_encode(["sucesso" => false, "mensagem" => "Erro ao remover produto"]);
-    }
-    $stmtDel->close();
-    break;
-
+            if ($stmtDel->affected_rows > 0) {
+                echo json_encode(["sucesso" => true, "mensagem" => "Produto removido com sucesso"]);
+            } else {
+                echo json_encode(["sucesso" => false, "mensagem" => "Erro ao remover produto"]);
+            }
+            $stmtDel->close();
+            break;
 
         default:
             echo json_encode([

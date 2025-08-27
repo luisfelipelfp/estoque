@@ -4,7 +4,7 @@ const API_URL = "http://192.168.15.100/estoque/api/actions.php";
 /**
  * Faz requisição à API.
  * - GET -> envia acao + dados na querystring
- * - POST -> envia acao + dados no body como JSON (o actions.php aceita JSON no corpo)
+ * - POST -> envia acao + dados no body como JSON
  */
 async function apiRequest(acao, dados = {}, metodo = "GET") {
     let url = API_URL;
@@ -14,27 +14,22 @@ async function apiRequest(acao, dados = {}, metodo = "GET") {
         const query = new URLSearchParams({ acao, ...dados }).toString();
         url += "?" + query;
     } else {
-        // Envia JSON no body (actions.php já lida com JSON no corpo)
         options.headers["Content-Type"] = "application/json";
         options.body = JSON.stringify({ acao, ...dados });
     }
-
-    console.debug("API Request:", metodo, url, options.body ?? null);
 
     try {
         const response = await fetch(url, options);
         const text = await response.text();
         try {
-            const json = JSON.parse(text);
-            console.debug("API Response:", json);
-            return json;
-        } catch (err) {
-            console.error("Resposta da API não é JSON:", text);
-            return { sucesso: false, mensagem: "Resposta inválida do servidor", raw: text };
+            return JSON.parse(text);
+        } catch {
+            console.error("Resposta inválida:", text);
+            return { sucesso: false, mensagem: "Resposta inválida do servidor" };
         }
     } catch (error) {
         console.error("Erro na requisição:", error);
-        return { sucesso: false, mensagem: "Erro na comunicação com o servidor" };
+        return { sucesso: false, mensagem: "Erro de comunicação com o servidor" };
     }
 }
 
@@ -45,14 +40,9 @@ async function carregarProdutos() {
     tbody.innerHTML = "<tr><td colspan='4'>Carregando...</td></tr>";
 
     const resp = await apiRequest("listarprodutos", {}, "GET");
+    let produtos = Array.isArray(resp) ? resp : (resp?.dados || []);
 
-    // o listarprodutos no PHP retorna um array simples; adaptamos pra ambos os casos
-    let produtos = [];
-    if (Array.isArray(resp)) produtos = resp;
-    else if (resp && Array.isArray(resp.dados)) produtos = resp.dados;
-    else if (resp && resp.sucesso && resp.dados && Array.isArray(resp.dados)) produtos = resp.dados;
-
-    if (!produtos || produtos.length === 0) {
+    if (!produtos.length) {
         tbody.innerHTML = "<tr><td colspan='4'>Nenhum produto encontrado</td></tr>";
         return;
     }
@@ -73,6 +63,9 @@ async function carregarProdutos() {
         `;
         tbody.appendChild(tr);
     });
+
+    // Atualiza o select de filtro de produto
+    atualizarFiltroProdutos(produtos);
 }
 
 async function adicionarProduto(nome, quantidade = 0) {
@@ -131,9 +124,9 @@ async function carregarMovimentacoes(filtros = {}) {
     ultimaBusca = { ...filtros, pagina: paginaAtual, limite: 10 };
     const resp = await apiRequest("listarmovimentacoes", ultimaBusca, "GET");
 
-    if (!resp || !resp.sucesso || !Array.isArray(resp.dados) || resp.dados.length === 0) {
+    if (!resp?.sucesso || !Array.isArray(resp.dados) || !resp.dados.length) {
         tabela.innerHTML = "<tr><td colspan='7'>Nenhuma movimentação encontrada</td></tr>";
-        document.getElementById("paginacaoMovs") && (document.getElementById("paginacaoMovs").innerHTML = "");
+        document.getElementById("paginacaoMovs")?.innerHTML = "";
         return;
     }
 
@@ -162,6 +155,22 @@ async function carregarMovimentacoes(filtros = {}) {
                 onclick="paginaAtual++; carregarMovimentacoes(ultimaBusca)">Próxima</button>
         `;
     }
+}
+
+// -------------------- FILTRO DE PRODUTOS --------------------
+
+function atualizarFiltroProdutos(produtos) {
+    const select = document.getElementById("filtroProduto");
+    if (!select) return;
+
+    // limpa opções e adiciona "todos"
+    select.innerHTML = `<option value="">Todos os produtos</option>`;
+    produtos.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.nome;
+        select.appendChild(opt);
+    });
 }
 
 // -------------------- INIT --------------------
