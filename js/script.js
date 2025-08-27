@@ -118,6 +118,31 @@ async function remover(id) {
     }
 }
 
+// ---------------- Adicionar Produto ----------------
+document.querySelector("#formAdicionarProduto").addEventListener("submit", async function (e) {
+    e.preventDefault();
+
+    const nome = document.querySelector("#nomeProduto").value.trim();
+    const quantidade = 0; // Inicialmente zero
+
+    if (!nome) {
+        alert("Informe o nome do produto.");
+        return;
+    }
+
+    const resposta = await apiRequest("adicionar_produto", {
+        nome,
+        quantidade
+    }, "POST");
+
+    if (resposta.sucesso) {
+        document.querySelector("#formAdicionarProduto").reset();
+        listarProdutos();
+    } else {
+        alert(resposta.mensagem || "Erro ao adicionar produto.");
+    }
+});
+
 // ---------------- Inicialização ----------------
 window.onload = () => {
     listarProdutos();
