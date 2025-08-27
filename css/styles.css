@@ -5,6 +5,7 @@ body, h1, h2, h3, p, table {
     font-family: Verdana, sans-serif;
 }
 
+/* Corpo */
 body {
     background-color: #f8f9fa;
     padding: 20px;
@@ -22,7 +23,16 @@ h1, h2 {
     font-weight: bold;
 }
 
-/* Botões */
+h1 {
+    background-color: #0d6efd;
+    color: white;
+    padding: 20px;
+    border-radius: 10px;
+    font-size: 1.8rem;
+    text-align: center;
+}
+
+/* Botões padrão */
 .btn {
     padding: 6px 12px;
     font-size: 14px;
@@ -52,6 +62,22 @@ h1, h2 {
     color: white;
 }
 
+/* Botões personalizados */
+.btn-entrada {
+    background-color: #198754;
+    color: white;
+}
+
+.btn-saida {
+    background-color: #ffc107;
+    color: black;
+}
+
+.btn-remover {
+    background-color: #dc3545;
+    color: white;
+}
+
 /* Tabelas */
 table {
     width: 100%;
@@ -71,6 +97,11 @@ table th {
     font-weight: bold;
 }
 
+.table td,
+.table th {
+    vertical-align: middle;
+}
+
 /* Estoque baixo */
 .estoque-baixo {
     background-color: #ffcccc !important; /* vermelho claro */
@@ -78,7 +109,7 @@ table th {
     font-weight: bold;
 }
 
-/* Formulário */
+/* Formulários */
 form {
     margin-bottom: 20px;
 }
@@ -88,4 +119,10 @@ input[type="text"] {
     border: 1px solid #ccc;
     border-radius: 4px;
     font-family: Verdana, sans-serif;
+}
+
+/* Formulário adicionar produto */
+#formAdicionarProduto input,
+#formAdicionarProduto button {
+    height: 45px;
 }
