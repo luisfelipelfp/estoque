@@ -1,60 +1,47 @@
 <?php
-require_once "db.php";
+function relatorio(mysqli $conn, array $f): array {
+    $cond = [];
+    $bind = [];
+    $types = "";
 
-$acao = $_REQUEST["acao"] ?? null;
+    // produto / produto_id
+    if (!empty($f["produto_id"])) {
+        $cond[] = "m.produto_id = ?";
+        $bind[] = (int)$f["produto_id"];
+        $types .= "i";
+    } elseif (!empty($f["produto"])) {
+        if (is_numeric($f["produto"])) {
+            $cond[] = "m.produto_id = ?";
+            $bind[] = (int)$f["produto"];
+            $types .= "i";
+        } else {
+            $cond[] = "p.nome LIKE ?";
+            $bind[] = "%".$f["produto"]."%";
+            $types .= "s";
+        }
+    }
 
-if ($acao === "relatorio") {
-    $data_inicio = $_GET["data_inicio"] ?? null;
-    $data_fim    = $_GET["data_fim"] ?? null;
-    $tipo        = $_GET["tipo"] ?? null;
-    $produto_id  = $_GET["produto_id"] ?? null;
+    if (!empty($f["tipo"]))        { $cond[] = "m.tipo = ?";        $bind[] = $f["tipo"];        $types .= "s"; }
+    if (!empty($f["usuario"]))     { $cond[] = "m.usuario = ?";     $bind[] = $f["usuario"];     $types .= "s"; }
+    if (!empty($f["responsavel"])) { $cond[] = "m.responsavel = ?"; $bind[] = $f["responsavel"]; $types .= "s"; }
+    if (!empty($f["data_inicio"])) { $cond[] = "DATE(m.data) >= ?"; $bind[] = $f["data_inicio"]; $types .= "s"; }
+    if (!empty($f["data_fim"]))    { $cond[] = "DATE(m.data) <= ?"; $bind[] = $f["data_fim"];    $types .= "s"; }
 
-    $conn = db();
+    $where = $cond ? ("WHERE ".implode(" AND ", $cond)) : "";
 
-    $sql = "SELECT m.*, p.nome AS produto_nome
+    $sql = "SELECT m.id, m.produto_id, p.nome AS produto_nome, m.tipo, m.quantidade, m.data, m.usuario, m.responsavel
               FROM movimentacoes m
-              JOIN produtos p ON m.produto_id = p.id
-             WHERE 1=1";
-    $params = [];
-    $types  = "";
-
-    if ($data_inicio && $data_fim) {
-        $sql .= " AND DATE(m.data) BETWEEN ? AND ?";
-        $params[] = $data_inicio;
-        $params[] = $data_fim;
-        $types   .= "ss";
-    }
-
-    if ($tipo) {
-        $sql .= " AND m.tipo = ?";
-        $params[] = $tipo;
-        $types   .= "s";
-    }
-
-    if ($produto_id) {
-        $sql .= " AND m.produto_id = ?";
-        $params[] = (int)$produto_id;
-        $types   .= "i";
-    }
-
-    $sql .= " ORDER BY m.data DESC";
+              LEFT JOIN produtos p ON p.id = m.produto_id
+              $where
+             ORDER BY m.data DESC";
 
     $stmt = $conn->prepare($sql);
-
-    if (!empty($params)) {
-        $stmt->bind_param($types, ...$params);
-    }
-
+    if ($bind) $stmt->bind_param($types, ...$bind);
     $stmt->execute();
-    $result = $stmt->get_result();
+    $res = $stmt->get_result();
 
-    $relatorio = [];
-    while ($row = $result->fetch_assoc()) {
-        $relatorio[] = $row;
-    }
+    $dados = [];
+    while ($row = $res->fetch_assoc()) $dados[] = $row;
 
-    echo json_encode($relatorio);
-    exit;
+    return ["sucesso" => true, "dados" => $dados];
 }
-
-echo json_encode(["sucesso" => false, "mensagem" => "Ação de relatório desconhecida."]);

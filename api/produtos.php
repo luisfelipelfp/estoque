@@ -1,63 +1,55 @@
 <?php
-function listar_produtos() {
-    $conn = db();
-    $sql = "SELECT * FROM produtos ORDER BY id DESC";
-    $result = $conn->query($sql);
-
-    $produtos = [];
-    if ($result) {
-        while ($row = $result->fetch_assoc()) {
-            $produtos[] = $row;
-        }
-    }
-
-    echo json_encode($produtos);
+function produtos_listar(mysqli $conn): array {
+    $res = $conn->query("SELECT * FROM produtos ORDER BY id DESC");
+    $out = [];
+    if ($res) while ($row = $res->fetch_assoc()) $out[] = $row;
+    return $out; // o front já aceita array puro
 }
 
-function adicionar_produto() {
-    $dados = json_decode(file_get_contents("php://input"), true);
-    $nome = $dados["nome"] ?? null;
-    $quantidade = $dados["quantidade"] ?? 0;
-
-    if (!$nome) {
-        echo json_encode(["sucesso" => false, "mensagem" => "Nome do produto é obrigatório."]);
-        exit;
+function produtos_adicionar(mysqli $conn, string $nome, int $quantidade = 0): array {
+    if ($nome === "") {
+        return ["sucesso" => false, "mensagem" => "Nome do produto é obrigatório."];
     }
 
-    $conn = db();
     $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade) VALUES (?, ?)");
     $stmt->bind_param("si", $nome, $quantidade);
-
-    if ($stmt->execute()) {
-        echo json_encode(["sucesso" => true, "mensagem" => "Produto adicionado com sucesso."]);
-    } else {
-        echo json_encode(["sucesso" => false, "mensagem" => "Erro ao adicionar produto: " . $conn->error]);
+    if (!$stmt->execute()) {
+        return ["sucesso" => false, "mensagem" => "Erro ao adicionar: ".$conn->error];
     }
+
+    // registra movimentação inicial como entrada (se > 0)
+    if ($quantidade > 0) {
+        $id = $conn->insert_id;
+        $stmt2 = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario, responsavel)
+                                 VALUES (?, 'entrada', ?, NOW(), 'sistema', 'admin')");
+        $stmt2->bind_param("ii", $id, $quantidade);
+        $stmt2->execute();
+    }
+
+    return ["sucesso" => true, "mensagem" => "Produto adicionado com sucesso."];
 }
 
-function remover_produto() {
-    $id = $_GET["id"] ?? null;
+function produtos_remover(mysqli $conn, int $id): array {
+    if ($id <= 0) return ["sucesso" => false, "mensagem" => "ID inválido."];
 
-    if (!$id) {
-        echo json_encode(["sucesso" => false, "mensagem" => "ID do produto é obrigatório."]);
-        exit;
+    // pega quantidade atual para registrar remoção
+    $stmtSel = $conn->prepare("SELECT quantidade FROM produtos WHERE id = ?");
+    $stmtSel->bind_param("i", $id);
+    $stmtSel->execute();
+    $prod = $stmtSel->get_result()->fetch_assoc();
+    if (!$prod) return ["sucesso" => false, "mensagem" => "Produto inexistente."];
+
+    $qtd = (int)$prod["quantidade"];
+
+    $stmtMov = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario, responsavel)
+                               VALUES (?, 'remocao', ?, NOW(), 'sistema', 'admin')");
+    $stmtMov->bind_param("ii", $id, $qtd);
+    $stmtMov->execute();
+
+    $stmtDel = $conn->prepare("DELETE FROM produtos WHERE id = ?");
+    $stmtDel->bind_param("i", $id);
+    if ($stmtDel->execute()) {
+        return ["sucesso" => true, "mensagem" => "Produto removido com sucesso."];
     }
-
-    $conn = db();
-
-    // Registrar movimentação antes de remover
-    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade) 
-                            SELECT id, 'remocao', quantidade FROM produtos WHERE id = ?");
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-
-    // Remover produto
-    $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
-    $stmt->bind_param("i", $id);
-
-    if ($stmt->execute()) {
-        echo json_encode(["sucesso" => true, "mensagem" => "Produto removido com sucesso."]);
-    } else {
-        echo json_encode(["sucesso" => false, "mensagem" => "Erro ao remover produto: " . $conn->error]);
-    }
+    return ["sucesso" => false, "mensagem" => "Erro ao remover produto: ".$conn->error];
 }
