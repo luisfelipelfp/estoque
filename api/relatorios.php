@@ -1,29 +1,43 @@
 <?php
-function relatorio() {
+require_once "db.php";
+
+$acao = $_REQUEST["acao"] ?? null;
+
+if ($acao === "relatorio") {
     $data_inicio = $_GET["data_inicio"] ?? null;
-    $data_fim = $_GET["data_fim"] ?? null;
-    $tipo = $_GET["tipo"] ?? null;
+    $data_fim    = $_GET["data_fim"] ?? null;
+    $tipo        = $_GET["tipo"] ?? null;
+    $produto_id  = $_GET["produto_id"] ?? null;
 
     $conn = db();
 
-    $sql = "SELECT * FROM movimentacoes WHERE 1=1";
+    $sql = "SELECT m.*, p.nome AS produto_nome
+              FROM movimentacoes m
+              JOIN produtos p ON m.produto_id = p.id
+             WHERE 1=1";
     $params = [];
-    $types = "";
+    $types  = "";
 
     if ($data_inicio && $data_fim) {
-        $sql .= " AND DATE(data) BETWEEN ? AND ?";
+        $sql .= " AND DATE(m.data) BETWEEN ? AND ?";
         $params[] = $data_inicio;
         $params[] = $data_fim;
-        $types .= "ss";
+        $types   .= "ss";
     }
 
     if ($tipo) {
-        $sql .= " AND tipo = ?";
+        $sql .= " AND m.tipo = ?";
         $params[] = $tipo;
-        $types .= "s";
+        $types   .= "s";
     }
 
-    $sql .= " ORDER BY data DESC";
+    if ($produto_id) {
+        $sql .= " AND m.produto_id = ?";
+        $params[] = (int)$produto_id;
+        $types   .= "i";
+    }
+
+    $sql .= " ORDER BY m.data DESC";
 
     $stmt = $conn->prepare($sql);
 
@@ -40,4 +54,7 @@ function relatorio() {
     }
 
     echo json_encode($relatorio);
+    exit;
 }
+
+echo json_encode(["sucesso" => false, "mensagem" => "Ação de relatório desconhecida."]);
