@@ -1,150 +1,179 @@
+// URL base da API (ajuste conforme seu servidor)
 const API_URL = "http://192.168.15.100/estoque/api/actions.php";
 
-async function apiRequest(acao, dados = null, metodo = "GET") {
-    let url = `${API_URL}?acao=${encodeURIComponent(acao)}`;
-    let options = { method: metodo };
+let paginaAtual = 1;
+let ultimaBusca = {};
 
-    if (metodo === "GET" && dados) {
-        const query = new URLSearchParams(dados).toString();
-        url += "&" + query;
-    } else if (metodo === "POST" && dados) {
-        options.headers = {
-            "Content-Type": "application/json"
+// Função genérica para requisições à API
+async function apiRequest(action, data = {}, method = "POST") {
+    try {
+        const options = {
+            method,
+            headers: { "Content-Type": "application/json" },
         };
-        options.body = JSON.stringify(dados);
-    }
+        if (method === "POST") {
+            options.body = JSON.stringify({ action, ...data });
+        }
+        const url = method === "GET"
+            ? `${API_URL}?action=${action}&${new URLSearchParams(data)}`
+            : API_URL;
 
-    const resp = await fetch(url, options);
-    return resp.json();
+        const resp = await fetch(url, options);
+        return await resp.json();
+    } catch (e) {
+        console.error("Erro na requisição:", e);
+        return { sucesso: false, erro: "Falha na conexão com API" };
+    }
 }
 
-// ---------------- Produtos ----------------
+// Carregar produtos
 async function listarProdutos() {
-    try {
-        const resp = await apiRequest("listar_produtos");
-        let produtos = Array.isArray(resp) ? resp : (resp?.dados || []);
-        const tabela = document.querySelector("#tabelaProdutos tbody");
-        tabela.innerHTML = "";
+    const tabela = document.querySelector("#tabelaProdutos tbody");
+    tabela.innerHTML = "<tr><td colspan='3'>Carregando...</td></tr>";
 
-        produtos.forEach(prod => {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `
-                <td>${prod.id}</td>
-                <td>${prod.nome}</td>
-                <td>${prod.quantidade}</td>
-                <td class="d-flex gap-2">
-                    <button class="btn btn-success btn-sm" onclick="entrada(${prod.id})">Entrada</button>
-                    <button class="btn btn-warning btn-sm" onclick="saida(${prod.id})">Saída</button>
-                    <button class="btn btn-danger btn-sm" onclick="remover(${prod.id})">Remover</button>
-                </td>
-            `;
-            tabela.appendChild(tr);
-        });
-    } catch (err) {
-        console.error("Erro ao listar produtos:", err);
-    }
-}
+    const resp = await apiRequest("listarprodutos", {}, "GET");
 
-// ---------------- Movimentações ----------------
-async function listarMovimentacoes() {
-    try {
-        const resp = await apiRequest("listar_movimentacoes");
-        let movimentacoes = Array.isArray(resp) ? resp : (resp?.dados || []);
-        const tabela = document.querySelector("#tabelaMovimentacoes tbody");
-        tabela.innerHTML = "";
+    const selectFiltro = document.getElementById("filtroProduto");
+    selectFiltro.innerHTML = "<option value=''>Todos</option>";
 
-        movimentacoes.forEach(mov => {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `
-                <td>${mov.id}</td>
-                <td>${mov.produto_nome || "-"}</td>
-                <td>${mov.tipo}</td>
-                <td>${mov.quantidade}</td>
-                <td>${mov.data}</td>
-                <td>${mov.usuario || "-"}</td>
-                <td>${mov.responsavel || "-"}</td>
-            `;
-            tabela.appendChild(tr);
-        });
-    } catch (err) {
-        console.error("Erro ao listar movimentações:", err);
-    }
-}
-
-// ---------------- Ações ----------------
-async function entrada(id) {
-    const quantidade = prompt("Quantidade de entrada:");
-    if (!quantidade || isNaN(quantidade) || quantidade <= 0) {
-        alert("Quantidade inválida.");
+    if (!resp?.sucesso || !Array.isArray(resp.dados)) {
+        tabela.innerHTML = "<tr><td colspan='3'>Erro ao carregar produtos</td></tr>";
         return;
     }
 
-    await apiRequest("registrar_movimentacao", {
-        produto_id: id,
+    tabela.innerHTML = "";
+    resp.dados.forEach(prod => {
+        // Preenche tabela
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${prod.id}</td>
+            <td>${prod.nome}</td>
+            <td>${prod.quantidade}</td>
+        `;
+        tabela.appendChild(tr);
+
+        // Preenche select de filtro
+        const opt = document.createElement("option");
+        opt.value = prod.id;
+        opt.textContent = prod.nome;
+        selectFiltro.appendChild(opt);
+    });
+}
+
+// Carregar movimentações
+async function carregarMovimentacoes(filtros = {}) {
+    const tabela = document.querySelector("#tabelaMovimentacoes tbody");
+    tabela.innerHTML = "<tr><td colspan='6'>Carregando...</td></tr>";
+
+    ultimaBusca = { ...filtros, pagina: paginaAtual, limite: 10 };
+    const resp = await apiRequest("listarmovimentacoes", ultimaBusca, "GET");
+
+    if (!resp?.sucesso || !Array.isArray(resp.dados) || !resp.dados.length) {
+        tabela.innerHTML = "<tr><td colspan='6'>Nenhuma movimentação encontrada</td></tr>";
+        document.getElementById("paginacaoMovs")?.innerHTML = "";
+        return;
+    }
+
+    tabela.innerHTML = "";
+    resp.dados.forEach(m => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${m.id}</td>
+            <td>${m.produto_nome || "-"}</td>
+            <td>${m.tipo}</td>
+            <td>${m.quantidade}</td>
+            <td>${m.responsavel || "-"}</td>
+            <td>${m.data}</td>
+        `;
+        tabela.appendChild(tr);
+    });
+
+    // Paginação
+    const pag = document.getElementById("paginacaoMovs");
+    if (pag) {
+        pag.innerHTML = `
+            <button onclick="mudarPagina(-1)">Anterior</button>
+            <span>Página ${paginaAtual}</span>
+            <button onclick="mudarPagina(1)">Próxima</button>
+        `;
+    }
+}
+
+function mudarPagina(delta) {
+    paginaAtual = Math.max(1, paginaAtual + delta);
+    carregarMovimentacoes(ultimaBusca);
+}
+
+// Registrar entrada
+async function entrada() {
+    const produto_id = document.getElementById("movProduto").value;
+    const quantidade = parseInt(document.getElementById("movQuantidade").value, 10);
+    const responsavel = document.getElementById("movResponsavel").value;
+
+    if (!produto_id || quantidade <= 0) {
+        alert("Informe produto e quantidade válida");
+        return;
+    }
+
+    const resp = await apiRequest("registrarmovimentacao", {
+        produto_id,
+        quantidade,
         tipo: "entrada",
-        quantidade,
-        usuario: "",       // enviando vazio
-        responsavel: ""    // enviando vazio
-    }, "POST");
+        responsavel
+    });
 
-    listarProdutos();
-    listarMovimentacoes();
-}
-
-async function saida(id) {
-    const quantidade = prompt("Quantidade de saída:");
-    if (!quantidade || isNaN(quantidade) || quantidade <= 0) {
-        alert("Quantidade inválida.");
-        return;
-    }
-
-    await apiRequest("registrar_movimentacao", {
-        produto_id: id,
-        tipo: "saida",
-        quantidade,
-        usuario: "",       // enviando vazio
-        responsavel: ""    // enviando vazio
-    }, "POST");
-
-    listarProdutos();
-    listarMovimentacoes();
-}
-
-async function remover(id) {
-    if (confirm("Deseja remover este produto?")) {
-        await apiRequest("remover_produto", { id }, "GET");
+    if (resp.sucesso) {
         listarProdutos();
-        listarMovimentacoes();
-    }
-}
-
-// ---------------- Adicionar Produto ----------------
-document.querySelector("#formAdicionarProduto").addEventListener("submit", async function (e) {
-    e.preventDefault();
-
-    const nome = document.querySelector("#nomeProduto").value.trim();
-    const quantidade = 0; // Inicialmente zero
-
-    if (!nome) {
-        alert("Informe o nome do produto.");
-        return;
-    }
-
-    const resposta = await apiRequest("adicionar_produto", {
-        nome,
-        quantidade
-    }, "POST");
-
-    if (resposta.sucesso) {
-        this.reset();
-        listarProdutos();
+        carregarMovimentacoes();
     } else {
-        alert(resposta.mensagem || "Erro ao adicionar produto.");
+        alert(resp.erro || "Erro ao registrar entrada");
     }
+}
+
+// Registrar saída
+async function saida() {
+    const produto_id = document.getElementById("movProduto").value;
+    const quantidade = parseInt(document.getElementById("movQuantidade").value, 10);
+    const responsavel = document.getElementById("movResponsavel").value;
+
+    if (!produto_id || quantidade <= 0) {
+        alert("Informe produto e quantidade válida");
+        return;
+    }
+
+    // Verifica estoque atual antes de enviar
+    const respProdutos = await apiRequest("listarprodutos", {}, "GET");
+    const prod = respProdutos.dados.find(p => p.id == produto_id);
+    if (prod && quantidade > prod.quantidade) {
+        alert("Estoque insuficiente!");
+        return;
+    }
+
+    const resp = await apiRequest("registrarmovimentacao", {
+        produto_id,
+        quantidade,
+        tipo: "saida",
+        responsavel
+    });
+
+    if (resp.sucesso) {
+        listarProdutos();
+        carregarMovimentacoes();
+    } else {
+        alert(resp.erro || "Erro ao registrar saída");
+    }
+}
+
+// Filtros
+document.getElementById("filtroForm")?.addEventListener("submit", e => {
+    e.preventDefault();
+    const produto_id = document.getElementById("filtroProduto").value;
+    const tipo = document.getElementById("filtroTipo").value;
+    const data_inicio = document.getElementById("filtroDataInicio").value;
+    const data_fim = document.getElementById("filtroDataFim").value;
+    carregarMovimentacoes({ produto_id, tipo, data_inicio, data_fim });
 });
 
-// ---------------- Inicialização ----------------
-window.onload = () => {
-    listarProdutos();
-    listarMovimentacoes();
-};
+// Inicialização
+listarProdutos();
+carregarMovimentacoes();
