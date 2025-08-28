@@ -46,9 +46,10 @@ async function listarProdutos() {
 }
 
 // ---------------- Movimentações ----------------
-async function listarMovimentacoes() {
+async function listarMovimentacoes(filtros = {}) {
     try {
-        const resp = await apiRequest("listar_movimentacoes");
+        // filtros: { data_inicio, data_fim, tipo, produto_id }
+        const resp = await apiRequest("relatorio", filtros);
         let movimentacoes = Array.isArray(resp) ? resp : (resp?.dados || []);
         const tabela = document.querySelector("#tabelaMovimentacoes tbody");
         tabela.innerHTML = "";
@@ -83,8 +84,8 @@ async function entrada(id) {
         produto_id: id,
         tipo: "entrada",
         quantidade,
-        usuario: "",       // enviando vazio
-        responsavel: ""    // enviando vazio
+        usuario: "",
+        responsavel: ""
     }, "POST");
 
     listarProdutos();
@@ -102,8 +103,8 @@ async function saida(id) {
         produto_id: id,
         tipo: "saida",
         quantidade,
-        usuario: "",       // enviando vazio
-        responsavel: ""    // enviando vazio
+        usuario: "",
+        responsavel: ""
     }, "POST");
 
     listarProdutos();
@@ -123,17 +124,14 @@ document.querySelector("#formAdicionarProduto").addEventListener("submit", async
     e.preventDefault();
 
     const nome = document.querySelector("#nomeProduto").value.trim();
-    const quantidade = 0; // Inicialmente zero
+    const quantidade = 0;
 
     if (!nome) {
         alert("Informe o nome do produto.");
         return;
     }
 
-    const resposta = await apiRequest("adicionar_produto", {
-        nome,
-        quantidade
-    }, "POST");
+    const resposta = await apiRequest("adicionar_produto", { nome, quantidade }, "POST");
 
     if (resposta.sucesso) {
         this.reset();
@@ -141,6 +139,20 @@ document.querySelector("#formAdicionarProduto").addEventListener("submit", async
     } else {
         alert(resposta.mensagem || "Erro ao adicionar produto.");
     }
+});
+
+// ---------------- Filtros de Movimentação ----------------
+document.querySelector("#formFiltrosMovimentacoes")?.addEventListener("submit", function(e){
+    e.preventDefault();
+    const data_inicio = document.querySelector("#filtroDataInicio").value;
+    const data_fim = document.querySelector("#filtroDataFim").value;
+    const tipo = document.querySelector("#filtroTipo").value;
+
+    listarMovimentacoes({
+        data_inicio: data_inicio || undefined,
+        data_fim: data_fim || undefined,
+        tipo: tipo || undefined
+    });
 });
 
 // ---------------- Inicialização ----------------
