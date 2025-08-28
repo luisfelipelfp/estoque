@@ -34,16 +34,16 @@
 
   <!-- Filtro movimentações -->
   <h3 class="mt-5 mb-3">📈 Movimentações</h3>
-  <form id="formFiltroMovs" class="mb-3 d-flex flex-wrap gap-2">
-    <input type="date" name="data_inicio" class="form-control">
-    <input type="date" name="data_fim" class="form-control">
-    <select name="tipo" class="form-control">
+  <form id="formFiltrosMovimentacoes" class="mb-3 d-flex flex-wrap gap-2">
+    <input type="date" id="filtroDataInicio" class="form-control">
+    <input type="date" id="filtroDataFim" class="form-control">
+    <select id="filtroTipo" class="form-control">
       <option value="">Todos</option>
       <option value="entrada">Entrada</option>
       <option value="saida">Saída</option>
       <option value="remocao">Remoção</option>
     </select>
-    <select name="produto" id="filtroProduto" class="form-control">
+    <select id="filtroProduto" class="form-control">
       <option value="">Todos os Produtos</option>
     </select>
     <button type="submit" class="btn btn-secondary">🔍 Filtrar</button>
@@ -67,6 +67,10 @@
   <!-- Paginação movimentações -->
   <div id="paginacaoMovs" class="mt-2"></div>
 
-  <script src="js/script.js"></script>
+  <!-- Scripts na ordem correta -->
+  <script src="js/api.js"></script>
+  <script src="js/produtos.js"></script>
+  <script src="js/movimentacoes.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>
