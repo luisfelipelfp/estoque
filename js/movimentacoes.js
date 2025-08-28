@@ -1,3 +1,4 @@
+// Função para listar movimentações com filtros
 async function listarMovimentacoes(filtros = {}) {
     try {
         const resp = await apiRequest("relatorio", filtros);
@@ -14,7 +15,6 @@ async function listarMovimentacoes(filtros = {}) {
                 <td>${mov.quantidade}</td>
                 <td>${mov.data}</td>
                 <td>${mov.usuario || "-"}</td>
-                <td>${mov.responsavel || "-"}</td>
             `;
             tabela.appendChild(tr);
         });
@@ -23,16 +23,22 @@ async function listarMovimentacoes(filtros = {}) {
     }
 }
 
-// Evento de filtros
-document.querySelector("#formFiltrosMovimentacoes")?.addEventListener("submit", function(e){
+// Evento do formulário de filtros
+document.querySelector("#formFiltroMovs")?.addEventListener("submit", function(e) {
     e.preventDefault();
-    const data_inicio = document.querySelector("#filtroDataInicio").value;
-    const data_fim = document.querySelector("#filtroDataFim").value;
-    const tipo = document.querySelector("#filtroTipo").value;
+
+    const data_inicio = this.querySelector("[name='data_inicio']").value;
+    const data_fim = this.querySelector("[name='data_fim']").value;
+    const tipo = this.querySelector("[name='tipo']").value;
+    const produto = this.querySelector("[name='produto']").value;
 
     listarMovimentacoes({
         data_inicio: data_inicio || undefined,
         data_fim: data_fim || undefined,
-        tipo: tipo || undefined
+        tipo: tipo || undefined,
+        produto: produto || undefined
     });
 });
+
+// Carregar movimentações ao iniciar
+listarMovimentacoes();
