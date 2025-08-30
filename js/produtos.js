@@ -19,6 +19,10 @@ async function listarProdutos() {
             `;
             tabela.appendChild(tr);
         });
+
+        // 🔄 Atualiza o select de filtro de produtos
+        preencherFiltroProdutos(produtos);
+
     } catch (err) {
         console.error("Erro ao listar produtos:", err);
     }
@@ -91,3 +95,18 @@ document.querySelector("#formAdicionarProduto")?.addEventListener("submit", asyn
         alert(resposta.mensagem || "Erro ao adicionar produto.");
     }
 });
+
+
+// 🔽 Função para preencher automaticamente o filtro de produtos
+function preencherFiltroProdutos(produtos) {
+    const select = document.querySelector("#filtroProduto");
+    if (!select) return;
+
+    select.innerHTML = `<option value="">Todos os Produtos</option>`;
+    produtos.forEach(prod => {
+        const opt = document.createElement("option");
+        opt.value = prod.id;
+        opt.textContent = prod.nome;
+        select.appendChild(opt);
+    });
+}
