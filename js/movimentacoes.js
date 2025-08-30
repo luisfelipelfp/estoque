@@ -4,18 +4,30 @@
 async function preencherFiltroProdutos() {
     try {
         const resp = await apiRequest("listar_produtos");
+        // resp pode ser array ou { dados: [...] }
         const produtos = Array.isArray(resp) ? resp : (resp?.dados || []);
 
-        const select = document.querySelector("#filtroProduto") || document.querySelector("select[name='produto']");
-        if (!select) return;
+        // Tenta encontrar o select por id ou por name
+        const selectById = document.querySelector("#filtroProduto");
+        const selectByName = document.querySelector("select[name='produto']");
+        const select = selectById || selectByName;
 
-        const current = select.value; // guarda seleção atual
+        if (!select) return; // nada pra preencher
 
+        // guarda valor selecionado para não perder seleção ao atualizar
+        const current = select.value;
+
+        // limpa
         select.innerHTML = "";
-        select.appendChild(new Option("Todos os Produtos", ""));
+        const optTodos = document.createElement("option");
+        optTodos.value = "";
+        optTodos.textContent = "Todos os Produtos";
+        select.appendChild(optTodos);
 
         produtos.forEach(p => {
-            const opt = new Option(p.nome, p.id);
+            const opt = document.createElement("option");
+            opt.value = p.id;
+            opt.textContent = p.nome;
             if (String(p.id) === String(current)) opt.selected = true;
             select.appendChild(opt);
         });
@@ -25,36 +37,33 @@ async function preencherFiltroProdutos() {
 }
 
 // Função que lista movimentações usando filtros
+// filtros: { data_inicio, data_fim, tipo, produto_id } (produto_id opcional)
 async function listarMovimentacoes(filtros = {}) {
     try {
+        // Se usuário passou 'produto' (nome ou id), transformamos em produto_id para API
         const params = { ...filtros };
 
-        // Se "produto" veio, transforma em produto_id
+        // se o filtro vier como 'produto' (ex: select name='produto'), renomeia
         if (params.produto && !params.produto_id) {
+            // se veio como id (numérico), envia como produto_id; senão envia como produto (nome)
             if (!isNaN(params.produto) && params.produto !== "") {
                 params.produto_id = params.produto;
+                delete params.produto;
             }
-            delete params.produto;
         }
 
-        // Remove chaves inválidas
+        // remove chaves undefined/"" para não poluir a querystring
         Object.keys(params).forEach(k => {
-            if (!params[k]) delete params[k];
+            if (params[k] === undefined || params[k] === "" || params[k] === null) delete params[k];
         });
 
+        // chama a API (usar "relatorio" que já implementamos no backend)
         const resp = await apiRequest("relatorio", params, "GET");
         const movimentacoes = Array.isArray(resp) ? resp : (resp?.dados || []);
 
         const tabela = document.querySelector("#tabelaMovimentacoes tbody");
         if (!tabela) return;
         tabela.innerHTML = "";
-
-        if (movimentacoes.length === 0) {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `<td colspan="6" class="text-center">Nenhuma movimentação encontrada</td>`;
-            tabela.appendChild(tr);
-            return;
-        }
 
         movimentacoes.forEach(mov => {
             const tr = document.createElement("tr");
@@ -73,9 +82,9 @@ async function listarMovimentacoes(filtros = {}) {
     }
 }
 
-// Lê valor de campo de formulário
-function lerCampoDoForm(form, keys = []) {
-    for (const key of keys) {
+// Helper: lê valor de campo do formulário por várias estratégias (id ou name)
+function lerCampoDoForm(form, idOrNameVariants = []) {
+    for (const key of idOrNameVariants) {
         const byId = form.querySelector(`#${key}`);
         if (byId) return byId.value;
         const byName = form.querySelector(`[name="${key}"]`);
@@ -84,11 +93,15 @@ function lerCampoDoForm(form, keys = []) {
     return "";
 }
 
-// Conecta formulário de filtros
+// Conecta o submit do(s) formulário(s) de filtros (suporta id diferente)
 function conectarFormFiltros() {
     const idsPossiveis = ["formFiltrosMovimentacoes", "formFiltroMovs", "formFiltrosMovs"];
-    let form = idsPossiveis.map(id => document.querySelector(`#${id}`)).find(f => f);
-
+    let form = null;
+    for (const id of idsPossiveis) {
+        form = document.querySelector(`#${id}`);
+        if (form) break;
+    }
+    // se não encontrou por id, tenta encontrar qualquer form que contenha o select #filtroProduto
     if (!form) {
         const possibleForm = document.querySelector("form");
         if (possibleForm && (possibleForm.querySelector("#filtroProduto") || possibleForm.querySelector("[name='produto']"))) {
@@ -100,20 +113,26 @@ function conectarFormFiltros() {
     form.addEventListener("submit", function (e) {
         e.preventDefault();
 
+        // Tenta ler usando nomes/ids comuns
+        const data_inicio = lerCampoDoForm(form, ["filtroDataInicio", "data_inicio"]);
+        const data_fim = lerCampoDoForm(form, ["filtroDataFim", "data_fim"]);
+        const tipo = lerCampoDoForm(form, ["filtroTipo", "tipo"]);
+        const produto = lerCampoDoForm(form, ["filtroProduto", "produto"]);
+
         const filtros = {
-            data_inicio: lerCampoDoForm(form, ["filtroDataInicio", "data_inicio"]) || undefined,
-            data_fim: lerCampoDoForm(form, ["filtroDataFim", "data_fim"]) || undefined,
-            tipo: lerCampoDoForm(form, ["filtroTipo", "tipo"]) || undefined,
-            produto: lerCampoDoForm(form, ["filtroProduto", "produto"]) || undefined
+            data_inicio: data_inicio || undefined,
+            data_fim: data_fim || undefined,
+            tipo: tipo || undefined,
+            produto: produto || undefined
         };
 
         listarMovimentacoes(filtros);
     });
 }
 
-// Inicialização
+// Inicialização: preencher select e ligar listeners
 (async function initMovimentacoesModule() {
-    await preencherFiltroProdutos();
-    conectarFormFiltros();
-    listarMovimentacoes();
+    await preencherFiltroProdutos();    // preenche select com produtos
+    conectarFormFiltros();              // conecta o(s) formulário(s) de filtros
+    listarMovimentacoes();              // lista inicial (sem filtros)
 })();
