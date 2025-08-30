@@ -15,7 +15,7 @@ function relatorio(mysqli $conn, array $f): array {
             $bind[] = (int)$f["produto"];
             $types .= "i";
         } else {
-            $cond[] = "p.nome LIKE ?";
+            $cond[] = "COALESCE(m.produto_nome, p.nome) LIKE ?";
             $bind[] = "%".$f["produto"]."%";
             $types .= "s";
         }
@@ -29,7 +29,14 @@ function relatorio(mysqli $conn, array $f): array {
 
     $where = $cond ? ("WHERE ".implode(" AND ", $cond)) : "";
 
-    $sql = "SELECT m.id, m.produto_id, p.nome AS produto_nome, m.tipo, m.quantidade, m.data, m.usuario, m.responsavel
+    $sql = "SELECT m.id, 
+                   m.produto_id, 
+                   COALESCE(m.produto_nome, p.nome) AS produto_nome,
+                   m.tipo, 
+                   m.quantidade, 
+                   m.data, 
+                   m.usuario, 
+                   m.responsavel
               FROM movimentacoes m
               LEFT JOIN produtos p ON p.id = m.produto_id
               $where
@@ -41,7 +48,9 @@ function relatorio(mysqli $conn, array $f): array {
     $res = $stmt->get_result();
 
     $dados = [];
-    while ($row = $res->fetch_assoc()) $dados[] = $row;
+    while ($row = $res->fetch_assoc()) {
+        $dados[] = $row;
+    }
 
     return ["sucesso" => true, "dados" => $dados];
 }

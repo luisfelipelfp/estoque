@@ -35,37 +35,7 @@ try {
         case "remover":
         case "remover_produto":
             $id = (int)($_GET["id"] ?? $_POST["id"] ?? 0);
-
-            // Buscar produto antes de remover
-            $stmt = $conn->prepare("SELECT nome, quantidade FROM produtos WHERE id = ?");
-            $stmt->bind_param("i", $id);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            $produto = $res->fetch_assoc();
-            $stmt->close();
-
-            if (!$produto) {
-                echo json_encode(["sucesso" => false, "mensagem" => "Produto não encontrado."]);
-                break;
-            }
-
-            // Remover produto
-            $resultado = produtos_remover($conn, $id);
-
-            if ($resultado["sucesso"]) {
-                // Registrar movimentação de remoção
-                mov_registrar(
-                    $conn,
-                    $id,
-                    "remocao",
-                    (int)$produto["quantidade"],
-                    "sistema",
-                    "admin",
-                    $produto["nome"] // passa também o nome do produto
-                );
-            }
-
-            echo json_encode($resultado);
+            echo json_encode(mov_remover($conn, $id, "sistema", "admin"));
             break;
 
         // ---- Movimentações

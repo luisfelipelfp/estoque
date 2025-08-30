@@ -64,7 +64,7 @@ function mov_listar(mysqli $conn, array $f): array {
 
     // dados
     $sql = "SELECT m.id, m.produto_id, 
-                   p.nome AS produto_nome,
+                   COALESCE(m.produto_nome, p.nome) AS produto_nome,
                    m.tipo, m.quantidade, m.data, m.usuario, m.responsavel
               FROM movimentacoes m
               LEFT JOIN produtos p ON p.id = m.produto_id
@@ -97,15 +97,22 @@ function mov_listar(mysqli $conn, array $f): array {
 function mov_entrada(mysqli $conn, int $id, int $quantidade, string $usuario = "sistema", string $responsavel = "admin"): array {
     if ($id <= 0 || $quantidade <= 0) return ["sucesso" => false, "mensagem" => "Dados inválidos."];
 
+    // pega o nome do produto
+    $stmtNome = $conn->prepare("SELECT nome FROM produtos WHERE id = ?");
+    $stmtNome->bind_param("i", $id);
+    $stmtNome->execute();
+    $produto = $stmtNome->get_result()->fetch_assoc();
+    if (!$produto) return ["sucesso" => false, "mensagem" => "Produto não encontrado."];
+
     // atualiza estoque
     $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?");
     $stmt->bind_param("ii", $quantidade, $id);
     if (!$stmt->execute()) return ["sucesso" => false, "mensagem" => "Erro ao atualizar estoque."];
 
     // registra movimentação
-    $stmt2 = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario, responsavel)
-                             VALUES (?, 'entrada', ?, NOW(), ?, ?)");
-    $stmt2->bind_param("iiss", $id, $quantidade, $usuario, $responsavel);
+    $stmt2 = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel)
+                             VALUES (?, ?, 'entrada', ?, NOW(), ?, ?)");
+    $stmt2->bind_param("isiss", $id, $produto["nome"], $quantidade, $usuario, $responsavel);
     $stmt2->execute();
 
     return ["sucesso" => true, "mensagem" => "Entrada registrada"];
@@ -114,6 +121,13 @@ function mov_entrada(mysqli $conn, int $id, int $quantidade, string $usuario = "
 function mov_saida(mysqli $conn, int $id, int $quantidade, string $usuario = "sistema", string $responsavel = "admin"): array {
     if ($id <= 0 || $quantidade <= 0) return ["sucesso" => false, "mensagem" => "Dados inválidos."];
 
+    // pega o nome do produto
+    $stmtNome = $conn->prepare("SELECT nome FROM produtos WHERE id = ?");
+    $stmtNome->bind_param("i", $id);
+    $stmtNome->execute();
+    $produto = $stmtNome->get_result()->fetch_assoc();
+    if (!$produto) return ["sucesso" => false, "mensagem" => "Produto não encontrado."];
+
     // tenta dar baixa no estoque
     $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ? AND quantidade >= ?");
     $stmt->bind_param("iii", $quantidade, $id, $quantidade);
@@ -121,10 +135,34 @@ function mov_saida(mysqli $conn, int $id, int $quantidade, string $usuario = "si
     if ($stmt->affected_rows <= 0) return ["sucesso" => false, "mensagem" => "Estoque insuficiente ou produto inexistente."];
 
     // registra movimentação
-    $stmt2 = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario, responsavel)
-                             VALUES (?, 'saida', ?, NOW(), ?, ?)");
-    $stmt2->bind_param("iiss", $id, $quantidade, $usuario, $responsavel);
+    $stmt2 = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel)
+                             VALUES (?, ?, 'saida', ?, NOW(), ?, ?)");
+    $stmt2->bind_param("isiss", $id, $produto["nome"], $quantidade, $usuario, $responsavel);
     $stmt2->execute();
 
     return ["sucesso" => true, "mensagem" => "Saída registrada"];
+}
+
+function mov_remover(mysqli $conn, int $id, string $usuario = "sistema", string $responsavel = "admin"): array {
+    if ($id <= 0) return ["sucesso" => false, "mensagem" => "ID inválido."];
+
+    // pega produto
+    $stmtNome = $conn->prepare("SELECT nome, quantidade FROM produtos WHERE id = ?");
+    $stmtNome->bind_param("i", $id);
+    $stmtNome->execute();
+    $produto = $stmtNome->get_result()->fetch_assoc();
+    if (!$produto) return ["sucesso" => false, "mensagem" => "Produto não encontrado."];
+
+    // remove produto
+    $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    if (!$stmt->execute()) return ["sucesso" => false, "mensagem" => "Erro ao remover produto."];
+
+    // registra movimentação
+    $stmt2 = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel)
+                             VALUES (?, ?, 'remocao', ?, NOW(), ?, ?)");
+    $stmt2->bind_param("isiss", $id, $produto["nome"], $produto["quantidade"], $usuario, $responsavel);
+    $stmt2->execute();
+
+    return ["sucesso" => true, "mensagem" => "Produto removido"];
 }
