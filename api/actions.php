@@ -18,7 +18,7 @@ $conn = db();
 
 try {
     switch ($acao) {
-        // ---- Produtos (aceita com e sem underline)
+        // ---- Produtos
         case "listarprodutos":
         case "listar_produtos":
             echo json_encode(produtos_listar($conn));
@@ -60,7 +60,8 @@ try {
                     "remocao",
                     (int)$produto["quantidade"],
                     "sistema",
-                    "admin"
+                    "admin",
+                    $produto["nome"] // passa também o nome do produto
                 );
             }
 
@@ -92,7 +93,6 @@ try {
 
         case "listarmovimentacoes":
         case "listar_movimentacoes":
-            // aceita produto_id OU produto (id ou nome)
             $filtros = [
                 "pagina"      => (int)($_GET["pagina"] ?? $_POST["pagina"] ?? 1),
                 "limite"      => (int)($_GET["limite"] ?? $_POST["limite"] ?? 10),
@@ -107,7 +107,7 @@ try {
             echo json_encode(mov_listar($conn, $filtros));
             break;
 
-        // ---- Relatório simples (sem paginação)
+        // ---- Relatório
         case "relatorio":
             $filtros = [
                 "tipo"        => $_GET["tipo"] ?? "",
@@ -127,7 +127,11 @@ try {
     }
 } catch (Throwable $e) {
     http_response_code(500);
-    echo json_encode(["sucesso" => false, "mensagem" => "Erro interno: ".$e->getMessage()]);
+    echo json_encode([
+        "sucesso" => false,
+        "mensagem" => "Erro interno no servidor",
+        "detalhes" => $e->getMessage() // ajuda a debugar
+    ]);
 } finally {
     $conn?->close();
 }
