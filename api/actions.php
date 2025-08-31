@@ -35,8 +35,7 @@ try {
         case "remover":
         case "remover_produto":
             $id = (int)($_GET["id"] ?? $_POST["id"] ?? 0);
-            // Agora apenas registramos a movimentação "remocao".
-            // O trigger AFTER INSERT fará o DELETE do produto.
+            // Apenas registramos a movimentação de remoção
             echo json_encode(mov_remover($conn, $id, "sistema", "admin"));
             break;
 

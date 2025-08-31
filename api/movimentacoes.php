@@ -96,7 +96,7 @@ function mov_entrada(mysqli $conn, int $id, int $quantidade, string $usuario = "
         return ["sucesso" => false, "mensagem" => "Dados inválidos."];
     }
 
-    // Confere se o produto existe (mensagem melhor de erro)
+    // Confere se o produto existe
     $chk = $conn->prepare("SELECT id FROM produtos WHERE id = ?");
     $chk->bind_param("i", $id);
     $chk->execute();
@@ -104,15 +104,25 @@ function mov_entrada(mysqli $conn, int $id, int $quantidade, string $usuario = "
         return ["sucesso" => false, "mensagem" => "Produto não encontrado."];
     }
 
-    // Apenas INSERE; trigger faz o UPDATE do estoque
-    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario, responsavel)
-                            VALUES (?, 'entrada', ?, NOW(), ?, ?)");
-    $stmt->bind_param("iiss", $id, $quantidade, $usuario, $responsavel);
-    if (!$stmt->execute()) {
-        return ["sucesso" => false, "mensagem" => "Erro ao registrar entrada."];
-    }
+    $conn->begin_transaction();
+    try {
+        // Atualiza quantidade
+        $up = $conn->prepare("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?");
+        $up->bind_param("ii", $quantidade, $id);
+        $up->execute();
 
-    return ["sucesso" => true, "mensagem" => "Entrada registrada"];
+        // Registra movimentação
+        $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario, responsavel)
+                                VALUES (?, 'entrada', ?, NOW(), ?, ?)");
+        $stmt->bind_param("iiss", $id, $quantidade, $usuario, $responsavel);
+        $stmt->execute();
+
+        $conn->commit();
+        return ["sucesso" => true, "mensagem" => "Entrada registrada"];
+    } catch (Exception $e) {
+        $conn->rollback();
+        return ["sucesso" => false, "mensagem" => "Erro ao registrar entrada"];
+    }
 }
 
 function mov_saida(mysqli $conn, int $id, int $quantidade, string $usuario = "sistema", string $responsavel = "admin"): array {
@@ -120,7 +130,6 @@ function mov_saida(mysqli $conn, int $id, int $quantidade, string $usuario = "si
         return ["sucesso" => false, "mensagem" => "Dados inválidos."];
     }
 
-    // Pré-checagem amigável (o trigger já vai impedir também)
     $chk = $conn->prepare("SELECT quantidade FROM produtos WHERE id = ?");
     $chk->bind_param("i", $id);
     $chk->execute();
@@ -132,18 +141,27 @@ function mov_saida(mysqli $conn, int $id, int $quantidade, string $usuario = "si
         return ["sucesso" => false, "mensagem" => "Estoque insuficiente."];
     }
 
-    // Apenas INSERE; trigger faz o UPDATE do estoque
-    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario, responsavel)
-                            VALUES (?, 'saida', ?, NOW(), ?, ?)");
-    $stmt->bind_param("iiss", $id, $quantidade, $usuario, $responsavel);
-    if (!$stmt->execute()) {
-        return ["sucesso" => false, "mensagem" => "Erro ao registrar saída."];
-    }
+    $conn->begin_transaction();
+    try {
+        // Atualiza quantidade
+        $up = $conn->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?");
+        $up->bind_param("ii", $quantidade, $id);
+        $up->execute();
 
-    return ["sucesso" => true, "mensagem" => "Saída registrada"];
+        // Registra movimentação
+        $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario, responsavel)
+                                VALUES (?, 'saida', ?, NOW(), ?, ?)");
+        $stmt->bind_param("iiss", $id, $quantidade, $usuario, $responsavel);
+        $stmt->execute();
+
+        $conn->commit();
+        return ["sucesso" => true, "mensagem" => "Saída registrada"];
+    } catch (Exception $e) {
+        $conn->rollback();
+        return ["sucesso" => false, "mensagem" => "Erro ao registrar saída"];
+    }
 }
 
-// opcional: usar no actions.php para remoção via histórico
 function mov_remover(mysqli $conn, int $id, string $usuario = "sistema", string $responsavel = "admin"): array {
     if ($id <= 0) {
         return ["sucesso" => false, "mensagem" => "ID inválido."];
@@ -151,17 +169,29 @@ function mov_remover(mysqli $conn, int $id, string $usuario = "sistema", string 
     $p = $conn->prepare("SELECT nome FROM produtos WHERE id = ?");
     $p->bind_param("i", $id);
     $p->execute();
-    if (!$p->get_result()->fetch_assoc()) {
+    $row = $p->get_result()->fetch_assoc();
+    if (!$row) {
         return ["sucesso" => false, "mensagem" => "Produto não encontrado."];
     }
+    $nome = $row["nome"];
 
-    // Apenas INSERE; trigger AFTER INSERT de 'remocao' apaga o produto
-    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario, responsavel)
-                            VALUES (?, 'remocao', 0, NOW(), ?, ?)");
-    $stmt->bind_param("iss", $id, $usuario, $responsavel);
-    if (!$stmt->execute()) {
-        return ["sucesso" => false, "mensagem" => "Erro ao registrar remoção."];
+    $conn->begin_transaction();
+    try {
+        // Remove produto da tabela
+        $del = $conn->prepare("DELETE FROM produtos WHERE id = ?");
+        $del->bind_param("i", $id);
+        $del->execute();
+
+        // Registra no histórico (mantém nome do produto)
+        $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel)
+                                VALUES (?, ?, 'remocao', 0, NOW(), ?, ?)");
+        $stmt->bind_param("isss", $id, $nome, $usuario, $responsavel);
+        $stmt->execute();
+
+        $conn->commit();
+        return ["sucesso" => true, "mensagem" => "Produto removido (registrado no histórico)."];
+    } catch (Exception $e) {
+        $conn->rollback();
+        return ["sucesso" => false, "mensagem" => "Erro ao remover produto"];
     }
-
-    return ["sucesso" => true, "mensagem" => "Produto removido (registrado no histórico)."];
 }
