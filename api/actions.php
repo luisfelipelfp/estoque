@@ -35,38 +35,9 @@ try {
         case "remover":
         case "remover_produto":
             $id = (int)($_GET["id"] ?? $_POST["id"] ?? 0);
-
-            // Busca produto antes de remover
-            $produto = $conn->prepare("SELECT nome, quantidade FROM produtos WHERE id = ?");
-            $produto->bind_param("i", $id);
-            $produto->execute();
-            $res = $produto->get_result();
-            $row = $res->fetch_assoc();
-
-            if ($row) {
-                // Registra movimentação como SAÍDA de todo o estoque
-                $stmt = $conn->prepare("
-                    INSERT INTO movimentacoes (produto_id, tipo, quantidade, usuario, responsavel, data)
-                    VALUES (?, 'saida', ?, ?, ?, NOW())
-                ");
-                $usuario = "sistema";
-                $responsavel = "admin";
-                $quantidade = (int)$row["quantidade"]; // quantidade atual do produto
-                $stmt->bind_param("iiss", $id, $quantidade, $usuario, $responsavel);
-                $stmt->execute();
-
-                // Agora remove o produto
-                $del = $conn->prepare("DELETE FROM produtos WHERE id = ?");
-                $del->bind_param("i", $id);
-                $ok = $del->execute();
-
-                echo json_encode([
-                    "sucesso" => $ok,
-                    "mensagem" => $ok ? "Produto removido com sucesso" : "Falha ao remover produto"
-                ]);
-            } else {
-                echo json_encode(["sucesso" => false, "mensagem" => "Produto não encontrado"]);
-            }
+            // Agora apenas registramos a movimentação "remocao".
+            // O trigger AFTER INSERT fará o DELETE do produto.
+            echo json_encode(mov_remover($conn, $id, "sistema", "admin"));
             break;
 
         // ---- Movimentações
