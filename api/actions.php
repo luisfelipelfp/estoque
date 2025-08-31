@@ -36,25 +36,26 @@ try {
         case "remover_produto":
             $id = (int)($_GET["id"] ?? $_POST["id"] ?? 0);
 
-            // Registrar a remoção no histórico ANTES de remover o produto
-            $produto = $conn->prepare("SELECT nome FROM produtos WHERE id = ?");
+            // Busca produto antes de remover
+            $produto = $conn->prepare("SELECT nome, quantidade FROM produtos WHERE id = ?");
             $produto->bind_param("i", $id);
             $produto->execute();
             $res = $produto->get_result();
             $row = $res->fetch_assoc();
 
             if ($row) {
-                // insere movimentação de remoção
+                // Registra movimentação como SAÍDA de todo o estoque
                 $stmt = $conn->prepare("
                     INSERT INTO movimentacoes (produto_id, tipo, quantidade, usuario, responsavel, data)
-                    VALUES (?, 'remocao', 0, ?, ?, NOW())
+                    VALUES (?, 'saida', ?, ?, ?, NOW())
                 ");
                 $usuario = "sistema";
                 $responsavel = "admin";
-                $stmt->bind_param("iss", $id, $usuario, $responsavel);
+                $quantidade = (int)$row["quantidade"]; // quantidade atual do produto
+                $stmt->bind_param("iiss", $id, $quantidade, $usuario, $responsavel);
                 $stmt->execute();
 
-                // remove o produto
+                // Agora remove o produto
                 $del = $conn->prepare("DELETE FROM produtos WHERE id = ?");
                 $del->bind_param("i", $id);
                 $ok = $del->execute();
