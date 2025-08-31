@@ -15,7 +15,7 @@ function relatorio(mysqli $conn, array $f): array {
             $bind[] = (int)$f["produto"];
             $types .= "i";
         } else {
-            $cond[] = "COALESCE(m.produto_nome, p.nome) LIKE ?";
+            $cond[] = "p.nome LIKE ?";
             $bind[] = "%".$f["produto"]."%";
             $types .= "s";
         }
@@ -31,7 +31,7 @@ function relatorio(mysqli $conn, array $f): array {
 
     $sql = "SELECT m.id, 
                    m.produto_id, 
-                   COALESCE(m.produto_nome, p.nome) AS produto_nome,
+                   p.nome AS produto_nome,
                    m.tipo, 
                    m.quantidade, 
                    m.data, 
