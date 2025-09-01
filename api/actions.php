@@ -26,7 +26,8 @@ try {
 
         case "adicionar":
         case "adicionar_produto":
-            $body = json_decode(file_get_contents("php://input"), true) ?? $_POST ?? $_GET;
+            $body = json_decode(file_get_contents("php://input"), true) ?? [];
+            $body = array_merge($_GET, $_POST, $body);
             $nome = trim($body["nome"] ?? "");
             $quant = (int)($body["quantidade"] ?? 0);
             echo json_encode(produtos_adicionar($conn, $nome, $quant));
@@ -34,13 +35,16 @@ try {
 
         case "remover":
         case "remover_produto":
-            $id = (int)($_GET["id"] ?? $_POST["id"] ?? 0);
+            $body = json_decode(file_get_contents("php://input"), true) ?? [];
+            $body = array_merge($_GET, $_POST, $body);
+            $id = (int)($body["id"] ?? 0);
             echo json_encode(mov_remover($conn, $id, "sistema", "admin"));
             break;
 
         // ---- Movimentações
         case "entrada":
-            $body = json_decode(file_get_contents("php://input"), true) ?? $_POST ?? $_GET;
+            $body = json_decode(file_get_contents("php://input"), true) ?? [];
+            $body = array_merge($_GET, $_POST, $body);
             echo json_encode(mov_entrada(
                 $conn,
                 (int)($body["id"] ?? 0),
@@ -51,7 +55,8 @@ try {
             break;
 
         case "saida":
-            $body = json_decode(file_get_contents("php://input"), true) ?? $_POST ?? $_GET;
+            $body = json_decode(file_get_contents("php://input"), true) ?? [];
+            $body = array_merge($_GET, $_POST, $body);
             echo json_encode(mov_saida(
                 $conn,
                 (int)($body["id"] ?? 0),
