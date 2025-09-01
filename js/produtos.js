@@ -1,10 +1,9 @@
 // js/produtos.js
 
-// Lista de produtos e ações (compatível com movimento.js)
+// Lista de produtos e ações
 async function listarProdutos() {
     try {
         const resp = await apiRequest("listar_produtos", null, "GET");
-        // resp pode ser array direto ou objeto {dados: [...]}
         const produtos = Array.isArray(resp) ? resp : (resp?.dados || resp || []);
         const tbody = document.querySelector("#tabelaProdutos tbody");
         if (!tbody) return;
@@ -37,18 +36,17 @@ async function listarProdutos() {
     }
 }
 
-// --- Funções globais (compatibilidade com onclick inline se existir) ---
+// --- Funções globais ---
 window.entrada = async function (id) {
-    // prompt quantidade
     const qtd = prompt("Quantidade de entrada:");
-    if (qtd === null) return; // cancelou
+    if (qtd === null) return;
     const quantidade = parseInt(qtd, 10);
     if (!Number.isFinite(quantidade) || quantidade <= 0) {
         alert("Quantidade inválida.");
         return;
     }
     try {
-        const resp = await apiRequest("entrada", { id, quantidade }, "POST");
+        const resp = await apiRequest("entrada", { id, quantidade }, "GET");
         if (resp.sucesso) {
             alert(resp.mensagem || "Entrada registrada.");
             await listarProdutos();
@@ -71,7 +69,7 @@ window.saida = async function (id) {
         return;
     }
     try {
-        const resp = await apiRequest("saida", { id, quantidade }, "POST");
+        const resp = await apiRequest("saida", { id, quantidade }, "GET");
         if (resp.sucesso) {
             alert(resp.mensagem || "Saída registrada.");
             await listarProdutos();
@@ -88,7 +86,7 @@ window.saida = async function (id) {
 window.remover = async function (id) {
     if (!confirm("Tem certeza que deseja remover este produto?")) return;
     try {
-        const resp = await apiRequest("remover", { id }, "POST");
+        const resp = await apiRequest("remover", { id }, "GET");
         if (resp.sucesso) {
             alert(resp.mensagem || "Produto removido.");
             await listarProdutos();
@@ -102,7 +100,7 @@ window.remover = async function (id) {
     }
 };
 
-// --- Event delegation: captura cliques nos botões da tabela (mais robusto que depender de onclick inline) ---
+// --- Event delegation ---
 document.addEventListener("click", function (e) {
     const btn = e.target.closest("button");
     if (!btn) return;
@@ -111,7 +109,6 @@ document.addEventListener("click", function (e) {
     if (!id) return;
 
     if (btn.classList.contains("btn-entrada")) {
-        // usa a função global que faz prompt/validação/invio
         window.entrada(parseInt(id, 10));
     } else if (btn.classList.contains("btn-saida")) {
         window.saida(parseInt(id, 10));
@@ -120,7 +117,7 @@ document.addEventListener("click", function (e) {
     }
 });
 
-// --- Formulário de adicionar produto (se existir no HTML) ---
+// --- Formulário de adicionar produto ---
 document.querySelector("#formAdicionarProduto")?.addEventListener("submit", async function (e) {
     e.preventDefault();
     const nome = (document.querySelector("#nomeProduto")?.value || "").trim();
@@ -144,7 +141,7 @@ document.querySelector("#formAdicionarProduto")?.addEventListener("submit", asyn
     }
 });
 
-// Inicialização (se o script for carregado diretamente)
+// Inicialização
 window.addEventListener("DOMContentLoaded", () => {
     listarProdutos();
 });
