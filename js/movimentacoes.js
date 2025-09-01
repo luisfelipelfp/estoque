@@ -111,9 +111,69 @@ function conectarFormFiltros() {
     });
 }
 
+/* ======================
+   ENTRADA E SAÍDA
+====================== */
+
+// Registrar entrada de produto
+async function registrarEntrada(id, quantidade) {
+    if (!id || !quantidade) {
+        alert("Informe produto e quantidade para entrada.");
+        return;
+    }
+
+    const resp = await apiRequest("entrada", { id, quantidade }, "POST");
+    if (resp.sucesso) {
+        alert("Entrada registrada com sucesso!");
+        listarMovimentacoes(); // Atualiza lista
+    } else {
+        alert("Erro: " + resp.mensagem);
+    }
+}
+
+// Registrar saída de produto
+async function registrarSaida(id, quantidade) {
+    if (!id || !quantidade) {
+        alert("Informe produto e quantidade para saída.");
+        return;
+    }
+
+    const resp = await apiRequest("saida", { id, quantidade }, "POST");
+    if (resp.sucesso) {
+        alert("Saída registrada com sucesso!");
+        listarMovimentacoes(); // Atualiza lista
+    } else {
+        alert("Erro: " + resp.mensagem);
+    }
+}
+
+// Conectar formulários de entrada e saída, se existirem
+function conectarFormMovimentacoes() {
+    const formEntrada = document.querySelector("#formEntrada");
+    if (formEntrada) {
+        formEntrada.addEventListener("submit", function (e) {
+            e.preventDefault();
+            const id = this.querySelector("[name='produto']").value;
+            const quantidade = this.querySelector("[name='quantidade']").value;
+            registrarEntrada(id, quantidade);
+        });
+    }
+
+    const formSaida = document.querySelector("#formSaida");
+    if (formSaida) {
+        formSaida.addEventListener("submit", function (e) {
+            e.preventDefault();
+            const id = this.querySelector("[name='produto']").value;
+            const quantidade = this.querySelector("[name='quantidade']").value;
+            registrarSaida(id, quantidade);
+        });
+    }
+}
+
 // Inicialização
 (async function initMovimentacoesModule() {
     await preencherFiltroProdutos();
     conectarFormFiltros();
+    conectarFormMovimentacoes();
     listarMovimentacoes();
 })();
