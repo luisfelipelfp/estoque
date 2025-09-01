@@ -122,7 +122,7 @@ async function registrarEntrada(id, quantidade) {
         return;
     }
 
-    const resp = await apiRequest("entrada", { id, quantidade }, "POST");
+    const resp = await apiRequest("entrada", { id, quantidade }, "GET"); // corrigido para GET
     if (resp.sucesso) {
         alert("Entrada registrada com sucesso!");
         listarMovimentacoes(); // Atualiza lista
@@ -138,7 +138,7 @@ async function registrarSaida(id, quantidade) {
         return;
     }
 
-    const resp = await apiRequest("saida", { id, quantidade }, "POST");
+    const resp = await apiRequest("saida", { id, quantidade }, "GET"); // corrigido para GET
     if (resp.sucesso) {
         alert("Saída registrada com sucesso!");
         listarMovimentacoes(); // Atualiza lista
