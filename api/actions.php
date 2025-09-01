@@ -21,7 +21,13 @@ try {
         // ---- Produtos
         case "listarprodutos":
         case "listar_produtos":
-            echo json_encode(produtos_listar($conn));
+            // Só produtos ativos
+            $result = $conn->query("SELECT * FROM produtos WHERE ativo = 1 ORDER BY id DESC");
+            $dados = [];
+            while ($row = $result->fetch_assoc()) {
+                $dados[] = $row;
+            }
+            echo json_encode($dados);
             break;
 
         case "adicionar":
@@ -38,7 +44,30 @@ try {
             $body = json_decode(file_get_contents("php://input"), true) ?? [];
             $body = array_merge($_GET, $_POST, $body);
             $id = (int)($body["id"] ?? 0);
-            echo json_encode(mov_remover($conn, $id, "sistema", "admin"));
+
+            if (!$id) {
+                echo json_encode(["sucesso" => false, "mensagem" => "ID inválido."]);
+                break;
+            }
+
+            // Marca como inativo
+            $stmt = $conn->prepare("UPDATE produtos SET ativo = 0 WHERE id = ?");
+            $stmt->bind_param("i", $id);
+            $stmt->execute();
+
+            if ($stmt->affected_rows > 0) {
+                // Registrar movimentação de remoção
+                $usuario = $body["usuario"] ?? "sistema";
+                $responsavel = $body["responsavel"] ?? "admin";
+
+                $stmt2 = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, usuario, responsavel, data) VALUES (?, 'remocao', 0, ?, ?, NOW())");
+                $stmt2->bind_param("iss", $id, $usuario, $responsavel);
+                $stmt2->execute();
+
+                echo json_encode(["sucesso" => true, "mensagem" => "Produto marcado como removido."]);
+            } else {
+                echo json_encode(["sucesso" => false, "mensagem" => "Produto não encontrado."]);
+            }
             break;
 
         // ---- Movimentações
