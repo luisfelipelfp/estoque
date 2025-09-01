@@ -1,112 +1,150 @@
+// js/produtos.js
+
+// Lista de produtos e ações (compatível com movimento.js)
 async function listarProdutos() {
     try {
-        const resp = await apiRequest("listar_produtos");
-        let produtos = Array.isArray(resp) ? resp : (resp?.dados || []);
-        const tabela = document.querySelector("#tabelaProdutos tbody");
-        tabela.innerHTML = "";
+        const resp = await apiRequest("listar_produtos", null, "GET");
+        // resp pode ser array direto ou objeto {dados: [...]}
+        const produtos = Array.isArray(resp) ? resp : (resp?.dados || resp || []);
+        const tbody = document.querySelector("#tabelaProdutos tbody");
+        if (!tbody) return;
 
-        produtos.forEach(prod => {
+        tbody.innerHTML = "";
+
+        if (!produtos.length) {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td colspan="4" class="text-center">Nenhum produto encontrado</td>`;
+            tbody.appendChild(tr);
+            return;
+        }
+
+        produtos.forEach(p => {
             const tr = document.createElement("tr");
             tr.innerHTML = `
-                <td>${prod.id}</td>
-                <td>${prod.nome}</td>
-                <td>${prod.quantidade}</td>
+                <td>${p.id}</td>
+                <td>${p.nome}</td>
+                <td>${p.quantidade}</td>
                 <td class="d-flex gap-2">
-                    <button class="btn btn-success btn-sm" onclick="entrada(${prod.id})">Entrada</button>
-                    <button class="btn btn-warning btn-sm" onclick="saida(${prod.id})">Saída</button>
-                    <button class="btn btn-danger btn-sm" onclick="remover(${prod.id})">Remover</button>
+                    <button class="btn btn-success btn-sm btn-entrada" data-id="${p.id}">Entrada</button>
+                    <button class="btn btn-warning btn-sm btn-saida" data-id="${p.id}">Saída</button>
+                    <button class="btn btn-danger btn-sm btn-remover" data-id="${p.id}">Remover</button>
                 </td>
             `;
-            tabela.appendChild(tr);
+            tbody.appendChild(tr);
         });
-
-        // 🔄 Atualiza o select de filtro de produtos
-        preencherFiltroProdutos(produtos);
-
     } catch (err) {
         console.error("Erro ao listar produtos:", err);
     }
 }
 
-async function entrada(id) {
-    const quantidade = prompt("Quantidade de entrada:");
-    if (!quantidade || isNaN(quantidade) || quantidade <= 0) {
+// --- Funções globais (compatibilidade com onclick inline se existir) ---
+window.entrada = async function (id) {
+    // prompt quantidade
+    const qtd = prompt("Quantidade de entrada:");
+    if (qtd === null) return; // cancelou
+    const quantidade = parseInt(qtd, 10);
+    if (!Number.isFinite(quantidade) || quantidade <= 0) {
         alert("Quantidade inválida.");
         return;
     }
+    try {
+        const resp = await apiRequest("entrada", { id, quantidade }, "POST");
+        if (resp.sucesso) {
+            alert(resp.mensagem || "Entrada registrada.");
+            await listarProdutos();
+            if (typeof listarMovimentacoes === "function") await listarMovimentacoes();
+        } else {
+            alert(resp.mensagem || "Erro ao registrar entrada.");
+        }
+    } catch (err) {
+        console.error("Erro na entrada:", err);
+        alert("Erro de comunicação.");
+    }
+};
 
-    await apiRequest("registrar_movimentacao", {
-        produto_id: id,
-        tipo: "entrada",
-        quantidade,
-        usuario: "",
-        responsavel: ""
-    }, "POST");
-
-    listarProdutos();
-    listarMovimentacoes();
-}
-
-async function saida(id) {
-    const quantidade = prompt("Quantidade de saída:");
-    if (!quantidade || isNaN(quantidade) || quantidade <= 0) {
+window.saida = async function (id) {
+    const qtd = prompt("Quantidade de saída:");
+    if (qtd === null) return;
+    const quantidade = parseInt(qtd, 10);
+    if (!Number.isFinite(quantidade) || quantidade <= 0) {
         alert("Quantidade inválida.");
         return;
     }
-
-    await apiRequest("registrar_movimentacao", {
-        produto_id: id,
-        tipo: "saida",
-        quantidade,
-        usuario: "",
-        responsavel: ""
-    }, "POST");
-
-    listarProdutos();
-    listarMovimentacoes();
-}
-
-async function remover(id) {
-    if (confirm("Deseja remover este produto?")) {
-        await apiRequest("remover_produto", { id }, "GET");
-        listarProdutos();
-        listarMovimentacoes();
+    try {
+        const resp = await apiRequest("saida", { id, quantidade }, "POST");
+        if (resp.sucesso) {
+            alert(resp.mensagem || "Saída registrada.");
+            await listarProdutos();
+            if (typeof listarMovimentacoes === "function") await listarMovimentacoes();
+        } else {
+            alert(resp.mensagem || "Erro ao registrar saída.");
+        }
+    } catch (err) {
+        console.error("Erro na saída:", err);
+        alert("Erro de comunicação.");
     }
-}
+};
 
-// Evento de adicionar produto
+window.remover = async function (id) {
+    if (!confirm("Tem certeza que deseja remover este produto?")) return;
+    try {
+        const resp = await apiRequest("remover", { id }, "POST");
+        if (resp.sucesso) {
+            alert(resp.mensagem || "Produto removido.");
+            await listarProdutos();
+            if (typeof listarMovimentacoes === "function") await listarMovimentacoes();
+        } else {
+            alert(resp.mensagem || "Erro ao remover produto.");
+        }
+    } catch (err) {
+        console.error("Erro ao remover produto:", err);
+        alert("Erro de comunicação.");
+    }
+};
+
+// --- Event delegation: captura cliques nos botões da tabela (mais robusto que depender de onclick inline) ---
+document.addEventListener("click", function (e) {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+
+    const id = btn.dataset.id;
+    if (!id) return;
+
+    if (btn.classList.contains("btn-entrada")) {
+        // usa a função global que faz prompt/validação/invio
+        window.entrada(parseInt(id, 10));
+    } else if (btn.classList.contains("btn-saida")) {
+        window.saida(parseInt(id, 10));
+    } else if (btn.classList.contains("btn-remover")) {
+        window.remover(parseInt(id, 10));
+    }
+});
+
+// --- Formulário de adicionar produto (se existir no HTML) ---
 document.querySelector("#formAdicionarProduto")?.addEventListener("submit", async function (e) {
     e.preventDefault();
-
-    const nome = document.querySelector("#nomeProduto").value.trim();
-    const quantidade = 0;
-
+    const nome = (document.querySelector("#nomeProduto")?.value || "").trim();
     if (!nome) {
         alert("Informe o nome do produto.");
         return;
     }
-
-    const resposta = await apiRequest("adicionar_produto", { nome, quantidade }, "POST");
-
-    if (resposta.sucesso) {
-        this.reset();
-        listarProdutos();
-    } else {
-        alert(resposta.mensagem || "Erro ao adicionar produto.");
+    const quantidade = 0;
+    try {
+        const resp = await apiRequest("adicionar", { nome, quantidade }, "POST");
+        if (resp.sucesso) {
+            this.reset();
+            await listarProdutos();
+            if (typeof preencherFiltroProdutos === "function") await preencherFiltroProdutos();
+        } else {
+            alert(resp.mensagem || "Erro ao adicionar produto.");
+        }
+    } catch (err) {
+        console.error("Erro ao adicionar produto:", err);
+        alert("Erro de comunicação.");
     }
 });
 
-
-// 🔽 Função para preencher automaticamente o filtro de produtos
-function preencherFiltroProdutos(produtos) {
-    const select = document.querySelector("#filtroProduto");
-    if (!select) return;
-
-    select.innerHTML = `<option value="">Todos os Produtos</option>`;
-    produtos.forEach(prod => {
-        const opt = document.createElement("option");
-        opt.value = prod.id;
-        opt.textContent = prod.nome;
-        select.appendChild(opt);
-    });
-}
+// Inicialização (se o script for carregado diretamente)
+window.addEventListener("DOMContentLoaded", () => {
+    listarProdutos();
+});
