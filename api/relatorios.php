@@ -15,9 +15,11 @@ function relatorio(mysqli $conn, array $f): array {
             $bind[] = (int)$f["produto"];
             $types .= "i";
         } else {
-            $cond[] = "p.nome LIKE ?";
+            // busca tanto no produto_nome salvo quanto no nome do JOIN
+            $cond[] = "(m.produto_nome LIKE ? OR p.nome LIKE ?)";
             $bind[] = "%".$f["produto"]."%";
-            $types .= "s";
+            $bind[] = "%".$f["produto"]."%";
+            $types .= "ss";
         }
     }
 
@@ -31,7 +33,7 @@ function relatorio(mysqli $conn, array $f): array {
 
     $sql = "SELECT m.id, 
                    m.produto_id, 
-                   p.nome AS produto_nome,
+                   COALESCE(m.produto_nome, p.nome) AS produto_nome,
                    m.tipo, 
                    m.quantidade, 
                    m.data, 

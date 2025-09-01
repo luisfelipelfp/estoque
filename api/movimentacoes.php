@@ -2,15 +2,10 @@
 /**
  * movimentacoes.php
  * Funções para listar e registrar movimentações (entrada/saida/remocao).
- *
- * Observação: Este módulo NÃO atualiza diretamente a tabela `produtos`.
- *            As atualizações/remoções são feitas por triggers no banco que
- *            respondem ao INSERT em `movimentacoes`.
  */
 
 /**
  * Lista movimentações com paginação e filtros.
- * Retorna array com keys: sucesso, total, pagina, limite, paginas, dados
  */
 function mov_listar(mysqli $conn, array $f): array {
     $pagina = max(1, (int)($f["pagina"] ?? 1));
@@ -88,20 +83,16 @@ function mov_listar(mysqli $conn, array $f): array {
 }
 
 /**
- * Registra uma entrada: apenas insere em movimentacoes; trigger atualiza estoque.
+ * Entrada
  */
 function mov_entrada(mysqli $conn, int $id, int $quantidade, string $usuario = "sistema", string $responsavel = "admin"): array {
     if ($id <= 0 || $quantidade <= 0) {
         return ["sucesso" => false, "mensagem" => "Dados inválidos."];
     }
 
-    // Inicia transação e bloqueia linha do produto
-    if (!$conn->begin_transaction()) {
-        return ["sucesso" => false, "mensagem" => "Não foi possível iniciar transação: ".$conn->error];
-    }
+    $conn->begin_transaction();
 
     $chk = $conn->prepare("SELECT nome FROM produtos WHERE id = ? FOR UPDATE");
-    if (!$chk) { $conn->rollback(); return ["sucesso" => false, "mensagem" => "Erro prepare: ".$conn->error]; }
     $chk->bind_param("i", $id);
     $chk->execute();
     $row = $chk->get_result()->fetch_assoc();
@@ -115,14 +106,13 @@ function mov_entrada(mysqli $conn, int $id, int $quantidade, string $usuario = "
 
     $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel)
                             VALUES (?, ?, 'entrada', ?, NOW(), ?, ?)");
-    if (!$stmt) { $conn->rollback(); return ["sucesso" => false, "mensagem" => "Erro prepare: ".$conn->error]; }
     $stmt->bind_param("isiss", $id, $nome, $quantidade, $usuario, $responsavel);
 
     if (!$stmt->execute()) {
-        $err = $stmt->error ?: $conn->error;
+        $err = $stmt->error;
         $stmt->close();
         $conn->rollback();
-        return ["sucesso" => false, "mensagem" => "Erro ao inserir movimentação: ".$err];
+        return ["sucesso" => false, "mensagem" => "Erro: ".$err];
     }
 
     $stmt->close();
@@ -131,19 +121,16 @@ function mov_entrada(mysqli $conn, int $id, int $quantidade, string $usuario = "
 }
 
 /**
- * Registra uma saída: faz pré-checagem (FOR UPDATE) e insere movimentação; trigger atualiza estoque.
+ * Saída
  */
 function mov_saida(mysqli $conn, int $id, int $quantidade, string $usuario = "sistema", string $responsavel = "admin"): array {
     if ($id <= 0 || $quantidade <= 0) {
         return ["sucesso" => false, "mensagem" => "Dados inválidos."];
     }
 
-    if (!$conn->begin_transaction()) {
-        return ["sucesso" => false, "mensagem" => "Não foi possível iniciar transação: ".$conn->error];
-    }
+    $conn->begin_transaction();
 
     $chk = $conn->prepare("SELECT nome, quantidade FROM produtos WHERE id = ? FOR UPDATE");
-    if (!$chk) { $conn->rollback(); return ["sucesso" => false, "mensagem" => "Erro prepare: ".$conn->error]; }
     $chk->bind_param("i", $id);
     $chk->execute();
     $row = $chk->get_result()->fetch_assoc();
@@ -154,8 +141,7 @@ function mov_saida(mysqli $conn, int $id, int $quantidade, string $usuario = "si
         return ["sucesso" => false, "mensagem" => "Produto não encontrado."];
     }
 
-    $estoqueAtual = (int)$row["quantidade"];
-    if ($estoqueAtual < $quantidade) {
+    if ((int)$row["quantidade"] < $quantidade) {
         $conn->rollback();
         return ["sucesso" => false, "mensagem" => "Estoque insuficiente."];
     }
@@ -164,14 +150,13 @@ function mov_saida(mysqli $conn, int $id, int $quantidade, string $usuario = "si
 
     $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel)
                             VALUES (?, ?, 'saida', ?, NOW(), ?, ?)");
-    if (!$stmt) { $conn->rollback(); return ["sucesso" => false, "mensagem" => "Erro prepare: ".$conn->error]; }
     $stmt->bind_param("isiss", $id, $nome, $quantidade, $usuario, $responsavel);
 
     if (!$stmt->execute()) {
-        $err = $stmt->error ?: $conn->error;
+        $err = $stmt->error;
         $stmt->close();
         $conn->rollback();
-        return ["sucesso" => false, "mensagem" => "Erro ao inserir movimentação: ".$err];
+        return ["sucesso" => false, "mensagem" => "Erro: ".$err];
     }
 
     $stmt->close();
@@ -180,20 +165,16 @@ function mov_saida(mysqli $conn, int $id, int $quantidade, string $usuario = "si
 }
 
 /**
- * Registra remoção: insere movimentação tipo 'remocao' com produto_nome e quantidade atual.
- * O trigger AFTER INSERT deve remover o produto da tabela `produtos`.
+ * Remoção
  */
 function mov_remover(mysqli $conn, int $id, string $usuario = "sistema", string $responsavel = "admin"): array {
     if ($id <= 0) {
         return ["sucesso" => false, "mensagem" => "ID inválido."];
     }
 
-    if (!$conn->begin_transaction()) {
-        return ["sucesso" => false, "mensagem" => "Não foi possível iniciar transação: ".$conn->error];
-    }
+    $conn->begin_transaction();
 
     $p = $conn->prepare("SELECT nome, quantidade FROM produtos WHERE id = ? FOR UPDATE");
-    if (!$p) { $conn->rollback(); return ["sucesso" => false, "mensagem" => "Erro prepare: ".$conn->error]; }
     $p->bind_param("i", $id);
     $p->execute();
     $row = $p->get_result()->fetch_assoc();
@@ -209,18 +190,16 @@ function mov_remover(mysqli $conn, int $id, string $usuario = "sistema", string 
 
     $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel)
                             VALUES (?, ?, 'remocao', ?, NOW(), ?, ?)");
-    if (!$stmt) { $conn->rollback(); return ["sucesso" => false, "mensagem" => "Erro prepare: ".$conn->error]; }
     $stmt->bind_param("isiss", $id, $nome, $qtd, $usuario, $responsavel);
 
     if (!$stmt->execute()) {
-        $err = $stmt->error ?: $conn->error;
+        $err = $stmt->error;
         $stmt->close();
         $conn->rollback();
-        return ["sucesso" => false, "mensagem" => "Erro ao inserir movimentação: ".$err];
+        return ["sucesso" => false, "mensagem" => "Erro: ".$err];
     }
 
     $stmt->close();
-    // O trigger AFTER INSERT (remocao) deverá deletar o produto; commit aplica tudo
     $conn->commit();
-    return ["sucesso" => true, "mensagem" => "Remoção registrada (trigger cuidará do DELETE)."];
+    return ["sucesso" => true, "mensagem" => "Remoção registrada"];
 }
