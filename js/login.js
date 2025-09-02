@@ -1,4 +1,5 @@
-const API_URL = "http://192.168.15.100/estoque/api/actions.php";
+// Caminho relativo, pois login.html está em /estoque/ e actions.php em /estoque/api/
+const API_URL = "api/actions.php";
 
 document.getElementById("formLogin").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -10,10 +11,13 @@ document.getElementById("formLogin").addEventListener("submit", async (e) => {
     msgErro.textContent = "";
 
     try {
+        const formData = new FormData();
+        formData.append("email", email);
+        formData.append("senha", senha);
+
         const response = await fetch(`${API_URL}?acao=login`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, senha })
+            body: formData
         });
 
         const data = await response.json();
