@@ -5,123 +5,90 @@
   <title>Estoque da Gordinha e do Careca</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- Bootstrap -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <!-- Ícones Bootstrap -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
-  <!-- CSS customizado -->
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css"> <!-- Arquivo CSS externo -->
 </head>
-<body>
+<body class="container py-4">
 
-  <!-- Cabeçalho -->
-  <nav class="navbar navbar-dark bg-primary mb-4 rounded shadow-sm">
-    <div class="container">
-      <span class="navbar-brand mx-auto fw-bold fs-4">
-        <i class="bi bi-box-seam me-2"></i>Estoque da Gordinha e do Careca
-      </span>
-    </div>
-  </nav>
+  <h1 class="mb-4 text-center">📦 Estoque da Gordinha e do Careca</h1>
 
-  <div class="container">
+  <!-- Formulário adicionar produto -->
+  <form id="formAdicionarProduto" class="mb-4 d-flex gap-2">
+    <input 
+      type="text" 
+      id="nomeProduto" 
+      name="nome" 
+      class="form-control" 
+      placeholder="Nome do produto" 
+      required
+    >
+    <button type="submit" class="btn btn-primary">➕ Adicionar Produto</button>
+  </form>
 
-    <!-- Adicionar produto -->
-    <div class="card shadow-sm mb-4">
-      <div class="card-body">
-        <form id="formAdicionarProduto" class="d-flex gap-2">
-          <input 
-            type="text" 
-            id="nomeProduto" 
-            name="nome" 
-            class="form-control" 
-            placeholder="Nome do produto" 
-            required
-          >
-          <button type="submit" class="btn btn-primary">
-            <i class="bi bi-plus-circle"></i> Adicionar
-          </button>
-        </form>
-      </div>
-    </div>
+  <!-- Tabela produtos -->
+  <h3 class="mt-4 mb-3">🛒 Produtos</h3>
+  <table id="tabelaProdutos" class="table table-bordered table-striped shadow-sm">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Nome</th>
+        <th>Quantidade</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
-    <!-- Produtos -->
-    <div class="card shadow-sm mb-4">
-      <div class="card-header bg-light fw-bold">
-        <i class="bi bi-cart"></i> Produtos
-      </div>
-      <div class="card-body">
-        <table id="tabelaProdutos" class="table table-hover align-middle">
-          <thead class="table-secondary">
-            <tr>
-              <th>ID</th>
-              <th>Nome</th>
-              <th>Quantidade</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
+  <!-- Filtro movimentações -->
+  <h3 class="mt-5 mb-3">📈 Movimentações</h3>
+  <form id="formFiltrosMovimentacoes" class="mb-3 d-flex flex-wrap gap-2">
+    <input 
+      type="date" 
+      id="filtroDataInicio" 
+      name="data_inicio" 
+      class="form-control"
+    >
+    <input 
+      type="date" 
+      id="filtroDataFim" 
+      name="data_fim" 
+      class="form-control"
+    >
+    <select id="filtroTipo" name="tipo" class="form-control">
+      <option value="">Todos</option>
+      <option value="entrada">Entrada</option>
+      <option value="saida">Saída</option>
+      <option value="remocao">Remoção</option>
+    </select>
+    <select id="filtroProduto" name="produto" class="form-control">
+      <option value="">Todos os Produtos</option>
+    </select>
+    <button type="submit" class="btn btn-secondary">🔍 Filtrar</button>
+  </form>
 
-    <!-- Movimentações -->
-    <div class="card shadow-sm mb-4">
-      <div class="card-header bg-light fw-bold">
-        <i class="bi bi-graph-up"></i> Movimentações
-      </div>
-      <div class="card-body">
-        
-        <!-- Filtros -->
-        <form id="formFiltrosMovimentacoes" class="row g-2 mb-3">
-          <div class="col-sm-6 col-md-3">
-            <input type="date" id="filtroDataInicio" name="data_inicio" class="form-control">
-          </div>
-          <div class="col-sm-6 col-md-3">
-            <input type="date" id="filtroDataFim" name="data_fim" class="form-control">
-          </div>
-          <div class="col-sm-6 col-md-2">
-            <select id="filtroTipo" name="tipo" class="form-select">
-              <option value="">Todos</option>
-              <option value="entrada">Entrada</option>
-              <option value="saida">Saída</option>
-              <option value="remocao">Remoção</option>
-            </select>
-          </div>
-          <div class="col-sm-6 col-md-3">
-            <select id="filtroProduto" name="produto" class="form-select">
-              <option value="">Todos os Produtos</option>
-            </select>
-          </div>
-          <div class="col-sm-6 col-md-1 d-grid">
-            <button type="submit" class="btn btn-secondary">
-              <i class="bi bi-search"></i>
-            </button>
-          </div>
-        </form>
+  <!-- Tabela movimentações -->
+  <table id="tabelaMovimentacoes" class="table table-bordered table-striped shadow-sm">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Produto</th>
+        <th>Tipo</th>
+        <th>Quantidade</th>
+        <th>Data</th>
+        <th>Usuário</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td colspan="6" class="text-center text-muted">Nenhuma movimentação encontrada</td>
+      </tr>
+    </tbody>
+  </table>
 
-        <!-- Tabela movimentações -->
-        <table id="tabelaMovimentacoes" class="table table-hover align-middle">
-          <thead class="table-secondary">
-            <tr>
-              <th>ID</th>
-              <th>Produto</th>
-              <th>Tipo</th>
-              <th>Quantidade</th>
-              <th>Data</th>
-              <th>Usuário</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+  <!-- Paginação movimentações -->
+  <div id="paginacaoMovs" class="mt-2"></div>
 
-        <!-- Paginação -->
-        <div id="paginacaoMovs" class="mt-2"></div>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- Scripts -->
+  <!-- Scripts na ordem correta -->
   <script src="js/api.js"></script>
   <script src="js/produtos.js"></script>
   <script src="js/movimentacoes.js"></script>

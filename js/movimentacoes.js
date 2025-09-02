@@ -1,173 +1,76 @@
-// js/movimentacoes.js
-
-// Função que preenche o select do filtro com produtos buscados da API
+// Função para preencher filtro de produtos
 async function preencherFiltroProdutos() {
     try {
-        const resp = await apiRequest("listar_produtos");
-        const produtos = Array.isArray(resp) ? resp : (resp?.dados || []);
+        const produtos = await apiRequest("listarProdutos");
+        const select = document.getElementById("filtroProduto");
+        select.innerHTML = '<option value="">Todos os Produtos</option>';
 
-        const select = document.querySelector("#filtroProduto") || document.querySelector("select[name='produto']");
-        if (!select) return;
-
-        const current = select.value; // guarda seleção atual
-
-        select.innerHTML = "";
-        select.appendChild(new Option("Todos os Produtos", ""));
-
-        produtos.forEach(p => {
-            const opt = new Option(p.nome, p.id);
-            if (String(p.id) === String(current)) opt.selected = true;
-            select.appendChild(opt);
+        produtos.forEach(produto => {
+            const option = document.createElement("option");
+            option.value = produto.id;
+            option.textContent = produto.nome;
+            select.appendChild(option);
         });
-    } catch (err) {
-        console.error("Erro ao preencher filtro de produtos:", err);
+    } catch (error) {
+        console.error("Erro ao carregar produtos no filtro:", error);
     }
 }
 
-// Função que lista movimentações usando filtros
+// Função para listar movimentações
 async function listarMovimentacoes(filtros = {}) {
     try {
-        const params = { ...filtros };
-
-        // Se "produto" veio, transforma em produto_id
-        if (params.produto && !params.produto_id) {
-            if (!isNaN(params.produto) && params.produto !== "") {
-                params.produto_id = params.produto;
-            }
-            delete params.produto;
-        }
-
-        // Remove chaves inválidas
-        Object.keys(params).forEach(k => {
-            if (!params[k]) delete params[k];
-        });
-
-        const resp = await apiRequest("relatorio", params, "GET");
-        const movimentacoes = Array.isArray(resp) ? resp : (resp?.dados || []);
-
+        const movimentacoes = await apiRequest("listarMovimentacoes", filtros);
         const tabela = document.querySelector("#tabelaMovimentacoes tbody");
-        if (!tabela) return;
         tabela.innerHTML = "";
 
         if (movimentacoes.length === 0) {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `<td colspan="6" class="text-center">Nenhuma movimentação encontrada</td>`;
-            tabela.appendChild(tr);
+            tabela.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center text-muted">Nenhuma movimentação encontrada</td>
+                </tr>
+            `;
             return;
         }
 
         movimentacoes.forEach(mov => {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `
-                <td>${mov.id}</td>
-                <td>${mov.produto_nome || "-"}</td>
-                <td>${mov.tipo}</td>
-                <td>${mov.quantidade}</td>
-                <td>${mov.data}</td>
-                <td>${mov.usuario || "-"}</td>
+            const row = `
+                <tr>
+                    <td>${mov.id}</td>
+                    <td>${mov.produto_nome ?? "-"}</td>
+                    <td>${mov.tipo}</td>
+                    <td>${mov.quantidade ?? "-"}</td>
+                    <td>${mov.data}</td>
+                    <td>${mov.usuario ?? "-"}</td>
+                </tr>
             `;
-            tabela.appendChild(tr);
+            tabela.innerHTML += row;
         });
-    } catch (err) {
-        console.error("Erro ao listar movimentações:", err);
+
+    } catch (error) {
+        console.error("Erro ao listar movimentações:", error);
     }
 }
 
-// Lê valor de campo de formulário
-function lerCampoDoForm(form, keys = []) {
-    for (const key of keys) {
-        const byId = form.querySelector(`#${key}`);
-        if (byId) return byId.value;
-        const byName = form.querySelector(`[name="${key}"]`);
-        if (byName) return byName.value;
-    }
-    return "";
-}
-
-// Conecta formulário de filtros
+// Conectar formulário de filtros
 function conectarFormFiltros() {
-    const idsPossiveis = ["formFiltrosMovimentacoes", "formFiltroMovs", "formFiltrosMovs"];
-    let form = idsPossiveis.map(id => document.querySelector(`#${id}`)).find(f => f);
-
-    if (!form) {
-        const possibleForm = document.querySelector("form");
-        if (possibleForm && (possibleForm.querySelector("#filtroProduto") || possibleForm.querySelector("[name='produto']"))) {
-            form = possibleForm;
-        }
-    }
-    if (!form) return;
-
-    form.addEventListener("submit", function (e) {
+    const form = document.getElementById("formFiltrosMovimentacoes");
+    form.addEventListener("submit", async (e) => {
         e.preventDefault();
 
         const filtros = {
-            data_inicio: lerCampoDoForm(form, ["filtroDataInicio", "data_inicio"]) || undefined,
-            data_fim: lerCampoDoForm(form, ["filtroDataFim", "data_fim"]) || undefined,
-            tipo: lerCampoDoForm(form, ["filtroTipo", "tipo"]) || undefined,
-            produto: lerCampoDoForm(form, ["filtroProduto", "produto"]) || undefined
+            data_inicio: document.getElementById("filtroDataInicio").value,
+            data_fim: document.getElementById("filtroDataFim").value,
+            tipo: document.getElementById("filtroTipo").value,
+            produto: document.getElementById("filtroProduto").value
         };
 
-        listarMovimentacoes(filtros);
+        await listarMovimentacoes(filtros);
     });
 }
 
-/* ======================
-   ENTRADA E SAÍDA
-====================== */
-
-// Registrar entrada de produto
-async function registrarEntrada(id, quantidade) {
-    if (!id || !quantidade) {
-        alert("Informe produto e quantidade para entrada.");
-        return;
-    }
-
-    const resp = await apiRequest("entrada", { id, quantidade }, "GET"); // corrigido para GET
-    if (resp.sucesso) {
-        alert("Entrada registrada com sucesso!");
-        listarMovimentacoes(); // Atualiza lista
-    } else {
-        alert("Erro: " + resp.mensagem);
-    }
-}
-
-// Registrar saída de produto
-async function registrarSaida(id, quantidade) {
-    if (!id || !quantidade) {
-        alert("Informe produto e quantidade para saída.");
-        return;
-    }
-
-    const resp = await apiRequest("saida", { id, quantidade }, "GET"); // corrigido para GET
-    if (resp.sucesso) {
-        alert("Saída registrada com sucesso!");
-        listarMovimentacoes(); // Atualiza lista
-    } else {
-        alert("Erro: " + resp.mensagem);
-    }
-}
-
-// Conectar formulários de entrada e saída, se existirem
+// Conectar formulário de movimentações (entrada/saída/remover via produtos.js)
 function conectarFormMovimentacoes() {
-    const formEntrada = document.querySelector("#formEntrada");
-    if (formEntrada) {
-        formEntrada.addEventListener("submit", function (e) {
-            e.preventDefault();
-            const id = this.querySelector("[name='produto']").value;
-            const quantidade = this.querySelector("[name='quantidade']").value;
-            registrarEntrada(id, quantidade);
-        });
-    }
-
-    const formSaida = document.querySelector("#formSaida");
-    if (formSaida) {
-        formSaida.addEventListener("submit", function (e) {
-            e.preventDefault();
-            const id = this.querySelector("[name='produto']").value;
-            const quantidade = this.querySelector("[name='quantidade']").value;
-            registrarSaida(id, quantidade);
-        });
-    }
+    // Caso precise, pode ser expandido aqui futuramente
 }
 
 // Inicialização
@@ -175,5 +78,5 @@ function conectarFormMovimentacoes() {
     await preencherFiltroProdutos();
     conectarFormFiltros();
     conectarFormMovimentacoes();
-    listarMovimentacoes();
+    // Não chama listarMovimentacoes() automaticamente
 })();
