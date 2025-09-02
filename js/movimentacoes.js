@@ -1,5 +1,5 @@
 // ==============================
-// js/movimentacoes.js (ajustado)
+// js/movimentacoes.js (revisado)
 // ==============================
 
 // Flag global: só lista após o usuário pesquisar
@@ -107,6 +107,8 @@ async function listarMovimentacoes(filtros = {}, force = false) {
             `;
             tabela.insertAdjacentHTML("beforeend", row);
         });
+
+        // Aqui você pode futuramente adicionar paginação se a API devolver dados de total/registros
 
     } catch (error) {
         console.error("Erro ao listar movimentações:", error);
