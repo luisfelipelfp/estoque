@@ -8,6 +8,8 @@ require_once __DIR__ . "/produtos.php";
 require_once __DIR__ . "/movimentacoes.php";
 require_once __DIR__ . "/relatorios.php";
 
+session_start();
+
 $acao = strtolower(trim($_REQUEST["acao"] ?? ""));
 if ($acao === "") {
     echo json_encode(["sucesso" => false, "mensagem" => "Nenhuma ação especificada."]);
@@ -18,10 +20,55 @@ $conn = db();
 
 try {
     switch ($acao) {
-        // ---- Produtos
+        // ---- Autenticação ----
+        case "login":
+            $body = json_decode(file_get_contents("php://input"), true) ?? [];
+            $email = trim($body["email"] ?? "");
+            $senha = trim($body["senha"] ?? "");
+
+            if ($email === "" || $senha === "") {
+                echo json_encode(["sucesso" => false, "mensagem" => "Preencha todos os campos."]);
+                break;
+            }
+
+            $stmt = $conn->prepare("SELECT id, nome, email, senha, nivel FROM usuarios WHERE email = ? LIMIT 1");
+            $stmt->bind_param("s", $email);
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            if ($row = $result->fetch_assoc()) {
+                if (password_verify($senha, $row["senha"])) {
+                    $_SESSION["usuario"] = [
+                        "id"    => $row["id"],
+                        "nome"  => $row["nome"],
+                        "email" => $row["email"],
+                        "nivel" => $row["nivel"]
+                    ];
+                    echo json_encode(["sucesso" => true, "usuario" => $_SESSION["usuario"]]);
+                } else {
+                    echo json_encode(["sucesso" => false, "mensagem" => "Senha incorreta."]);
+                }
+            } else {
+                echo json_encode(["sucesso" => false, "mensagem" => "Usuário não encontrado."]);
+            }
+            break;
+
+        case "logout":
+            session_destroy();
+            echo json_encode(["sucesso" => true, "mensagem" => "Logout realizado com sucesso."]);
+            break;
+
+        case "usuario_atual":
+            if (!empty($_SESSION["usuario"])) {
+                echo json_encode(["logado" => true, "usuario" => $_SESSION["usuario"]]);
+            } else {
+                echo json_encode(["logado" => false]);
+            }
+            break;
+
+        // ---- Produtos ----
         case "listarprodutos":
         case "listar_produtos":
-            // Só produtos ativos
             $result = $conn->query("SELECT * FROM produtos WHERE ativo = 1 ORDER BY id DESC");
             $dados = [];
             while ($row = $result->fetch_assoc()) {
@@ -50,13 +97,11 @@ try {
                 break;
             }
 
-            // Marca como inativo
             $stmt = $conn->prepare("UPDATE produtos SET ativo = 0 WHERE id = ?");
             $stmt->bind_param("i", $id);
             $stmt->execute();
 
             if ($stmt->affected_rows > 0) {
-                // Registrar movimentação de remoção
                 $usuario = $body["usuario"] ?? "sistema";
                 $responsavel = $body["responsavel"] ?? "admin";
 
@@ -70,7 +115,7 @@ try {
             }
             break;
 
-        // ---- Movimentações
+        // ---- Movimentações ----
         case "entrada":
             $body = json_decode(file_get_contents("php://input"), true) ?? [];
             $body = array_merge($_GET, $_POST, $body);
@@ -111,7 +156,7 @@ try {
             echo json_encode(mov_listar($conn, $filtros));
             break;
 
-        // ---- Relatório
+        // ---- Relatório ----
         case "relatorio":
             $filtros = [
                 "tipo"        => $_GET["tipo"] ?? "",
