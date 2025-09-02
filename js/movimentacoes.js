@@ -1,17 +1,21 @@
 // ==============================
-// js/movimentacoes.js (corrigido)
+// js/movimentacoes.js (ajustado)
 // ==============================
 
 // Flag global: só lista após o usuário pesquisar
 window._podeListarMovs = false;
 
+// ==============================
 // Mensagens auxiliares
+// ==============================
 function renderPlaceholderInicial() {
     const tbody = document.querySelector("#tabelaMovimentacoes tbody");
     if (!tbody) return;
     tbody.innerHTML = `
         <tr>
-            <td colspan="6" class="text-center text-muted">Use os filtros para buscar movimentações</td>
+            <td colspan="6" class="text-center text-muted">
+                Use os filtros acima para buscar movimentações
+            </td>
         </tr>
     `;
 }
@@ -21,7 +25,9 @@ function renderNenhumResultado() {
     if (!tbody) return;
     tbody.innerHTML = `
         <tr>
-            <td colspan="6" class="text-center text-muted">Nenhuma movimentação encontrada</td>
+            <td colspan="6" class="text-center text-muted">
+                Nenhuma movimentação encontrada
+            </td>
         </tr>
     `;
 }
@@ -53,7 +59,7 @@ async function preencherFiltroProdutos() {
 // ==============================
 async function listarMovimentacoes(filtros = {}, force = false) {
     try {
-        // Se não for pesquisa forçada e o usuário ainda não pesquisou, não busca nada
+        // Só lista após pesquisa ou se for forçado
         if (!force && !window._podeListarMovs) {
             renderPlaceholderInicial();
             return;
@@ -62,7 +68,6 @@ async function listarMovimentacoes(filtros = {}, force = false) {
         // Normaliza filtros
         const params = { ...filtros };
 
-        // Se veio "produto" do select (é ID), transforma em produto_id para o backend
         if (params.produto && !params.produto_id) {
             if (!isNaN(params.produto) && params.produto !== "") {
                 params.produto_id = params.produto;
@@ -119,7 +124,7 @@ function conectarFormFiltros() {
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
 
-        // A partir daqui o usuário pesquisou ao menos uma vez
+        // Marca que já pode listar
         window._podeListarMovs = true;
 
         const filtros = {
@@ -146,6 +151,6 @@ function conectarFormMovimentacoes() {
     conectarFormFiltros();
     conectarFormMovimentacoes();
 
-    // Tabela começa vazia com mensagem inicial
+    // Tabela começa com mensagem inicial
     renderPlaceholderInicial();
 })();
