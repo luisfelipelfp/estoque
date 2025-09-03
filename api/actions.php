@@ -22,7 +22,6 @@ try {
     switch ($acao) {
         // ---- Autenticação ----
         case "login":
-            // Aceitar JSON, POST normal e FormData
             $body = json_decode(file_get_contents("php://input"), true);
             if (!is_array($body)) {
                 $body = array_merge($_POST, $_GET);
@@ -84,6 +83,10 @@ try {
 
         case "adicionar":
         case "adicionar_produto":
+            if (empty($_SESSION["usuario"])) {
+                echo json_encode(["sucesso" => false, "mensagem" => "Faça login para adicionar produtos."]);
+                break;
+            }
             $body = json_decode(file_get_contents("php://input"), true) ?? [];
             $body = array_merge($_GET, $_POST, $body);
             $nome = trim($body["nome"] ?? "");
@@ -93,6 +96,15 @@ try {
 
         case "remover":
         case "remover_produto":
+            if (empty($_SESSION["usuario"])) {
+                echo json_encode(["sucesso" => false, "mensagem" => "Faça login para remover produtos."]);
+                break;
+            }
+            if ($_SESSION["usuario"]["nivel"] !== "admin") {
+                echo json_encode(["sucesso" => false, "mensagem" => "Ação permitida apenas para administradores."]);
+                break;
+            }
+
             $body = json_decode(file_get_contents("php://input"), true) ?? [];
             $body = array_merge($_GET, $_POST, $body);
             $id = (int)($body["id"] ?? 0);
@@ -107,8 +119,8 @@ try {
             $stmt->execute();
 
             if ($stmt->affected_rows > 0) {
-                $usuario = $body["usuario"] ?? "sistema";
-                $responsavel = $body["responsavel"] ?? "admin";
+                $usuario = $_SESSION["usuario"]["nome"];
+                $responsavel = $_SESSION["usuario"]["nivel"];
 
                 $stmt2 = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, usuario, responsavel, data) VALUES (?, 'remocao', 0, ?, ?, NOW())");
                 $stmt2->bind_param("iss", $id, $usuario, $responsavel);
@@ -122,26 +134,36 @@ try {
 
         // ---- Movimentações ----
         case "entrada":
+            if (empty($_SESSION["usuario"])) {
+                echo json_encode(["sucesso" => false, "mensagem" => "Faça login para registrar entrada."]);
+                break;
+            }
             $body = json_decode(file_get_contents("php://input"), true) ?? [];
             $body = array_merge($_GET, $_POST, $body);
+
             echo json_encode(mov_entrada(
                 $conn,
                 (int)($body["id"] ?? 0),
                 (int)($body["quantidade"] ?? 0),
-                $body["usuario"] ?? "sistema",
-                $body["responsavel"] ?? "admin"
+                $_SESSION["usuario"]["nome"],
+                $_SESSION["usuario"]["nivel"]
             ));
             break;
 
         case "saida":
+            if (empty($_SESSION["usuario"])) {
+                echo json_encode(["sucesso" => false, "mensagem" => "Faça login para registrar saída."]);
+                break;
+            }
             $body = json_decode(file_get_contents("php://input"), true) ?? [];
             $body = array_merge($_GET, $_POST, $body);
+
             echo json_encode(mov_saida(
                 $conn,
                 (int)($body["id"] ?? 0),
                 (int)($body["quantidade"] ?? 0),
-                $body["usuario"] ?? "sistema",
-                $body["responsavel"] ?? "admin"
+                $_SESSION["usuario"]["nome"],
+                $_SESSION["usuario"]["nivel"]
             ));
             break;
 
