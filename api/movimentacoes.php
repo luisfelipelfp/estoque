@@ -114,6 +114,13 @@ function mov_entrada(mysqli $conn, int $id, int $quantidade, int $usuario_id): a
     }
     $nome = $row["nome"];
 
+    // atualiza estoque
+    $upd = $conn->prepare("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?");
+    $upd->bind_param("ii", $quantidade, $id);
+    $upd->execute();
+    $upd->close();
+
+    // registra movimentação
     $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id)
                             VALUES (?, ?, 'entrada', ?, NOW(), ?)");
     $stmt->bind_param("isii", $id, $nome, $quantidade, $usuario_id);
@@ -155,6 +162,13 @@ function mov_saida(mysqli $conn, int $id, int $quantidade, int $usuario_id): arr
 
     $nome = $row["nome"];
 
+    // atualiza estoque
+    $upd = $conn->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?");
+    $upd->bind_param("ii", $quantidade, $id);
+    $upd->execute();
+    $upd->close();
+
+    // registra movimentação
     $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id)
                             VALUES (?, ?, 'saida', ?, NOW(), ?)");
     $stmt->bind_param("isii", $id, $nome, $quantidade, $usuario_id);
@@ -192,6 +206,13 @@ function mov_remover(mysqli $conn, int $id, int $usuario_id): array {
     $nome = $row["nome"];
     $qtd  = (int)$row["quantidade"];
 
+    // marca produto como inativo
+    $upd = $conn->prepare("UPDATE produtos SET ativo = 0 WHERE id = ?");
+    $upd->bind_param("i", $id);
+    $upd->execute();
+    $upd->close();
+
+    // registra movimentação
     $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id)
                             VALUES (?, ?, 'remocao', ?, NOW(), ?)");
     $stmt->bind_param("isii", $id, $nome, $qtd, $usuario_id);

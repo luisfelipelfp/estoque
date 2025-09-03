@@ -1,9 +1,15 @@
 <?php
+/**
+ * relatorios.php
+ * Geração de relatórios de movimentações com filtros flexíveis.
+ */
+
 function relatorio(mysqli $conn, array $f): array {
     $cond = [];
     $bind = [];
     $types = "";
 
+    // Filtros opcionais
     if (!empty($f["produto_id"])) {
         $cond[] = "m.produto_id = ?";
         $bind[] = (int)$f["produto_id"];
@@ -34,8 +40,9 @@ function relatorio(mysqli $conn, array $f): array {
         $types .= "s";
     }
 
-    $where = $cond ? ("WHERE ".implode(" AND ", $cond)) : "";
+    $where = $cond ? ("WHERE " . implode(" AND ", $cond)) : "";
 
+    // Consulta principal
     $sql = "SELECT m.id,
                    m.produto_id,
                    COALESCE(m.produto_nome, p.nome) AS produto_nome,
@@ -43,7 +50,7 @@ function relatorio(mysqli $conn, array $f): array {
                    m.quantidade,
                    m.data,
                    m.usuario_id,
-                   u.nome AS usuario_nome,
+                   COALESCE(u.nome, 'Sistema') AS usuario_nome,
                    u.nivel AS usuario_nivel
               FROM movimentacoes m
          LEFT JOIN produtos p ON p.id = m.produto_id
@@ -52,7 +59,9 @@ function relatorio(mysqli $conn, array $f): array {
           ORDER BY m.data DESC";
 
     $stmt = $conn->prepare($sql);
-    if ($bind) $stmt->bind_param($types, ...$bind);
+    if ($bind) {
+        $stmt->bind_param($types, ...$bind);
+    }
     $stmt->execute();
     $res = $stmt->get_result();
 
@@ -61,5 +70,11 @@ function relatorio(mysqli $conn, array $f): array {
         $dados[] = $row;
     }
 
-    return ["sucesso" => true, "dados" => $dados];
+    $stmt->close();
+
+    return [
+        "sucesso" => true,
+        "total"   => count($dados),
+        "dados"   => $dados
+    ];
 }
