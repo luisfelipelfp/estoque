@@ -11,13 +11,12 @@ document.getElementById("formLogin").addEventListener("submit", async (e) => {
     msgErro.textContent = "";
 
     try {
-        const formData = new FormData();
-        formData.append("email", email);
-        formData.append("senha", senha);
-
         const response = await fetch(`${API_URL}?acao=login`, {
             method: "POST",
-            body: formData
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ email, senha })
         });
 
         const data = await response.json();
