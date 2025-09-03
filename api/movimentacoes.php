@@ -4,9 +4,6 @@
  * Funções para listar e registrar movimentações (entrada/saida/remocao).
  */
 
-/**
- * Lista movimentações com paginação e filtros.
- */
 function mov_listar(mysqli $conn, array $f): array {
     $pagina = max(1, (int)($f["pagina"] ?? 1));
     $limite = max(1, (int)($f["limite"] ?? 10));
@@ -16,24 +13,35 @@ function mov_listar(mysqli $conn, array $f): array {
     $bind = [];
     $types = "";
 
-    $produto = $f["produto"] ?? null;
-    $produto_id = $f["produto_id"] ?? null;
-
-    if ($produto_id !== null && $produto_id !== "") {
+    if (!empty($f["produto_id"])) {
         $cond[] = "m.produto_id = ?";
-        $bind[] = (int)$produto_id;
+        $bind[] = (int)$f["produto_id"];
         $types .= "i";
-    } elseif ($produto !== null && $produto !== "") {
-        $cond[] = "COALESCE(m.produto_nome, p.nome) LIKE ?";
-        $bind[] = "%".$produto."%";
+    }
+
+    if (!empty($f["tipo"])) {
+        $cond[] = "m.tipo = ?";
+        $bind[] = $f["tipo"];
         $types .= "s";
     }
 
-    if (!empty($f["tipo"]))        { $cond[] = "m.tipo = ?";        $bind[] = $f["tipo"];        $types .= "s"; }
-    if (!empty($f["usuario"]))     { $cond[] = "m.usuario = ?";     $bind[] = $f["usuario"];     $types .= "s"; }
-    if (!empty($f["responsavel"])) { $cond[] = "m.responsavel = ?"; $bind[] = $f["responsavel"]; $types .= "s"; }
-    if (!empty($f["data_inicio"])) { $cond[] = "DATE(m.data) >= ?"; $bind[] = $f["data_inicio"]; $types .= "s"; }
-    if (!empty($f["data_fim"]))    { $cond[] = "DATE(m.data) <= ?"; $bind[] = $f["data_fim"];    $types .= "s"; }
+    if (!empty($f["usuario_id"])) {
+        $cond[] = "m.usuario_id = ?";
+        $bind[] = (int)$f["usuario_id"];
+        $types .= "i";
+    }
+
+    if (!empty($f["data_inicio"])) {
+        $cond[] = "DATE(m.data) >= ?";
+        $bind[] = $f["data_inicio"];
+        $types .= "s";
+    }
+
+    if (!empty($f["data_fim"])) {
+        $cond[] = "DATE(m.data) <= ?";
+        $bind[] = $f["data_fim"];
+        $types .= "s";
+    }
 
     $where = $cond ? ("WHERE ".implode(" AND ", $cond)) : "";
 
@@ -41,6 +49,7 @@ function mov_listar(mysqli $conn, array $f): array {
     $sqlTotal = "SELECT COUNT(*) AS total
                    FROM movimentacoes m
               LEFT JOIN produtos p ON p.id = m.produto_id
+              LEFT JOIN usuarios u ON u.id = m.usuario_id
                   $where";
     $stmtT = $conn->prepare($sqlTotal);
     if ($bind) $stmtT->bind_param($types, ...$bind);
@@ -51,9 +60,13 @@ function mov_listar(mysqli $conn, array $f): array {
     // dados
     $sql = "SELECT m.id, m.produto_id,
                    COALESCE(m.produto_nome, p.nome) AS produto_nome,
-                   m.tipo, m.quantidade, m.data, m.usuario, m.responsavel
+                   m.tipo, m.quantidade, m.data,
+                   m.usuario_id,
+                   u.nome AS usuario_nome,
+                   u.nivel AS usuario_nivel
               FROM movimentacoes m
          LEFT JOIN produtos p ON p.id = m.produto_id
+         LEFT JOIN usuarios u ON u.id = m.usuario_id
               $where
           ORDER BY m.data DESC
              LIMIT ? OFFSET ?";
@@ -82,10 +95,7 @@ function mov_listar(mysqli $conn, array $f): array {
     ];
 }
 
-/**
- * Entrada
- */
-function mov_entrada(mysqli $conn, int $id, int $quantidade, string $usuario = "sistema", string $responsavel = "admin"): array {
+function mov_entrada(mysqli $conn, int $id, int $quantidade, int $usuario_id): array {
     if ($id <= 0 || $quantidade <= 0) {
         return ["sucesso" => false, "mensagem" => "Dados inválidos."];
     }
@@ -104,9 +114,9 @@ function mov_entrada(mysqli $conn, int $id, int $quantidade, string $usuario = "
     }
     $nome = $row["nome"];
 
-    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel)
-                            VALUES (?, ?, 'entrada', ?, NOW(), ?, ?)");
-    $stmt->bind_param("isiss", $id, $nome, $quantidade, $usuario, $responsavel);
+    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id)
+                            VALUES (?, ?, 'entrada', ?, NOW(), ?)");
+    $stmt->bind_param("isii", $id, $nome, $quantidade, $usuario_id);
 
     if (!$stmt->execute()) {
         $err = $stmt->error;
@@ -120,10 +130,7 @@ function mov_entrada(mysqli $conn, int $id, int $quantidade, string $usuario = "
     return ["sucesso" => true, "mensagem" => "Entrada registrada"];
 }
 
-/**
- * Saída
- */
-function mov_saida(mysqli $conn, int $id, int $quantidade, string $usuario = "sistema", string $responsavel = "admin"): array {
+function mov_saida(mysqli $conn, int $id, int $quantidade, int $usuario_id): array {
     if ($id <= 0 || $quantidade <= 0) {
         return ["sucesso" => false, "mensagem" => "Dados inválidos."];
     }
@@ -148,9 +155,9 @@ function mov_saida(mysqli $conn, int $id, int $quantidade, string $usuario = "si
 
     $nome = $row["nome"];
 
-    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel)
-                            VALUES (?, ?, 'saida', ?, NOW(), ?, ?)");
-    $stmt->bind_param("isiss", $id, $nome, $quantidade, $usuario, $responsavel);
+    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id)
+                            VALUES (?, ?, 'saida', ?, NOW(), ?)");
+    $stmt->bind_param("isii", $id, $nome, $quantidade, $usuario_id);
 
     if (!$stmt->execute()) {
         $err = $stmt->error;
@@ -164,10 +171,7 @@ function mov_saida(mysqli $conn, int $id, int $quantidade, string $usuario = "si
     return ["sucesso" => true, "mensagem" => "Saída registrada"];
 }
 
-/**
- * Remoção
- */
-function mov_remover(mysqli $conn, int $id, string $usuario = "sistema", string $responsavel = "admin"): array {
+function mov_remover(mysqli $conn, int $id, int $usuario_id): array {
     if ($id <= 0) {
         return ["sucesso" => false, "mensagem" => "ID inválido."];
     }
@@ -188,9 +192,9 @@ function mov_remover(mysqli $conn, int $id, string $usuario = "sistema", string 
     $nome = $row["nome"];
     $qtd  = (int)$row["quantidade"];
 
-    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario, responsavel)
-                            VALUES (?, ?, 'remocao', ?, NOW(), ?, ?)");
-    $stmt->bind_param("isiss", $id, $nome, $qtd, $usuario, $responsavel);
+    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id)
+                            VALUES (?, ?, 'remocao', ?, NOW(), ?)");
+    $stmt->bind_param("isii", $id, $nome, $qtd, $usuario_id);
 
     if (!$stmt->execute()) {
         $err = $stmt->error;

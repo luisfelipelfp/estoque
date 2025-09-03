@@ -120,14 +120,12 @@ try {
 
             if ($stmt->affected_rows > 0) {
                 $usuarioId = $_SESSION["usuario"]["id"];
-                $usuarioNome = $_SESSION["usuario"]["nome"];
-                $usuarioNivel = $_SESSION["usuario"]["nivel"];
 
                 $stmt2 = $conn->prepare("
-                    INSERT INTO movimentacoes (produto_id, tipo, quantidade, usuario_id, usuario, responsavel, data) 
-                    VALUES (?, 'remocao', 0, ?, ?, ?, NOW())
+                    INSERT INTO movimentacoes (produto_id, tipo, quantidade, usuario_id, data) 
+                    VALUES (?, 'remocao', 0, ?, NOW())
                 ");
-                $stmt2->bind_param("iiss", $id, $usuarioId, $usuarioNome, $usuarioNivel);
+                $stmt2->bind_param("ii", $id, $usuarioId);
                 $stmt2->execute();
 
                 echo json_encode(["sucesso" => true, "mensagem" => "Produto marcado como removido."]);
@@ -149,9 +147,7 @@ try {
                 $conn,
                 (int)($body["id"] ?? 0),
                 (int)($body["quantidade"] ?? 0),
-                $_SESSION["usuario"]["id"],
-                $_SESSION["usuario"]["nome"],
-                $_SESSION["usuario"]["nivel"]
+                $_SESSION["usuario"]["id"]
             ));
             break;
 
@@ -167,9 +163,7 @@ try {
                 $conn,
                 (int)($body["id"] ?? 0),
                 (int)($body["quantidade"] ?? 0),
-                $_SESSION["usuario"]["id"],
-                $_SESSION["usuario"]["nome"],
-                $_SESSION["usuario"]["nivel"]
+                $_SESSION["usuario"]["id"]
             ));
             break;
 
@@ -182,7 +176,6 @@ try {
                 "produto_id"  => $_GET["produto_id"] ?? $_POST["produto_id"] ?? null,
                 "produto"     => $_GET["produto"] ?? $_POST["produto"] ?? null,
                 "usuario"     => $_GET["usuario"] ?? $_POST["usuario"] ?? "",
-                "responsavel" => $_GET["responsavel"] ?? $_POST["responsavel"] ?? "",
                 "data_inicio" => $_GET["data_inicio"] ?? $_POST["data_inicio"] ?? "",
                 "data_fim"    => $_GET["data_fim"] ?? $_POST["data_fim"] ?? "",
             ];
@@ -196,7 +189,6 @@ try {
                 "produto_id"  => $_GET["produto_id"] ?? null,
                 "produto"     => $_GET["produto"] ?? null,
                 "usuario"     => $_GET["usuario"] ?? "",
-                "responsavel" => $_GET["responsavel"] ?? "",
                 "data_inicio" => $_GET["data_inicio"] ?? "",
                 "data_fim"    => $_GET["data_fim"] ?? "",
             ];
