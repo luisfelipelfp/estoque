@@ -10,28 +10,41 @@ require_once __DIR__ . "/relatorios.php";
 
 session_start();
 
-$acao = strtolower(trim($_REQUEST["acao"] ?? ""));
-if ($acao === "") {
-    echo json_encode(["sucesso" => false, "mensagem" => "Nenhuma ação especificada."]);
-    exit;
+$conn = db();
+
+function resposta($sucesso, $mensagem = "", $extra = []) {
+    return array_merge(["sucesso" => $sucesso, "mensagem" => $mensagem], $extra);
 }
 
-$conn = db();
+function require_login($nivel = null) {
+    if (empty($_SESSION["usuario"])) {
+        echo json_encode(resposta(false, "Faça login para continuar."));
+        exit;
+    }
+    if ($nivel && $_SESSION["usuario"]["nivel"] !== $nivel) {
+        echo json_encode(resposta(false, "Ação permitida apenas para $nivel."));
+        exit;
+    }
+}
+
+$acao = strtolower(trim($_REQUEST["acao"] ?? ""));
+if ($acao === "") {
+    echo json_encode(resposta(false, "Nenhuma ação especificada."));
+    exit;
+}
 
 try {
     switch ($acao) {
         // ---- Autenticação ----
         case "login":
-            $body = json_decode(file_get_contents("php://input"), true);
-            if (!is_array($body)) {
-                $body = array_merge($_POST, $_GET);
-            }
+            $body = json_decode(file_get_contents("php://input"), true) ?? [];
+            $body = array_merge($_POST, $_GET, $body);
 
             $email = trim($body["email"] ?? "");
             $senha = trim($body["senha"] ?? "");
 
             if ($email === "" || $senha === "") {
-                echo json_encode(["sucesso" => false, "mensagem" => "Preencha todos os campos."]);
+                echo json_encode(resposta(false, "Preencha todos os campos."));
                 break;
             }
 
@@ -48,26 +61,25 @@ try {
                         "email" => $row["email"],
                         "nivel" => $row["nivel"]
                     ];
-                    echo json_encode(["sucesso" => true, "usuario" => $_SESSION["usuario"]]);
+                    echo json_encode(resposta(true, "Login realizado.", ["usuario" => $_SESSION["usuario"]]));
                 } else {
-                    echo json_encode(["sucesso" => false, "mensagem" => "Senha incorreta."]);
+                    echo json_encode(resposta(false, "Senha incorreta."));
                 }
             } else {
-                echo json_encode(["sucesso" => false, "mensagem" => "Usuário não encontrado."]);
+                echo json_encode(resposta(false, "Usuário não encontrado."));
             }
             break;
 
         case "logout":
             session_destroy();
-            echo json_encode(["sucesso" => true, "mensagem" => "Logout realizado com sucesso."]);
+            echo json_encode(resposta(true, "Logout realizado com sucesso."));
             break;
 
         case "usuario_atual":
-            if (!empty($_SESSION["usuario"])) {
-                echo json_encode(["logado" => true, "usuario" => $_SESSION["usuario"]]);
-            } else {
-                echo json_encode(["logado" => false]);
-            }
+            echo json_encode([
+                "logado"  => !empty($_SESSION["usuario"]),
+                "usuario" => $_SESSION["usuario"] ?? null
+            ]);
             break;
 
         // ---- Produtos ----
@@ -78,39 +90,30 @@ try {
             while ($row = $result->fetch_assoc()) {
                 $dados[] = $row;
             }
-            echo json_encode($dados);
+            echo json_encode(resposta(true, "", ["dados" => $dados]));
             break;
 
         case "adicionar":
         case "adicionar_produto":
-            if (empty($_SESSION["usuario"])) {
-                echo json_encode(["sucesso" => false, "mensagem" => "Faça login para adicionar produtos."]);
-                break;
-            }
+            require_login();
             $body = json_decode(file_get_contents("php://input"), true) ?? [];
             $body = array_merge($_GET, $_POST, $body);
-            $nome = trim($body["nome"] ?? "");
+
+            $nome  = trim($body["nome"] ?? "");
             $quant = (int)($body["quantidade"] ?? 0);
+
             echo json_encode(produtos_adicionar($conn, $nome, $quant));
             break;
 
         case "remover":
         case "remover_produto":
-            if (empty($_SESSION["usuario"])) {
-                echo json_encode(["sucesso" => false, "mensagem" => "Faça login para remover produtos."]);
-                break;
-            }
-            if ($_SESSION["usuario"]["nivel"] !== "admin") {
-                echo json_encode(["sucesso" => false, "mensagem" => "Ação permitida apenas para administradores."]);
-                break;
-            }
-
+            require_login("admin");
             $body = json_decode(file_get_contents("php://input"), true) ?? [];
             $body = array_merge($_GET, $_POST, $body);
             $id = (int)($body["id"] ?? 0);
 
             if (!$id) {
-                echo json_encode(["sucesso" => false, "mensagem" => "ID inválido."]);
+                echo json_encode(resposta(false, "ID inválido."));
                 break;
             }
 
@@ -128,18 +131,15 @@ try {
                 $stmt2->bind_param("ii", $id, $usuarioId);
                 $stmt2->execute();
 
-                echo json_encode(["sucesso" => true, "mensagem" => "Produto marcado como removido."]);
+                echo json_encode(resposta(true, "Produto marcado como removido."));
             } else {
-                echo json_encode(["sucesso" => false, "mensagem" => "Produto não encontrado."]);
+                echo json_encode(resposta(false, "Produto não encontrado."));
             }
             break;
 
         // ---- Movimentações ----
         case "entrada":
-            if (empty($_SESSION["usuario"])) {
-                echo json_encode(["sucesso" => false, "mensagem" => "Faça login para registrar entrada."]);
-                break;
-            }
+            require_login();
             $body = json_decode(file_get_contents("php://input"), true) ?? [];
             $body = array_merge($_GET, $_POST, $body);
 
@@ -152,10 +152,7 @@ try {
             break;
 
         case "saida":
-            if (empty($_SESSION["usuario"])) {
-                echo json_encode(["sucesso" => false, "mensagem" => "Faça login para registrar saída."]);
-                break;
-            }
+            require_login();
             $body = json_decode(file_get_contents("php://input"), true) ?? [];
             $body = array_merge($_GET, $_POST, $body);
 
@@ -196,16 +193,14 @@ try {
             break;
 
         default:
-            echo json_encode(["sucesso" => false, "mensagem" => "Ação desconhecida."]);
+            echo json_encode(resposta(false, "Ação desconhecida."));
             break;
     }
 } catch (Throwable $e) {
     http_response_code(500);
-    echo json_encode([
-        "sucesso" => false,
-        "mensagem" => "Erro interno no servidor",
+    echo json_encode(resposta(false, "Erro interno no servidor", [
         "detalhes" => $e->getMessage()
-    ]);
+    ]));
 } finally {
     $conn?->close();
 }
