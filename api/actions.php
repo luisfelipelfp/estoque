@@ -22,7 +22,12 @@ try {
     switch ($acao) {
         // ---- Autenticação ----
         case "login":
-            $body = json_decode(file_get_contents("php://input"), true) ?? [];
+            // Aceitar JSON, POST normal e FormData
+            $body = json_decode(file_get_contents("php://input"), true);
+            if (!is_array($body)) {
+                $body = array_merge($_POST, $_GET);
+            }
+
             $email = trim($body["email"] ?? "");
             $senha = trim($body["senha"] ?? "");
 
