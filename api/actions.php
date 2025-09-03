@@ -119,11 +119,15 @@ try {
             $stmt->execute();
 
             if ($stmt->affected_rows > 0) {
-                $usuario = $_SESSION["usuario"]["nome"];
-                $responsavel = $_SESSION["usuario"]["nivel"];
+                $usuarioId = $_SESSION["usuario"]["id"];
+                $usuarioNome = $_SESSION["usuario"]["nome"];
+                $usuarioNivel = $_SESSION["usuario"]["nivel"];
 
-                $stmt2 = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, usuario, responsavel, data) VALUES (?, 'remocao', 0, ?, ?, NOW())");
-                $stmt2->bind_param("iss", $id, $usuario, $responsavel);
+                $stmt2 = $conn->prepare("
+                    INSERT INTO movimentacoes (produto_id, tipo, quantidade, usuario_id, usuario, responsavel, data) 
+                    VALUES (?, 'remocao', 0, ?, ?, ?, NOW())
+                ");
+                $stmt2->bind_param("iiss", $id, $usuarioId, $usuarioNome, $usuarioNivel);
                 $stmt2->execute();
 
                 echo json_encode(["sucesso" => true, "mensagem" => "Produto marcado como removido."]);
@@ -145,6 +149,7 @@ try {
                 $conn,
                 (int)($body["id"] ?? 0),
                 (int)($body["quantidade"] ?? 0),
+                $_SESSION["usuario"]["id"],
                 $_SESSION["usuario"]["nome"],
                 $_SESSION["usuario"]["nivel"]
             ));
@@ -162,6 +167,7 @@ try {
                 $conn,
                 (int)($body["id"] ?? 0),
                 (int)($body["quantidade"] ?? 0),
+                $_SESSION["usuario"]["id"],
                 $_SESSION["usuario"]["nome"],
                 $_SESSION["usuario"]["nivel"]
             ));
