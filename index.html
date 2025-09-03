@@ -10,7 +10,14 @@
 </head>
 <body class="container py-4">
 
-  <h1 class="mb-4 text-center">📦 Estoque da Gordinha e do Careca</h1>
+  <!-- Header com usuário logado e logout -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="mb-0">📦 Estoque da Gordinha e do Careca</h1>
+    <div>
+      <span id="usuarioLogado" class="me-3 fw-bold text-primary"></span>
+      <button id="btnLogout" class="btn btn-outline-danger btn-sm">Sair</button>
+    </div>
+  </div>
 
   <!-- Formulário adicionar produto -->
   <form id="formAdicionarProduto" class="mb-4 d-flex gap-2">
@@ -42,18 +49,8 @@
   <!-- Filtro movimentações -->
   <h3 class="mt-5 mb-3">📈 Movimentações</h3>
   <form id="formFiltrosMovimentacoes" class="mb-3 d-flex flex-wrap gap-2">
-    <input 
-      type="date" 
-      id="filtroDataInicio" 
-      name="data_inicio" 
-      class="form-control"
-    >
-    <input 
-      type="date" 
-      id="filtroDataFim" 
-      name="data_fim" 
-      class="form-control"
-    >
+    <input type="date" id="filtroDataInicio" name="data_inicio" class="form-control">
+    <input type="date" id="filtroDataFim" name="data_fim" class="form-control">
     <select id="filtroTipo" name="tipo" class="form-control">
       <option value="">Todos</option>
       <option value="entrada">Entrada</option>

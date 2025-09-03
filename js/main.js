@@ -1,5 +1,5 @@
 // ==============================
-// js/main.js (com proteção de login)
+// js/main.js (proteção de login + logout)
 // ==============================
 
 async function verificarLogin() {
@@ -23,6 +23,17 @@ async function verificarLogin() {
     }
 }
 
+async function logout() {
+    try {
+        await fetch("api/actions.php?acao=logout");
+    } catch (err) {
+        console.error("Erro ao deslogar:", err);
+    } finally {
+        localStorage.removeItem("usuario");
+        window.location.href = "login.html";
+    }
+}
+
 window.onload = async () => {
     try {
         // Primeiro verifica login
@@ -30,6 +41,18 @@ window.onload = async () => {
         if (!usuario) return; // Se não logado, já foi redirecionado
 
         console.log("Usuário logado:", usuario.nome, "-", usuario.nivel);
+
+        // Mostra usuário logado no header
+        const usuarioSpan = document.getElementById("usuarioLogado");
+        if (usuarioSpan) {
+            usuarioSpan.textContent = `${usuario.nome} (${usuario.nivel})`;
+        }
+
+        // Configura botão de logout
+        const btnLogout = document.getElementById("btnLogout");
+        if (btnLogout) {
+            btnLogout.addEventListener("click", logout);
+        }
 
         // Continua carregando os produtos logo ao abrir
         if (typeof listarProdutos === "function") {
