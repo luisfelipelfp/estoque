@@ -4,11 +4,12 @@
 
 async function verificarLogin() {
     try {
-        const response = await fetch("api/actions.php?acao=usuario_atual");
+        const response = await fetch("api/actions.php?acao=usuario_atual", {
+            credentials: "include" // garante que cookies/sessão PHP sejam enviados
+        });
         const data = await response.json();
 
         if (!data.logado) {
-            // Não logado → redireciona
             window.location.href = "login.html";
             return null;
         }
@@ -25,7 +26,9 @@ async function verificarLogin() {
 
 async function logout() {
     try {
-        await fetch("api/actions.php?acao=logout");
+        await fetch("api/actions.php?acao=logout", {
+            credentials: "include"
+        });
     } catch (err) {
         console.error("Erro ao deslogar:", err);
     } finally {
@@ -61,10 +64,9 @@ window.onload = async () => {
             console.warn("Função listarProdutos não encontrada.");
         }
 
-        // Não chama listarMovimentacoes() na inicialização
-        // Agora as movimentações só aparecem após o usuário aplicar os filtros
+        // Movimentações só aparecem após aplicar os filtros
         if (typeof renderPlaceholderInicial === "function") {
-            renderPlaceholderInicial(); // mostra mensagem inicial na tabela
+            renderPlaceholderInicial();
         }
     } catch (error) {
         console.error("Erro durante inicialização da página:", error);
