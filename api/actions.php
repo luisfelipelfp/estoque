@@ -85,12 +85,9 @@ try {
         // ---- Produtos ----
         case "listarprodutos":
         case "listar_produtos":
-            $result = $conn->query("SELECT * FROM produtos WHERE ativo = 1 ORDER BY id DESC");
-            $dados = [];
-            while ($row = $result->fetch_assoc()) {
-                $dados[] = $row;
-            }
-            echo json_encode(resposta(true, "", ["dados" => $dados]));
+            echo json_encode(resposta(true, "", [
+                "dados" => produtos_listar($conn) // só ativos por padrão
+            ]));
             break;
 
         case "adicionar":
@@ -174,6 +171,7 @@ try {
                 "data_inicio" => $_GET["data_inicio"] ?? "",
                 "data_fim"    => $_GET["data_fim"] ?? "",
             ];
+            // já usa produtos_listar($conn, true) dentro do relatorio.php
             echo json_encode(relatorio($conn, $filtros));
             break;
 
