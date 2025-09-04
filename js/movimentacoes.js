@@ -1,5 +1,5 @@
 // ==============================
-// js/movimentacoes.js (ajustado)
+// js/movimentacoes.js (corrigido)
 // ==============================
 
 // Flag global: só lista após o usuário pesquisar
@@ -95,17 +95,10 @@ async function listarMovimentacoes(filtros = {}, force = false) {
         }
 
         movimentacoes.forEach(mov => {
-            // Nome do usuário com fallback
-            let usuario = mov.usuario_nome && mov.usuario_nome.trim() !== "" 
-                ? mov.usuario_nome 
+            // Usa diretamente o campo "usuario" que vem do banco
+            let usuario = mov.usuario && mov.usuario.trim() !== "" 
+                ? mov.usuario 
                 : "Sistema";
-
-            // Se existir nível, adiciona no texto
-            if (mov.usuario_nivel && mov.usuario_nivel !== "sistema") {
-                usuario += ` (${mov.usuario_nivel})`;
-            } else if (mov.usuario_nivel === "sistema") {
-                usuario = "Sistema";
-            }
 
             const row = `
                 <tr>
