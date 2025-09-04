@@ -1,6 +1,15 @@
 // js/produtos.js
 
-// Lista de produtos e ações
+function getUsuarioId() {
+    try {
+        const user = JSON.parse(localStorage.getItem("usuarioLogado"));
+        return user?.id || null;
+    } catch {
+        return null;
+    }
+}
+
+// Lista de produtos
 async function listarProdutos() {
     try {
         const resp = await apiRequest("listar_produtos", null, "GET");
@@ -36,7 +45,6 @@ async function listarProdutos() {
     }
 }
 
-// --- Funções globais ---
 window.entrada = async function (id) {
     const qtd = prompt("Quantidade de entrada:");
     if (qtd === null) return;
@@ -46,7 +54,7 @@ window.entrada = async function (id) {
         return;
     }
     try {
-        const resp = await apiRequest("entrada", { id, quantidade }, "GET");
+        const resp = await apiRequest("entrada", { id, quantidade, usuario_id: getUsuarioId() }, "GET");
         if (resp.sucesso) {
             alert(resp.mensagem || "Entrada registrada.");
             await listarProdutos();
@@ -69,7 +77,7 @@ window.saida = async function (id) {
         return;
     }
     try {
-        const resp = await apiRequest("saida", { id, quantidade }, "GET");
+        const resp = await apiRequest("saida", { id, quantidade, usuario_id: getUsuarioId() }, "GET");
         if (resp.sucesso) {
             alert(resp.mensagem || "Saída registrada.");
             await listarProdutos();
@@ -86,7 +94,7 @@ window.saida = async function (id) {
 window.remover = async function (id) {
     if (!confirm("Tem certeza que deseja remover este produto?")) return;
     try {
-        const resp = await apiRequest("remover", { id }, "GET");
+        const resp = await apiRequest("remover", { id, usuario_id: getUsuarioId() }, "GET");
         if (resp.sucesso) {
             alert(resp.mensagem || "Produto removido.");
             await listarProdutos();
@@ -100,11 +108,10 @@ window.remover = async function (id) {
     }
 };
 
-// --- Event delegation ---
+// Event delegation
 document.addEventListener("click", function (e) {
     const btn = e.target.closest("button");
     if (!btn) return;
-
     const id = btn.dataset.id;
     if (!id) return;
 
@@ -117,7 +124,7 @@ document.addEventListener("click", function (e) {
     }
 });
 
-// --- Formulário de adicionar produto ---
+// Formulário adicionar produto
 document.querySelector("#formAdicionarProduto")?.addEventListener("submit", async function (e) {
     e.preventDefault();
     const nome = (document.querySelector("#nomeProduto")?.value || "").trim();
@@ -125,9 +132,8 @@ document.querySelector("#formAdicionarProduto")?.addEventListener("submit", asyn
         alert("Informe o nome do produto.");
         return;
     }
-    const quantidade = 0;
     try {
-        const resp = await apiRequest("adicionar", { nome, quantidade }, "POST");
+        const resp = await apiRequest("adicionar", { nome, quantidade: 0, usuario_id: getUsuarioId() }, "POST");
         if (resp.sucesso) {
             this.reset();
             await listarProdutos();
@@ -141,7 +147,6 @@ document.querySelector("#formAdicionarProduto")?.addEventListener("submit", asyn
     }
 });
 
-// Inicialização
 window.addEventListener("DOMContentLoaded", () => {
     listarProdutos();
 });
