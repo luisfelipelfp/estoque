@@ -28,6 +28,12 @@ function relatorio(mysqli $conn, array $f): array {
         $types .= "i";
     }
 
+    if (!empty($f["usuario"])) {
+        $cond[] = "u.nome LIKE ?";
+        $bind[] = "%" . $f["usuario"] . "%";
+        $types .= "s";
+    }
+
     if (!empty($f["data_inicio"])) {
         $cond[] = "DATE(m.data) >= ?";
         $bind[] = $f["data_inicio"];

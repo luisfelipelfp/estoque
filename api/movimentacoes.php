@@ -25,10 +25,10 @@ function mov_listar(mysqli $conn, array $f): array {
         $types .= "s";
     }
 
-    if (!empty($f["usuario_id"])) {
-        $cond[] = "m.usuario_id = ?";
-        $bind[] = (int)$f["usuario_id"];
-        $types .= "i";
+    if (!empty($f["usuario"])) {
+        $cond[] = "u.nome LIKE ?";
+        $bind[] = "%".$f["usuario"]."%";
+        $types .= "s";
     }
 
     if (!empty($f["data_inicio"])) {

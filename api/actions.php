@@ -117,24 +117,7 @@ try {
                 break;
             }
 
-            $stmt = $conn->prepare("UPDATE produtos SET ativo = 0 WHERE id = ?");
-            $stmt->bind_param("i", $id);
-            $stmt->execute();
-
-            if ($stmt->affected_rows > 0) {
-                $usuarioId = $_SESSION["usuario"]["id"];
-
-                $stmt2 = $conn->prepare("
-                    INSERT INTO movimentacoes (produto_id, tipo, quantidade, usuario_id, data) 
-                    VALUES (?, 'remocao', 0, ?, NOW())
-                ");
-                $stmt2->bind_param("ii", $id, $usuarioId);
-                $stmt2->execute();
-
-                echo json_encode(resposta(true, "Produto marcado como removido."));
-            } else {
-                echo json_encode(resposta(false, "Produto não encontrado."));
-            }
+            echo json_encode(mov_remover($conn, $id, $_SESSION["usuario"]["id"]));
             break;
 
         // ---- Movimentações ----
