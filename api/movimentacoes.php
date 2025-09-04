@@ -32,6 +32,7 @@ function mov_listar(mysqli $conn, array $f): array {
     }
 
     if (!empty($f["usuario"])) {
+        // Permite buscar tanto usuários cadastrados quanto "Sistema"
         $cond[] = "(u.nome LIKE ? OR (u.id IS NULL AND 'Sistema' LIKE ?))";
         $bind[] = "%".$f["usuario"]."%";
         $bind[] = "%".$f["usuario"]."%";
@@ -115,17 +116,19 @@ function mov_entrada(mysqli $conn, int $id, int $quantidade, int $usuario_id): a
     $row = $chk->get_result()->fetch_assoc();
     $chk->close();
 
-    if (!$row || !$row["ativo"]) {
+    if (!$row || !(int)$row["ativo"]) {
         $conn->rollback();
         return ["sucesso" => false, "mensagem" => "Produto não encontrado ou inativo."];
     }
     $nome = $row["nome"];
 
+    // atualiza estoque
     $upd = $conn->prepare("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?");
     $upd->bind_param("ii", $quantidade, $id);
     $upd->execute();
     $upd->close();
 
+    // registra movimentação
     $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id)
                             VALUES (?, ?, 'entrada', ?, NOW(), ?)");
     $stmt->bind_param("isii", $id, $nome, $quantidade, $usuario_id);
@@ -139,7 +142,7 @@ function mov_entrada(mysqli $conn, int $id, int $quantidade, int $usuario_id): a
 
     $stmt->close();
     $conn->commit();
-    return ["sucesso" => true, "mensagem" => "Entrada registrada"];
+    return ["sucesso" => true, "mensagem" => "Entrada registrado"];
 }
 
 function mov_saida(mysqli $conn, int $id, int $quantidade, int $usuario_id): array {
@@ -155,7 +158,7 @@ function mov_saida(mysqli $conn, int $id, int $quantidade, int $usuario_id): arr
     $row = $chk->get_result()->fetch_assoc();
     $chk->close();
 
-    if (!$row || !$row["ativo"]) {
+    if (!$row || !(int)$row["ativo"]) {
         $conn->rollback();
         return ["sucesso" => false, "mensagem" => "Produto não encontrado ou inativo."];
     }
@@ -167,11 +170,13 @@ function mov_saida(mysqli $conn, int $id, int $quantidade, int $usuario_id): arr
 
     $nome = $row["nome"];
 
+    // atualiza estoque
     $upd = $conn->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?");
     $upd->bind_param("ii", $quantidade, $id);
     $upd->execute();
     $upd->close();
 
+    // registra movimentação
     $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id)
                             VALUES (?, ?, 'saida', ?, NOW(), ?)");
     $stmt->bind_param("isii", $id, $nome, $quantidade, $usuario_id);
@@ -201,7 +206,7 @@ function mov_remover(mysqli $conn, int $id, int $usuario_id): array {
     $row = $p->get_result()->fetch_assoc();
     $p->close();
 
-    if (!$row || !$row["ativo"]) {
+    if (!$row || !(int)$row["ativo"]) {
         $conn->rollback();
         return ["sucesso" => false, "mensagem" => "Produto não encontrado ou já inativo."];
     }
@@ -209,11 +214,13 @@ function mov_remover(mysqli $conn, int $id, int $usuario_id): array {
     $nome = $row["nome"];
     $qtd  = (int)$row["quantidade"];
 
+    // marca produto como inativo
     $upd = $conn->prepare("UPDATE produtos SET ativo = 0 WHERE id = ?");
     $upd->bind_param("i", $id);
     $upd->execute();
     $upd->close();
 
+    // registra movimentação
     $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id)
                             VALUES (?, ?, 'remocao', ?, NOW(), ?)");
     $stmt->bind_param("isii", $id, $nome, $qtd, $usuario_id);
