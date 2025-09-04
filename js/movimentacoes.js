@@ -95,6 +95,10 @@ async function listarMovimentacoes(filtros = {}, force = false) {
         }
 
         movimentacoes.forEach(mov => {
+            const usuario = mov.usuario_nome && mov.usuario_nome.trim() !== "" 
+                ? mov.usuario_nome 
+                : "Sistema";
+
             const row = `
                 <tr>
                     <td>${mov.id}</td>
@@ -102,7 +106,7 @@ async function listarMovimentacoes(filtros = {}, force = false) {
                     <td>${mov.tipo}</td>
                     <td>${mov.quantidade ?? "-"}</td>
                     <td>${mov.data}</td>
-                    <td>${mov.usuario_nome ?? "-"}</td>
+                    <td>${usuario}</td>
                 </tr>
             `;
             tabela.insertAdjacentHTML("beforeend", row);

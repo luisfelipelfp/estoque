@@ -25,6 +25,12 @@ function mov_listar(mysqli $conn, array $f): array {
         $types .= "s";
     }
 
+    if (!empty($f["usuario_id"])) {
+        $cond[] = "m.usuario_id = ?";
+        $bind[] = (int)$f["usuario_id"];
+        $types .= "i";
+    }
+
     if (!empty($f["usuario"])) {
         $cond[] = "u.nome LIKE ?";
         $bind[] = "%".$f["usuario"]."%";
@@ -62,7 +68,7 @@ function mov_listar(mysqli $conn, array $f): array {
                    COALESCE(m.produto_nome, p.nome) AS produto_nome,
                    m.tipo, m.quantidade, m.data,
                    m.usuario_id,
-                   u.nome AS usuario_nome,
+                   COALESCE(u.nome, 'Sistema') AS usuario_nome,
                    u.nivel AS usuario_nivel
               FROM movimentacoes m
          LEFT JOIN produtos p ON p.id = m.produto_id
