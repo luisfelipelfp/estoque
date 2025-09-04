@@ -1,5 +1,5 @@
 // ==============================
-// js/movimentacoes.js (corrigido)
+// js/movimentacoes.js (ajustado)
 // ==============================
 
 // Flag global: só lista após o usuário pesquisar
@@ -95,9 +95,17 @@ async function listarMovimentacoes(filtros = {}, force = false) {
         }
 
         movimentacoes.forEach(mov => {
-            const usuario = mov.usuario_nome && mov.usuario_nome.trim() !== "" 
+            // Nome do usuário com fallback
+            let usuario = mov.usuario_nome && mov.usuario_nome.trim() !== "" 
                 ? mov.usuario_nome 
                 : "Sistema";
+
+            // Se existir nível, adiciona no texto
+            if (mov.usuario_nivel && mov.usuario_nivel !== "sistema") {
+                usuario += ` (${mov.usuario_nivel})`;
+            } else if (mov.usuario_nivel === "sistema") {
+                usuario = "Sistema";
+            }
 
             const row = `
                 <tr>

@@ -32,9 +32,11 @@ function mov_listar(mysqli $conn, array $f): array {
     }
 
     if (!empty($f["usuario"])) {
-        $cond[] = "u.nome LIKE ?";
+        // Permite buscar tanto usuários cadastrados quanto "Sistema"
+        $cond[] = "(u.nome LIKE ? OR (u.id IS NULL AND 'Sistema' LIKE ?))";
         $bind[] = "%".$f["usuario"]."%";
-        $types .= "s";
+        $bind[] = "%".$f["usuario"]."%";
+        $types .= "ss";
     }
 
     if (!empty($f["data_inicio"])) {
@@ -69,7 +71,7 @@ function mov_listar(mysqli $conn, array $f): array {
                    m.tipo, m.quantidade, m.data,
                    m.usuario_id,
                    COALESCE(u.nome, 'Sistema') AS usuario_nome,
-                   u.nivel AS usuario_nivel
+                   COALESCE(u.nivel, 'sistema') AS usuario_nivel
               FROM movimentacoes m
          LEFT JOIN produtos p ON p.id = m.produto_id
          LEFT JOIN usuarios u ON u.id = m.usuario_id
