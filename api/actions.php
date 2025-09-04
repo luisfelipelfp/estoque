@@ -90,6 +90,12 @@ try {
             ]));
             break;
 
+        case "listar_produtos_todos":
+            echo json_encode(resposta(true, "", [
+                "dados" => produtos_listar($conn, true) // ativos + inativos
+            ]));
+            break;
+
         case "adicionar":
         case "adicionar_produto":
             require_login();
