@@ -122,13 +122,7 @@ function mov_entrada(mysqli $conn, int $id, int $quantidade, int $usuario_id): a
     }
     $nome = $row["nome"];
 
-    // atualiza estoque
-    $upd = $conn->prepare("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?");
-    $upd->bind_param("ii", $quantidade, $id);
-    $upd->execute();
-    $upd->close();
-
-    // registra movimentação
+    // registra movimentação (trigger cuida do estoque)
     $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id)
                             VALUES (?, ?, 'entrada', ?, NOW(), ?)");
     $stmt->bind_param("isii", $id, $nome, $quantidade, $usuario_id);
@@ -142,7 +136,7 @@ function mov_entrada(mysqli $conn, int $id, int $quantidade, int $usuario_id): a
 
     $stmt->close();
     $conn->commit();
-    return ["sucesso" => true, "mensagem" => "Entrada registrado"];
+    return ["sucesso" => true, "mensagem" => "Entrada registrada"];
 }
 
 function mov_saida(mysqli $conn, int $id, int $quantidade, int $usuario_id): array {
@@ -170,13 +164,7 @@ function mov_saida(mysqli $conn, int $id, int $quantidade, int $usuario_id): arr
 
     $nome = $row["nome"];
 
-    // atualiza estoque
-    $upd = $conn->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?");
-    $upd->bind_param("ii", $quantidade, $id);
-    $upd->execute();
-    $upd->close();
-
-    // registra movimentação
+    // registra movimentação (trigger cuida do estoque)
     $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id)
                             VALUES (?, ?, 'saida', ?, NOW(), ?)");
     $stmt->bind_param("isii", $id, $nome, $quantidade, $usuario_id);
