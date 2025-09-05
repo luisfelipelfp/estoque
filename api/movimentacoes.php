@@ -13,38 +13,39 @@ function mov_listar(mysqli $conn, array $f): array {
     $bind = [];
     $types = "";
 
-    if (!empty($f["produto_id"])) {
+    // use isset para aceitar "0" e strings "0"
+    if (isset($f["produto_id"]) && $f["produto_id"] !== "" && $f["produto_id"] !== null) {
         $cond[] = "m.produto_id = ?";
         $bind[] = (int)$f["produto_id"];
         $types .= "i";
     }
 
-    if (!empty($f["tipo"])) {
+    if (isset($f["tipo"]) && $f["tipo"] !== "") {
         $cond[] = "m.tipo = ?";
         $bind[] = $f["tipo"];
         $types .= "s";
     }
 
-    if (!empty($f["usuario_id"])) {
+    if (isset($f["usuario_id"]) && $f["usuario_id"] !== "" && $f["usuario_id"] !== null) {
         $cond[] = "m.usuario_id = ?";
         $bind[] = (int)$f["usuario_id"];
         $types .= "i";
     }
 
-    if (!empty($f["usuario"])) {
-        $cond[] = "(u.nome LIKE ? OR (u.id IS NULL AND 'Sistema' LIKE ?))";
-        $bind[] = "%".$f["usuario"]."%";
-        $bind[] = "%".$f["usuario"]."%";
-        $types .= "ss";
+    if (isset($f["usuario"]) && $f["usuario"] !== "") {
+        // usa COALESCE pra incluir 'Sistema' quando usuário for NULL
+        $cond[] = "COALESCE(u.nome, 'Sistema') LIKE ?";
+        $bind[] = "%" . $f["usuario"] . "%";
+        $types .= "s";
     }
 
-    if (!empty($f["data_inicio"])) {
+    if (isset($f["data_inicio"]) && $f["data_inicio"] !== "") {
         $cond[] = "DATE(m.data) >= ?";
         $bind[] = $f["data_inicio"];
         $types .= "s";
     }
 
-    if (!empty($f["data_fim"])) {
+    if (isset($f["data_fim"]) && $f["data_fim"] !== "") {
         $cond[] = "DATE(m.data) <= ?";
         $bind[] = $f["data_fim"];
         $types .= "s";
@@ -64,16 +65,19 @@ function mov_listar(mysqli $conn, array $f): array {
     $stmtT->close();
 
     // dados
-    $sql = "SELECT m.id, m.produto_id, m.produto_nome,
+    $sql = "SELECT m.id, m.produto_id,
+                   COALESCE(m.produto_nome, p.nome) AS produto_nome,
                    m.tipo, m.quantidade, m.data,
                    m.usuario_id,
                    COALESCE(u.nome, 'Sistema') AS usuario
               FROM movimentacoes m
+         LEFT JOIN produtos p ON p.id = m.produto_id
          LEFT JOIN usuarios u ON u.id = m.usuario_id
               $where
           ORDER BY m.data DESC
              LIMIT ? OFFSET ?";
     $stmt = $conn->prepare($sql);
+
     $types2 = $types . "ii";
     $params2 = array_merge($bind, [$limite, $offset]);
 
@@ -99,107 +103,199 @@ function mov_listar(mysqli $conn, array $f): array {
 }
 
 /**
- * Registrar entrada de produto
+ * Helpers: checar duplicata recente (últimos N segundos)
+ */
+function _mov_is_duplicate(mysqli $conn, int $produto_id, string $tipo, int $quantidade, ?int $usuario_id, int $window_seconds = 5): bool {
+    $sql = "SELECT 1 FROM movimentacoes
+            WHERE produto_id = ? AND tipo = ? AND quantidade = ? AND usuario_id = ?
+              AND data >= (NOW() - INTERVAL ? SECOND)
+            LIMIT 1";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("isiii", $produto_id, $tipo, $quantidade, $usuario_id, $window_seconds);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $dup = $res && $res->num_rows > 0;
+    $stmt->close();
+    return $dup;
+}
+
+/**
+ * Registrar entrada de produto (atômico, com lock e checagem de duplicata)
  */
 function mov_entrada(mysqli $conn, int $produto_id, int $quantidade, int $usuario_id): array {
     if ($produto_id <= 0 || $quantidade <= 0) {
         return ["sucesso" => false, "mensagem" => "Produto ou quantidade inválida."];
     }
 
-    // buscar nome do produto
-    $stmt = $conn->prepare("SELECT nome FROM produtos WHERE id = ?");
-    $stmt->bind_param("i", $produto_id);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-
-    if (!$row) {
-        return ["sucesso" => false, "mensagem" => "Produto não encontrado."];
+    // checa duplicata no DB (defesa extra caso sessões/cookies não protejam)
+    if (_mov_is_duplicate($conn, $produto_id, 'entrada', $quantidade, $usuario_id, 5)) {
+        return ["sucesso" => true, "mensagem" => "Ação ignorada: duplicata detectada (DB)."];
     }
-    $nome = $row["nome"];
 
-    $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?");
-    $stmt->bind_param("ii", $quantidade, $produto_id);
-    $stmt->execute();
-    $stmt->close();
+    // início de transação para evitar race conditions
+    $conn->begin_transaction();
+    try {
+        // ler nome do produto e travar linha
+        $stmt = $conn->prepare("SELECT nome FROM produtos WHERE id = ? FOR UPDATE");
+        $stmt->bind_param("i", $produto_id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res->fetch_assoc();
+        $stmt->close();
 
-    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id) VALUES (?, ?, 'entrada', ?, NOW(), ?)");
-    $stmt->bind_param("isii", $produto_id, $nome, $quantidade, $usuario_id);
-    $stmt->execute();
-    $stmt->close();
+        if (!$row) {
+            $conn->rollback();
+            return ["sucesso" => false, "mensagem" => "Produto não encontrado."];
+        }
+        $nome = $row["nome"];
 
-    return ["sucesso" => true, "mensagem" => "Entrada registrada com sucesso."];
+        // atualizar estoque
+        $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?");
+        $stmt->bind_param("ii", $quantidade, $produto_id);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            $conn->rollback();
+            return ["sucesso" => false, "mensagem" => "Erro ao atualizar produto: " . $conn->error];
+        }
+        $stmt->close();
+
+        // inserir movimentação (grava também produto_nome)
+        $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id) VALUES (?, ?, 'entrada', ?, NOW(), ?)");
+        $stmt->bind_param("isii", $produto_id, $nome, $quantidade, $usuario_id);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            $conn->rollback();
+            return ["sucesso" => false, "mensagem" => "Erro ao registrar movimentação: " . $conn->error];
+        }
+        $stmt->close();
+
+        $conn->commit();
+        return ["sucesso" => true, "mensagem" => "Entrada registrada com sucesso."];
+    } catch (Throwable $e) {
+        $conn->rollback();
+        error_log("mov_entrada erro: " . $e->getMessage());
+        return ["sucesso" => false, "mensagem" => "Erro interno ao registrar entrada."];
+    }
 }
 
 /**
- * Registrar saída de produto
+ * Registrar saída de produto (atômico, com lock, valida estoque e checagem de duplicata)
  */
 function mov_saida(mysqli $conn, int $produto_id, int $quantidade, int $usuario_id): array {
     if ($produto_id <= 0 || $quantidade <= 0) {
         return ["sucesso" => false, "mensagem" => "Produto ou quantidade inválida."];
     }
 
-    // buscar nome e estoque
-    $stmt = $conn->prepare("SELECT nome, quantidade FROM produtos WHERE id = ?");
-    $stmt->bind_param("i", $produto_id);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-
-    if (!$row) {
-        return ["sucesso" => false, "mensagem" => "Produto não encontrado."];
-    }
-    $estoque = (int)$row["quantidade"];
-    $nome = $row["nome"];
-
-    if ($quantidade > $estoque) {
-        return ["sucesso" => false, "mensagem" => "Estoque insuficiente."];
+    if (_mov_is_duplicate($conn, $produto_id, 'saida', $quantidade, $usuario_id, 5)) {
+        return ["sucesso" => true, "mensagem" => "Ação ignorada: duplicata detectada (DB)."];
     }
 
-    $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?");
-    $stmt->bind_param("ii", $quantidade, $produto_id);
-    $stmt->execute();
-    $stmt->close();
+    $conn->begin_transaction();
+    try {
+        // ler nome e estoque, travando a linha
+        $stmt = $conn->prepare("SELECT nome, quantidade FROM produtos WHERE id = ? FOR UPDATE");
+        $stmt->bind_param("i", $produto_id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res->fetch_assoc();
+        $stmt->close();
 
-    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id) VALUES (?, ?, 'saida', ?, NOW(), ?)");
-    $stmt->bind_param("isii", $produto_id, $nome, $quantidade, $usuario_id);
-    $stmt->execute();
-    $stmt->close();
+        if (!$row) {
+            $conn->rollback();
+            return ["sucesso" => false, "mensagem" => "Produto não encontrado."];
+        }
 
-    return ["sucesso" => true, "mensagem" => "Saída registrada com sucesso."];
+        $estoque = (int)$row["quantidade"];
+        $nome = $row["nome"];
+
+        if ($quantidade > $estoque) {
+            $conn->rollback();
+            return ["sucesso" => false, "mensagem" => "Estoque insuficiente."];
+        }
+
+        // atualizar estoque
+        $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?");
+        $stmt->bind_param("ii", $quantidade, $produto_id);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            $conn->rollback();
+            return ["sucesso" => false, "mensagem" => "Erro ao atualizar produto: " . $conn->error];
+        }
+        $stmt->close();
+
+        // inserir movimentacao
+        $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id) VALUES (?, ?, 'saida', ?, NOW(), ?)");
+        $stmt->bind_param("isii", $produto_id, $nome, $quantidade, $usuario_id);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            $conn->rollback();
+            return ["sucesso" => false, "mensagem" => "Erro ao registrar movimentação: " . $conn->error];
+        }
+        $stmt->close();
+
+        $conn->commit();
+        return ["sucesso" => true, "mensagem" => "Saída registrada com sucesso."];
+    } catch (Throwable $e) {
+        $conn->rollback();
+        error_log("mov_saida erro: " . $e->getMessage());
+        return ["sucesso" => false, "mensagem" => "Erro interno ao registrar saída."];
+    }
 }
 
 /**
- * Remover produto
+ * Remover produto (registra o nome antes de deletar; transação; checagem duplicata)
  */
 function mov_remover(mysqli $conn, int $produto_id, int $usuario_id): array {
     if ($produto_id <= 0) {
         return ["sucesso" => false, "mensagem" => "ID do produto inválido."];
     }
 
-    // buscar nome antes de deletar
-    $stmt = $conn->prepare("SELECT nome FROM produtos WHERE id = ?");
-    $stmt->bind_param("i", $produto_id);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-
-    if (!$row) {
-        return ["sucesso" => false, "mensagem" => "Produto não encontrado."];
+    // checar duplicata de remoção recente
+    if (_mov_is_duplicate($conn, $produto_id, 'remocao', 0, $usuario_id, 5)) {
+        return ["sucesso" => true, "mensagem" => "Ação ignorada: duplicata detectada (DB)."];
     }
-    $nome = $row["nome"];
 
-    // registrar movimentação de remoção (produto_id NULL após delete)
-    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id) VALUES (?, ?, 'remocao', 0, NOW(), ?)");
-    $stmt->bind_param("isi", $produto_id, $nome, $usuario_id);
-    $stmt->execute();
-    $stmt->close();
+    $conn->begin_transaction();
+    try {
+        // buscar nome e travar
+        $stmt = $conn->prepare("SELECT nome FROM produtos WHERE id = ? FOR UPDATE");
+        $stmt->bind_param("i", $produto_id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res->fetch_assoc();
+        $stmt->close();
 
-    // deletar produto
-    $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
-    $stmt->bind_param("i", $produto_id);
-    $stmt->execute();
-    $stmt->close();
+        if (!$row) {
+            $conn->rollback();
+            return ["sucesso" => false, "mensagem" => "Produto não encontrado."];
+        }
+        $nome = $row["nome"];
 
-    return ["sucesso" => true, "mensagem" => "Produto removido com sucesso."];
+        // registrar movimentação (com produto_nome)
+        $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id) VALUES (?, ?, 'remocao', 0, NOW(), ?)");
+        $stmt->bind_param("isi", $produto_id, $nome, $usuario_id);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            $conn->rollback();
+            return ["sucesso" => false, "mensagem" => "Erro ao registrar movimentação de remoção: " . $conn->error];
+        }
+        $stmt->close();
+
+        // deletar produto (produto_id nas movimentações ficará NULL por ON DELETE SET NULL)
+        $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
+        $stmt->bind_param("i", $produto_id);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            $conn->rollback();
+            return ["sucesso" => false, "mensagem" => "Erro ao deletar produto: " . $conn->error];
+        }
+        $stmt->close();
+
+        $conn->commit();
+        return ["sucesso" => true, "mensagem" => "Produto removido com sucesso."];
+    } catch (Throwable $e) {
+        $conn->rollback();
+        error_log("mov_remover erro: " . $e->getMessage());
+        return ["sucesso" => false, "mensagem" => "Erro interno ao remover produto."];
+    }
 }

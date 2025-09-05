@@ -19,38 +19,37 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $bind = [];
     $types = "";
 
-    if (!empty($filtros["tipo"])) {
+    if (isset($filtros["tipo"]) && $filtros["tipo"] !== "") {
         $cond[] = "m.tipo = ?";
         $bind[] = $filtros["tipo"];
         $types .= "s";
     }
 
-    if (!empty($filtros["produto_id"])) {
+    if (isset($filtros["produto_id"]) && $filtros["produto_id"] !== "" && $filtros["produto_id"] !== null) {
         $cond[] = "m.produto_id = ?";
         $bind[] = (int)$filtros["produto_id"];
         $types .= "i";
     }
 
-    if (!empty($filtros["usuario_id"])) {
+    if (isset($filtros["usuario_id"]) && $filtros["usuario_id"] !== "" && $filtros["usuario_id"] !== null) {
         $cond[] = "m.usuario_id = ?";
         $bind[] = (int)$filtros["usuario_id"];
         $types .= "i";
     }
 
-    if (!empty($filtros["usuario"])) {
-        $cond[] = "(u.nome LIKE ? OR (u.id IS NULL AND 'Sistema' LIKE ?))";
+    if (isset($filtros["usuario"]) && $filtros["usuario"] !== "") {
+        $cond[] = "COALESCE(u.nome, 'Sistema') LIKE ?";
         $bind[] = "%" . $filtros["usuario"] . "%";
-        $bind[] = "%" . $filtros["usuario"] . "%";
-        $types .= "ss";
+        $types .= "s";
     }
 
-    if (!empty($filtros["data_inicio"])) {
+    if (isset($filtros["data_inicio"]) && $filtros["data_inicio"] !== "") {
         $cond[] = "DATE(m.data) >= ?";
         $bind[] = $filtros["data_inicio"];
         $types .= "s";
     }
 
-    if (!empty($filtros["data_fim"])) {
+    if (isset($filtros["data_fim"]) && $filtros["data_fim"] !== "") {
         $cond[] = "DATE(m.data) <= ?";
         $bind[] = $filtros["data_fim"];
         $types .= "s";
@@ -61,7 +60,6 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     // Total de registros
     $sqlTotal = "SELECT COUNT(*) AS total
                    FROM movimentacoes m
-              LEFT JOIN produtos p ON p.id = m.produto_id
               LEFT JOIN usuarios u ON u.id = m.usuario_id
                   $where";
     $stmtT = $conn->prepare($sqlTotal);
@@ -74,8 +72,7 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $sql = "SELECT m.id, m.produto_id,
                    COALESCE(m.produto_nome, p.nome) AS produto_nome,
                    m.tipo, m.quantidade, m.data,
-                   m.usuario_id,
-                   COALESCE(u.nome, 'Sistema') AS usuario
+                   m.usuario_id, COALESCE(u.nome, 'Sistema') AS usuario
               FROM movimentacoes m
          LEFT JOIN produtos p ON p.id = m.produto_id
          LEFT JOIN usuarios u ON u.id = m.usuario_id

@@ -5,8 +5,6 @@ header("Content-Type: application/json; charset=UTF-8");
 ini_set('display_errors', 0);
 ini_set('display_startup_errors', 0);
 error_reporting(E_ALL);
-
-// Criar log em api/debug.log
 ini_set("log_errors", 1);
 ini_set("error_log", __DIR__ . "/debug.log");
 
@@ -23,24 +21,16 @@ function resposta($sucesso, $mensagem = "", $extra = []) {
     return array_merge(["sucesso" => $sucesso, "mensagem" => $mensagem], $extra);
 }
 
-/**
- * Evita execução duplicada de ações idênticas em curto espaço de tempo.
- * Usa $_SESSION['last_actions'] para guardar um hash da última ação.
- * Retorna true se a ação é duplicada (e já foi registrada); false caso contrário (e registra).
- */
 function is_duplicate_action(string $key, string $hash, int $ttl_seconds = 3): bool {
     if (!isset($_SESSION['last_actions'])) {
         $_SESSION['last_actions'] = [];
     }
-
     if (isset($_SESSION['last_actions'][$key])) {
         $info = $_SESSION['last_actions'][$key];
         if ($info['hash'] === $hash && (time() - ($info['ts'] ?? 0)) <= $ttl_seconds) {
             return true;
         }
     }
-
-    // registra/atualiza
     $_SESSION['last_actions'][$key] = ['hash' => $hash, 'ts' => time()];
     return false;
 }
@@ -68,7 +58,6 @@ try {
         case "login":
             $body = json_decode(file_get_contents("php://input"), true) ?? [];
             $body = array_merge($_POST, $_GET, $body);
-
             $email = trim($body["email"] ?? "");
             $senha = trim($body["senha"] ?? "");
 
@@ -140,7 +129,16 @@ try {
                 break;
             }
 
-            echo json_encode(produtos_adicionar($conn, $nome, $quant));
+            $res = produtos_adicionar($conn, $nome, $quant);
+
+            // Se houve sucesso e quantidade inicial > 0, registra movimentação de entrada
+            if ($res["sucesso"] && $quant > 0) {
+                if (function_exists("mov_entrada")) {
+                    mov_entrada($conn, $conn->insert_id, $quant, $_SESSION["usuario"]["id"]);
+                }
+            }
+
+            echo json_encode($res);
             break;
 
         case "remover":
@@ -148,7 +146,6 @@ try {
             require_login("admin");
             $body = json_decode(file_get_contents("php://input"), true) ?? [];
             $body = array_merge($_GET, $_POST, $body);
-
             $produto_id = (int)($body["produto_id"] ?? $body["id"] ?? 0);
 
             if ($produto_id <= 0) {
@@ -162,11 +159,6 @@ try {
                 break;
             }
 
-            if (!function_exists('mov_remover')) {
-                echo json_encode(resposta(false, "Função mov_remover não encontrada. Verifique o arquivo movimentacoes.php"));
-                break;
-            }
-
             echo json_encode(mov_remover($conn, $produto_id, $_SESSION["usuario"]["id"]));
             break;
 
@@ -175,7 +167,6 @@ try {
             require_login();
             $body = json_decode(file_get_contents("php://input"), true) ?? [];
             $body = array_merge($_GET, $_POST, $body);
-
             $produto_id = (int)($body["produto_id"] ?? $body["id"] ?? 0);
             $quantidade = (int)($body["quantidade"] ?? 0);
 
@@ -190,11 +181,6 @@ try {
                 break;
             }
 
-            if (!function_exists('mov_entrada')) {
-                echo json_encode(resposta(false, "Função mov_entrada não encontrada. Verifique o arquivo movimentacoes.php"));
-                break;
-            }
-
             echo json_encode(mov_entrada($conn, $produto_id, $quantidade, $_SESSION["usuario"]["id"]));
             break;
 
@@ -202,7 +188,6 @@ try {
             require_login();
             $body = json_decode(file_get_contents("php://input"), true) ?? [];
             $body = array_merge($_GET, $_POST, $body);
-
             $produto_id = (int)($body["produto_id"] ?? $body["id"] ?? 0);
             $quantidade = (int)($body["quantidade"] ?? 0);
 
@@ -214,11 +199,6 @@ try {
             $hash = md5("saida|{$produto_id}|{$quantidade}|" . ($_SESSION["usuario"]["id"] ?? '0'));
             if (is_duplicate_action("saida", $hash, 3)) {
                 echo json_encode(resposta(true, "Ação ignorada: duplicata detectada."));
-                break;
-            }
-
-            if (!function_exists('mov_saida')) {
-                echo json_encode(resposta(false, "Função mov_saida não encontrada. Verifique o arquivo movimentacoes.php"));
                 break;
             }
 
