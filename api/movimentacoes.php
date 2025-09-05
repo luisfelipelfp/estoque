@@ -66,7 +66,7 @@ function mov_listar(mysqli $conn, array $f): array {
 
     // dados
     $sql = "SELECT m.id, m.produto_id,
-                   COALESCE(m.produto_nome, p.nome) AS produto_nome,
+                   p.nome AS produto_nome,
                    m.tipo, m.quantidade, m.data,
                    m.usuario_id,
                    COALESCE(u.nome, 'Sistema') AS usuario
@@ -130,7 +130,6 @@ function mov_saida(mysqli $conn, int $produto_id, int $quantidade, int $usuario_
         return ["sucesso" => false, "mensagem" => "Produto ou quantidade inválida."];
     }
 
-    // verificar estoque
     $stmt = $conn->prepare("SELECT quantidade FROM produtos WHERE id = ?");
     $stmt->bind_param("i", $produto_id);
     $stmt->execute();
@@ -172,7 +171,6 @@ function mov_remover(mysqli $conn, int $produto_id, int $usuario_id): array {
     if (!$row) {
         return ["sucesso" => false, "mensagem" => "Produto não encontrado."];
     }
-    $nome = $row["nome"];
 
     // deletar produto
     $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
@@ -181,8 +179,8 @@ function mov_remover(mysqli $conn, int $produto_id, int $usuario_id): array {
     $stmt->close();
 
     // registrar movimentação de remoção
-    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id) VALUES (?, ?, 'remocao', 0, NOW(), ?)");
-    $stmt->bind_param("isi", $produto_id, $nome, $usuario_id);
+    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario_id) VALUES (?, 'remocao', 0, NOW(), ?)");
+    $stmt->bind_param("ii", $produto_id, $usuario_id);
     $stmt->execute();
     $stmt->close();
 
