@@ -74,7 +74,8 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $sql = "SELECT m.id, m.produto_id,
                    COALESCE(m.produto_nome, p.nome) AS produto_nome,
                    m.tipo, m.quantidade, m.data,
-                   m.usuario_id, COALESCE(u.nome, 'Sistema') AS usuario
+                   m.usuario_id,
+                   COALESCE(u.nome, 'Sistema') AS usuario
               FROM movimentacoes m
          LEFT JOIN produtos p ON p.id = m.produto_id
          LEFT JOIN usuarios u ON u.id = m.usuario_id

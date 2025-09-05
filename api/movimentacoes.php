@@ -101,4 +101,90 @@ function mov_listar(mysqli $conn, array $f): array {
     ];
 }
 
-// funções mov_entrada, mov_saida, mov_remover continuam iguais
+/**
+ * Registrar entrada de produto
+ */
+function mov_entrada(mysqli $conn, int $produto_id, int $quantidade, int $usuario_id): array {
+    if ($produto_id <= 0 || $quantidade <= 0) {
+        return ["sucesso" => false, "mensagem" => "Produto ou quantidade inválida."];
+    }
+
+    $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?");
+    $stmt->bind_param("ii", $quantidade, $produto_id);
+    $stmt->execute();
+    $stmt->close();
+
+    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario_id) VALUES (?, 'entrada', ?, NOW(), ?)");
+    $stmt->bind_param("iii", $produto_id, $quantidade, $usuario_id);
+    $stmt->execute();
+    $stmt->close();
+
+    return ["sucesso" => true, "mensagem" => "Entrada registrada com sucesso."];
+}
+
+/**
+ * Registrar saída de produto
+ */
+function mov_saida(mysqli $conn, int $produto_id, int $quantidade, int $usuario_id): array {
+    if ($produto_id <= 0 || $quantidade <= 0) {
+        return ["sucesso" => false, "mensagem" => "Produto ou quantidade inválida."];
+    }
+
+    // verificar estoque
+    $stmt = $conn->prepare("SELECT quantidade FROM produtos WHERE id = ?");
+    $stmt->bind_param("i", $produto_id);
+    $stmt->execute();
+    $estoque = (int)($stmt->get_result()->fetch_assoc()["quantidade"] ?? 0);
+    $stmt->close();
+
+    if ($quantidade > $estoque) {
+        return ["sucesso" => false, "mensagem" => "Estoque insuficiente."];
+    }
+
+    $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?");
+    $stmt->bind_param("ii", $quantidade, $produto_id);
+    $stmt->execute();
+    $stmt->close();
+
+    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario_id) VALUES (?, 'saida', ?, NOW(), ?)");
+    $stmt->bind_param("iii", $produto_id, $quantidade, $usuario_id);
+    $stmt->execute();
+    $stmt->close();
+
+    return ["sucesso" => true, "mensagem" => "Saída registrada com sucesso."];
+}
+
+/**
+ * Remover produto
+ */
+function mov_remover(mysqli $conn, int $produto_id, int $usuario_id): array {
+    if ($produto_id <= 0) {
+        return ["sucesso" => false, "mensagem" => "ID do produto inválido."];
+    }
+
+    // buscar nome antes de deletar
+    $stmt = $conn->prepare("SELECT nome FROM produtos WHERE id = ?");
+    $stmt->bind_param("i", $produto_id);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$row) {
+        return ["sucesso" => false, "mensagem" => "Produto não encontrado."];
+    }
+    $nome = $row["nome"];
+
+    // deletar produto
+    $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
+    $stmt->bind_param("i", $produto_id);
+    $stmt->execute();
+    $stmt->close();
+
+    // registrar movimentação de remoção
+    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id) VALUES (?, ?, 'remocao', 0, NOW(), ?)");
+    $stmt->bind_param("isi", $produto_id, $nome, $usuario_id);
+    $stmt->execute();
+    $stmt->close();
+
+    return ["sucesso" => true, "mensagem" => "Produto removido com sucesso."];
+}

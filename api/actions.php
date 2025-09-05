@@ -85,16 +85,12 @@ try {
         // ---- Produtos ----
         case "listarprodutos":
         case "listar_produtos":
-            echo json_encode(resposta(true, "", [
-                "dados" => produtos_listar($conn)
-            ]));
+            echo json_encode(produtos_listar($conn));
             break;
 
         case "listarprodutostodos":
         case "listar_produtos_todos":
-            echo json_encode(resposta(true, "", [
-                "dados" => produtos_listar($conn, true)
-            ]));
+            echo json_encode(produtos_listar($conn, true));
             break;
 
         case "adicionar":
@@ -172,14 +168,14 @@ try {
                 "data_inicio" => $_GET["data_inicio"] ?? $_POST["data_inicio"] ?? "",
                 "data_fim"    => $_GET["data_fim"] ?? $_POST["data_fim"] ?? "",
             ];
-            echo json_encode(resposta(true, "", [
-                "dados" => mov_listar($conn, $filtros)
-            ]));
+            echo json_encode(mov_listar($conn, $filtros));
             break;
 
         // ---- Relatório ----
         case "relatorio":
             $filtros = [
+                "pagina"      => (int)($_GET["pagina"] ?? 1),
+                "limite"      => (int)($_GET["limite"] ?? 50),
                 "tipo"        => $_GET["tipo"] ?? "",
                 "produto_id"  => $_GET["produto_id"] ?? null,
                 "usuario_id"  => $_GET["usuario_id"] ?? null,
@@ -187,9 +183,7 @@ try {
                 "data_inicio" => $_GET["data_inicio"] ?? "",
                 "data_fim"    => $_GET["data_fim"] ?? "",
             ];
-            echo json_encode(resposta(true, "", [
-                "dados" => relatorio($conn, $filtros)
-            ]));
+            echo json_encode(relatorio($conn, $filtros));
             break;
 
         default:
