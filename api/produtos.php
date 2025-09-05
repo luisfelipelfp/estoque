@@ -28,6 +28,7 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade = 0, ?in
         return ["sucesso" => false, "mensagem" => "Nome do produto é obrigatório."];
     }
 
+    // insere produto
     $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade, ativo) VALUES (?, ?, 1)");
     $stmt->bind_param("si", $nome, $quantidade);
 
@@ -36,6 +37,7 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade = 0, ?in
     }
 
     $id = $conn->insert_id;
+    $stmt->close();
 
     // Se quantidade inicial > 0, registra movimentação de entrada
     if ($quantidade > 0) {
@@ -43,6 +45,7 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade = 0, ?in
                                  VALUES (?, ?, 'entrada', ?, NOW(), ?)");
         $stmt2->bind_param("isii", $id, $nome, $quantidade, $usuario_id);
         $stmt2->execute();
+        $stmt2->close();
     }
 
     return ["sucesso" => true, "mensagem" => "Produto adicionado com sucesso."];
