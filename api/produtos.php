@@ -23,7 +23,7 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = false): array {
 }
 
 // Adiciona novo produto
-function produtos_adicionar(mysqli $conn, string $nome, int $quantidade = 0, int $usuario_id = null): array {
+function produtos_adicionar(mysqli $conn, string $nome, int $quantidade = 0, ?int $usuario_id = null): array {
     if (trim($nome) === "") {
         return ["sucesso" => false, "mensagem" => "Nome do produto é obrigatório."];
     }
