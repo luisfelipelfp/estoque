@@ -38,9 +38,10 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     }
 
     if (!empty($filtros["usuario"])) {
-        $cond[] = "u.nome LIKE ?";
+        $cond[] = "(u.nome LIKE ? OR (u.id IS NULL AND 'Sistema' LIKE ?))";
         $bind[] = "%" . $filtros["usuario"] . "%";
-        $types .= "s";
+        $bind[] = "%" . $filtros["usuario"] . "%";
+        $types .= "ss";
     }
 
     if (!empty($filtros["data_inicio"])) {
@@ -60,6 +61,7 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     // Total de registros
     $sqlTotal = "SELECT COUNT(*) AS total
                    FROM movimentacoes m
+              LEFT JOIN produtos p ON p.id = m.produto_id
               LEFT JOIN usuarios u ON u.id = m.usuario_id
                   $where";
     $stmtT = $conn->prepare($sqlTotal);
@@ -69,9 +71,12 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $stmtT->close();
 
     // Dados
-    $sql = "SELECT m.id, m.produto_id, m.produto_nome, m.tipo, m.quantidade, m.data,
-                   m.usuario_id, COALESCE(u.nome, 'Sistema') AS usuario_nome
+    $sql = "SELECT m.id, m.produto_id,
+                   COALESCE(m.produto_nome, p.nome) AS produto_nome,
+                   m.tipo, m.quantidade, m.data,
+                   m.usuario_id, COALESCE(u.nome, 'Sistema') AS usuario
               FROM movimentacoes m
+         LEFT JOIN produtos p ON p.id = m.produto_id
          LEFT JOIN usuarios u ON u.id = m.usuario_id
               $where
           ORDER BY m.data DESC
@@ -94,12 +99,12 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $stmt->close();
 
     return [
-        "sucesso" => true,
-        "total"   => $total,
-        "pagina"  => $pagina,
-        "limite"  => $limite,
-        "paginas" => (int)ceil($total / $limite),
-        "dados"   => $dados,
+        "sucesso"  => true,
+        "total"    => $total,
+        "pagina"   => $pagina,
+        "limite"   => $limite,
+        "paginas"  => (int)ceil($total / $limite),
+        "dados"    => $dados,
         "produtos" => produtos_listar($conn, true), // inclui inativos/removidos também
     ];
 }

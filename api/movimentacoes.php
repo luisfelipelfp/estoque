@@ -101,17 +101,4 @@ function mov_listar(mysqli $conn, array $f): array {
     ];
 }
 
-// funções mov_entrada, mov_saida, mov_remover
-// (sem alterações, apenas mantidas iguais às suas)
-
-function mov_entrada(mysqli $conn, int $id, int $quantidade, int $usuario_id): array {
-    // ...
-}
-
-function mov_saida(mysqli $conn, int $id, int $quantidade, int $usuario_id): array {
-    // ...
-}
-
-function mov_remover(mysqli $conn, int $id, int $usuario_id): array {
-    // ...
-}
+// funções mov_entrada, mov_saida, mov_remover continuam iguais
