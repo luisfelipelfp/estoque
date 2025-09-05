@@ -37,7 +37,7 @@ function renderNenhumResultado() {
 // ==============================
 async function preencherFiltroProdutos() {
     try {
-        const resp = await apiRequest("listarProdutos");
+        const resp = await apiRequest("listarprodutos"); // 👈 padronizado em minúsculo
         const produtos = Array.isArray(resp) ? resp : (resp?.dados || []);
         const select = document.getElementById("filtroProduto");
         if (!select) return;
@@ -82,7 +82,8 @@ async function listarMovimentacoes(filtros = {}, force = false) {
             }
         });
 
-        const resposta = await apiRequest("listarMovimentacoes", params, "GET");
+        // 👇 corrigido: usar sempre minúsculo
+        const resposta = await apiRequest("listarmovimentacoes", params, "GET");
         const movimentacoes = Array.isArray(resposta) ? resposta : (resposta?.dados || []);
 
         const tabela = document.querySelector("#tabelaMovimentacoes tbody");
