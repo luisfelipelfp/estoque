@@ -1,7 +1,14 @@
 <?php
 header("Content-Type: application/json; charset=UTF-8");
+
+// === Configuração de logs ===
 ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
 error_reporting(E_ALL);
+
+// Criar log em api/debug.log
+ini_set("log_errors", 1);
+ini_set("error_log", __DIR__ . "/debug.log");
 
 require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/produtos.php";
@@ -142,7 +149,6 @@ try {
             $body = json_decode(file_get_contents("php://input"), true) ?? [];
             $body = array_merge($_GET, $_POST, $body);
 
-            // aceitar tanto produto_id quanto id
             $produto_id = (int)($body["produto_id"] ?? $body["id"] ?? 0);
 
             if ($produto_id <= 0) {
@@ -150,14 +156,12 @@ try {
                 break;
             }
 
-            // proteção contra duplicate requests
             $hash = md5("remover|{$produto_id}|" . ($_SESSION["usuario"]["id"] ?? '0'));
             if (is_duplicate_action("remover", $hash, 3)) {
                 echo json_encode(resposta(true, "Ação ignorada: duplicata detectada."));
                 break;
             }
 
-            // checar se função existe (evita fatal error se movimentacoes.php não estiver com mov_remover)
             if (!function_exists('mov_remover')) {
                 echo json_encode(resposta(false, "Função mov_remover não encontrada. Verifique o arquivo movimentacoes.php"));
                 break;
@@ -180,14 +184,12 @@ try {
                 break;
             }
 
-            // proteção contra duplicate requests
             $hash = md5("entrada|{$produto_id}|{$quantidade}|" . ($_SESSION["usuario"]["id"] ?? '0'));
             if (is_duplicate_action("entrada", $hash, 3)) {
                 echo json_encode(resposta(true, "Ação ignorada: duplicata detectada."));
                 break;
             }
 
-            // checar se função existe
             if (!function_exists('mov_entrada')) {
                 echo json_encode(resposta(false, "Função mov_entrada não encontrada. Verifique o arquivo movimentacoes.php"));
                 break;
@@ -209,7 +211,6 @@ try {
                 break;
             }
 
-            // proteção contra duplicate requests
             $hash = md5("saida|{$produto_id}|{$quantidade}|" . ($_SESSION["usuario"]["id"] ?? '0'));
             if (is_duplicate_action("saida", $hash, 3)) {
                 echo json_encode(resposta(true, "Ação ignorada: duplicata detectada."));
@@ -259,10 +260,10 @@ try {
             break;
     }
 } catch (Throwable $e) {
-    // Retorna 500 e detalhes para debugging (o detalhe aparecerá no JSON)
     http_response_code(500);
+    error_log("Erro em actions.php: " . $e->getMessage() . " | Arquivo: " . $e->getFile() . " | Linha: " . $e->getLine());
     echo json_encode(resposta(false, "Erro interno no servidor", [
-        "detalhes" => $e->getMessage()
+        "detalhes" => "Verifique o arquivo debug.log"
     ]));
 } finally {
     $conn?->close();
