@@ -84,20 +84,18 @@ try {
 
         // ---- Produtos ----
         case "listarprodutos":
-        case "listar_produtos":
             echo json_encode(resposta(true, "", [
                 "dados" => produtos_listar($conn)
             ]));
             break;
 
-        case "listar_produtos_todos":
+        case "listarprodutostodos":
             echo json_encode(resposta(true, "", [
                 "dados" => produtos_listar($conn, true)
             ]));
             break;
 
         case "adicionar":
-        case "adicionar_produto":
             require_login();
             $body = json_decode(file_get_contents("php://input"), true) ?? [];
             $body = array_merge($_GET, $_POST, $body);
@@ -109,7 +107,6 @@ try {
             break;
 
         case "remover":
-        case "remover_produto":
             require_login("admin");
             $body = json_decode(file_get_contents("php://input"), true) ?? [];
             $body = array_merge($_GET, $_POST, $body);
@@ -151,13 +148,11 @@ try {
             break;
 
         case "listarmovimentacoes":
-        case "listar_movimentacoes":
             $filtros = [
                 "pagina"      => (int)($_GET["pagina"] ?? $_POST["pagina"] ?? 1),
                 "limite"      => (int)($_GET["limite"] ?? $_POST["limite"] ?? 10),
                 "tipo"        => $_GET["tipo"] ?? $_POST["tipo"] ?? "",
                 "produto_id"  => $_GET["produto_id"] ?? $_POST["produto_id"] ?? null,
-                "produto"     => $_GET["produto"] ?? $_POST["produto"] ?? null,
                 "usuario_id"  => $_GET["usuario_id"] ?? $_POST["usuario_id"] ?? null,
                 "usuario"     => $_GET["usuario"] ?? $_POST["usuario"] ?? "",
                 "data_inicio" => $_GET["data_inicio"] ?? $_POST["data_inicio"] ?? "",
@@ -173,7 +168,6 @@ try {
             $filtros = [
                 "tipo"        => $_GET["tipo"] ?? "",
                 "produto_id"  => $_GET["produto_id"] ?? null,
-                "produto"     => $_GET["produto"] ?? null,
                 "usuario_id"  => $_GET["usuario_id"] ?? null,
                 "usuario"     => $_GET["usuario"] ?? "",
                 "data_inicio" => $_GET["data_inicio"] ?? "",
