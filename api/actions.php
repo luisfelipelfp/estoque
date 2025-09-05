@@ -84,18 +84,21 @@ try {
 
         // ---- Produtos ----
         case "listarprodutos":
+        case "listar_produtos":
             echo json_encode(resposta(true, "", [
                 "dados" => produtos_listar($conn)
             ]));
             break;
 
         case "listarprodutostodos":
+        case "listar_produtos_todos":
             echo json_encode(resposta(true, "", [
                 "dados" => produtos_listar($conn, true)
             ]));
             break;
 
         case "adicionar":
+        case "adicionar_produto":
             require_login();
             $body = json_decode(file_get_contents("php://input"), true) ?? [];
             $body = array_merge($_GET, $_POST, $body);
@@ -103,10 +106,20 @@ try {
             $nome  = trim($body["nome"] ?? "");
             $quant = (int)($body["quantidade"] ?? 0);
 
+            if ($nome === "") {
+                echo json_encode(resposta(false, "Nome do produto é obrigatório."));
+                break;
+            }
+            if ($quant < 0) {
+                echo json_encode(resposta(false, "Quantidade inválida."));
+                break;
+            }
+
             echo json_encode(produtos_adicionar($conn, $nome, $quant));
             break;
 
         case "remover":
+        case "remover_produto":
             require_login("admin");
             $body = json_decode(file_get_contents("php://input"), true) ?? [];
             $body = array_merge($_GET, $_POST, $body);
@@ -148,6 +161,7 @@ try {
             break;
 
         case "listarmovimentacoes":
+        case "listar_movimentacoes":
             $filtros = [
                 "pagina"      => (int)($_GET["pagina"] ?? $_POST["pagina"] ?? 1),
                 "limite"      => (int)($_GET["limite"] ?? $_POST["limite"] ?? 10),
