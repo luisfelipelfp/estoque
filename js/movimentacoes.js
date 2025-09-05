@@ -1,5 +1,5 @@
 // ==============================
-// js/movimentacoes.js (corrigido)
+// js/movimentacoes.js (corrigido + global)
 // ==============================
 
 // Flag global: só lista após o usuário pesquisar
@@ -118,6 +118,9 @@ async function listarMovimentacoes(filtros = {}, force = false) {
         renderNenhumResultado();
     }
 }
+
+// 🔑 Expondo a função globalmente (assim como no produtos.js)
+window.listarMovimentacoes = listarMovimentacoes;
 
 // ==============================
 // Conexão do formulário de filtros

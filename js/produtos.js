@@ -43,21 +43,21 @@ if (!window.__PRODUTOS_JS_BOUND__) {
     }
   }
 
+  // 🔑 Expondo a função globalmente para o main.js encontrar
+  window.listarProdutos = listarProdutos;
+
   async function execAcao(acao, id, quantidade) {
     const key = `${acao}-${id}`;
     if (inflight.has(key)) {
-      // já existe uma requisição em curso para esse botão/produto
       return { sucesso: false, mensagem: "Aguarde a conclusão da ação anterior." };
     }
     inflight.add(key);
 
-    // desabilita temporariamente os botões do produto
     const rowBtns = document.querySelectorAll(`button[data-id="${id}"]`);
     rowBtns.forEach(b => b.disabled = true);
 
     try {
       const payload = quantidade != null ? { id, quantidade } : { id };
-      // IMPORTANTE: usar POST para ações que alteram estado
       const resp = await apiRequest(acao, payload, "POST");
       return resp;
     } catch (err) {
@@ -69,7 +69,7 @@ if (!window.__PRODUTOS_JS_BOUND__) {
     }
   }
 
-  // --- Funções globais (para usar em onclicks, se necessário) ---
+  // --- Funções globais ---
   window.entrada = async function (id) {
     const qtd = prompt("Quantidade de entrada:");
     if (qtd === null) return;
@@ -121,7 +121,7 @@ if (!window.__PRODUTOS_JS_BOUND__) {
     }
   };
 
-  // --- Event delegation (registrado uma única vez) ---
+  // --- Event delegation ---
   document.addEventListener("click", function (e) {
     const btn = e.target.closest("button");
     if (!btn) return;
@@ -136,9 +136,9 @@ if (!window.__PRODUTOS_JS_BOUND__) {
     } else if (btn.classList.contains("btn-remover")) {
       window.remover(parseInt(id, 10));
     }
-  }, { once: false }); // o guard global acima impede múltiplos bindings
+  }, { once: false });
 
-  // --- Formulário de adicionar produto (usa POST) ---
+  // --- Formulário de adicionar produto ---
   document.querySelector("#formAdicionarProduto")?.addEventListener("submit", async function (e) {
     e.preventDefault();
     const nome = (document.querySelector("#nomeProduto")?.value || "").trim();

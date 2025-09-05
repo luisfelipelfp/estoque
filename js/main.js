@@ -57,16 +57,19 @@ window.onload = async () => {
             btnLogout.addEventListener("click", logout);
         }
 
-        // Continua carregando os produtos logo ao abrir
-        if (typeof listarProdutos === "function") {
-            listarProdutos();
+        // Carregar lista de produtos se a função existir
+        if (typeof window.listarProdutos === "function") {
+            window.listarProdutos();
+        } else if (typeof window.carregarProdutos === "function") {
+            // fallback se a função tiver outro nome
+            window.carregarProdutos();
         } else {
-            console.warn("Função listarProdutos não encontrada.");
+            console.warn("Nenhuma função para listar produtos encontrada (listarProdutos ou carregarProdutos).");
         }
 
         // Movimentações só aparecem após aplicar os filtros
-        if (typeof renderPlaceholderInicial === "function") {
-            renderPlaceholderInicial();
+        if (typeof window.renderPlaceholderInicial === "function") {
+            window.renderPlaceholderInicial();
         }
     } catch (error) {
         console.error("Erro durante inicialização da página:", error);
