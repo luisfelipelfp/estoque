@@ -129,15 +129,8 @@ try {
                 break;
             }
 
-            $res = produtos_adicionar($conn, $nome, $quant);
-
-            // Se houve sucesso e quantidade inicial > 0, registra movimentação de entrada
-            if ($res["sucesso"] && $quant > 0) {
-                if (function_exists("mov_entrada")) {
-                    mov_entrada($conn, $conn->insert_id, $quant, $_SESSION["usuario"]["id"]);
-                }
-            }
-
+            // ✅ produtos_adicionar já registra movimentação inicial, não precisa chamar mov_entrada aqui
+            $res = produtos_adicionar($conn, $nome, $quant, $_SESSION["usuario"]["id"]);
             echo json_encode($res);
             break;
 
