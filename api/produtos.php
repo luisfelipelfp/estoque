@@ -21,13 +21,12 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = false): array {
     return $out; // o front já aceita array puro
 }
 
-// Adiciona novo produto
+// Adiciona novo produto (não registra movimentação)
 function produtos_adicionar(mysqli $conn, string $nome, int $quantidade = 0, ?int $usuario_id = null): array {
     if (trim($nome) === "") {
         return ["sucesso" => false, "mensagem" => "Nome do produto é obrigatório."];
     }
 
-    // insere produto
     $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade, ativo) VALUES (?, ?, 1)");
     $stmt->bind_param("si", $nome, $quantidade);
 
@@ -40,12 +39,12 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade = 0, ?in
     $id = $conn->insert_id;
     $stmt->close();
 
-    // ⚠️ NÃO registra movimentação aqui.
-    // A movimentação inicial (se quantidade > 0) deve ser feita pelo actions.php chamando mov_entrada.
-
+    // Retorna apenas os dados do produto criado
     return [
         "sucesso" => true,
         "mensagem" => "Produto adicionado com sucesso.",
-        "id"       => $id
+        "id"       => $id,
+        "nome"     => $nome,
+        "quantidade" => $quantidade
     ];
 }
