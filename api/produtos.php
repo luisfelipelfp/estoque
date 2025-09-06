@@ -40,6 +40,10 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
     $id = $conn->insert_id;
     $stmt->close();
 
+    // ⚠️ Não registra movimentação aqui.
+    // Se quantidade inicial > 0, o actions.php chamará mov_entrada
+    // para registrar corretamente a movimentação e atualizar o estoque.
+
     return [
         "sucesso" => true,
         "mensagem" => "Produto adicionado com sucesso.",
