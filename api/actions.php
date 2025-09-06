@@ -21,6 +21,10 @@ function resposta($sucesso, $mensagem = "", $extra = []) {
     return array_merge(["sucesso" => $sucesso, "mensagem" => $mensagem], $extra);
 }
 
+/**
+ * Proteção contra duplicate requests por chave (chave por ação + alvo)
+ * Guarda em $_SESSION['last_actions'] => [ key => ['hash'=>..., 'ts'=>...] ]
+ */
 function is_duplicate_action(string $key, string $hash, int $ttl_seconds = 3): bool {
     if (!isset($_SESSION['last_actions'])) {
         $_SESSION['last_actions'] = [];
@@ -28,6 +32,7 @@ function is_duplicate_action(string $key, string $hash, int $ttl_seconds = 3): b
     if (isset($_SESSION['last_actions'][$key])) {
         $info = $_SESSION['last_actions'][$key];
         if ($info['hash'] === $hash && (time() - ($info['ts'] ?? 0)) <= $ttl_seconds) {
+            error_log("Duplicate action ignored: key={$key} hash={$hash}");
             return true;
         }
     }
@@ -46,6 +51,14 @@ function require_login($nivel = null) {
     }
 }
 
+/**
+ * Helper: leitura segura do corpo (JSON + GET/POST)
+ */
+function read_body(): array {
+    $body = json_decode(file_get_contents("php://input"), true) ?? [];
+    return array_merge($_GET, $_POST, $body);
+}
+
 $acao = strtolower(trim($_REQUEST["acao"] ?? ""));
 if ($acao === "") {
     echo json_encode(resposta(false, "Nenhuma ação especificada."));
@@ -56,8 +69,7 @@ try {
     switch ($acao) {
         // ---- Autenticação ----
         case "login":
-            $body = json_decode(file_get_contents("php://input"), true) ?? [];
-            $body = array_merge($_POST, $_GET, $body);
+            $body = read_body();
             $email = trim($body["email"] ?? "");
             $senha = trim($body["senha"] ?? "");
 
@@ -100,7 +112,7 @@ try {
             ]));
             break;
 
-        // ---- Produtos ----
+        // ---- Produtos (leitura) ----
         case "listarprodutos":
         case "listar_produtos":
             echo json_encode(produtos_listar($conn));
@@ -111,11 +123,11 @@ try {
             echo json_encode(produtos_listar($conn, true));
             break;
 
+        // ---- Adicionar produto: cria produto (quantidade = 0) e registra movimentação inicial via mov_entrada
         case "adicionar":
         case "adicionar_produto":
             require_login();
-            $body = json_decode(file_get_contents("php://input"), true) ?? [];
-            $body = array_merge($_GET, $_POST, $body);
+            $body = read_body();
 
             $nome  = trim($body["nome"] ?? "");
             $quant = (int)($body["quantidade"] ?? 0);
@@ -129,22 +141,54 @@ try {
                 break;
             }
 
+            // prevenir duplicate submit por nome+quant+user nos próximos 3s
+            $hash = md5("adicionar|{$nome}|{$quant}|" . ($_SESSION["usuario"]["id"] ?? '0'));
+            $key  = "adicionar|".md5($nome);
+            if (is_duplicate_action($key, $hash, 3)) {
+                echo json_encode(resposta(true, "Ação ignorada: duplicata detectada."));
+                break;
+            }
+
             // adiciona produto sempre com estoque inicial = 0
             $res = produtos_adicionar($conn, $nome, 0, $_SESSION["usuario"]["id"]);
 
-            // registra movimentação inicial se quantidade > 0
-            if ($res["sucesso"] && $quant > 0) {
-                mov_entrada($conn, $res["id"], $quant, $_SESSION["usuario"]["id"]);
+            // se falhar ao criar produto, devolve erro
+            if (!$res["sucesso"]) {
+                echo json_encode($res);
+                break;
             }
 
+            // registra movimentação inicial se quantidade > 0 (usando mov_entrada, que atualiza produtos)
+            if ($quant > 0) {
+                if (!function_exists('mov_entrada')) {
+                    // importante: se mov_entrada não existir, removemos o produto para não deixar inconsistência
+                    // (apenas se quiser esse comportamento; aqui registramos erro)
+                    echo json_encode(resposta(false, "Função mov_entrada não encontrada. Produto criado sem movimentação."));
+                    break;
+                }
+
+                $movRes = mov_entrada($conn, (int)$res["id"], $quant, $_SESSION["usuario"]["id"] ?? null);
+
+                // se mov_entrada falhar, retornamos erro com detalhes
+                if (!$movRes["sucesso"]) {
+                    // opcional: você pode querer deletar o produto recém-criado para manter consistência; aqui apenas retorna erro
+                    echo json_encode(resposta(false, "Produto criado, mas falha ao registrar movimentação inicial.", ["movimentacao" => $movRes]));
+                    break;
+                }
+
+                // tudo OK: devolve sucesso incluindo info da movimentação
+                echo json_encode(resposta(true, "Produto criado e movimentação inicial registrada.", ["produto" => ["id" => $res["id"], "nome" => $nome, "quantidade" => $quant]]));
+                break;
+            }
+
+            // sem movimentação inicial
             echo json_encode($res);
             break;
 
         case "remover":
         case "remover_produto":
             require_login("admin");
-            $body = json_decode(file_get_contents("php://input"), true) ?? [];
-            $body = array_merge($_GET, $_POST, $body);
+            $body = read_body();
             $produto_id = (int)($body["produto_id"] ?? $body["id"] ?? 0);
 
             if ($produto_id <= 0) {
@@ -153,19 +197,24 @@ try {
             }
 
             $hash = md5("remover|{$produto_id}|" . ($_SESSION["usuario"]["id"] ?? '0'));
-            if (is_duplicate_action("remover", $hash, 3)) {
+            $key  = "remover|{$produto_id}";
+            if (is_duplicate_action($key, $hash, 3)) {
                 echo json_encode(resposta(true, "Ação ignorada: duplicata detectada."));
                 break;
             }
 
-            echo json_encode(mov_remover($conn, $produto_id, $_SESSION["usuario"]["id"]));
+            if (!function_exists('mov_remover')) {
+                echo json_encode(resposta(false, "Função mov_remover não encontrada. Verifique o arquivo movimentacoes.php"));
+                break;
+            }
+
+            echo json_encode(mov_remover($conn, $produto_id, $_SESSION["usuario"]["id"] ?? null));
             break;
 
         // ---- Movimentações ----
         case "entrada":
             require_login();
-            $body = json_decode(file_get_contents("php://input"), true) ?? [];
-            $body = array_merge($_GET, $_POST, $body);
+            $body = read_body();
             $produto_id = (int)($body["produto_id"] ?? $body["id"] ?? 0);
             $quantidade = (int)($body["quantidade"] ?? 0);
 
@@ -174,19 +223,28 @@ try {
                 break;
             }
 
+            // chave por produto evita colidir ações diferentes
             $hash = md5("entrada|{$produto_id}|{$quantidade}|" . ($_SESSION["usuario"]["id"] ?? '0'));
-            if (is_duplicate_action("entrada", $hash, 3)) {
+            $key  = "entrada|{$produto_id}";
+            if (is_duplicate_action($key, $hash, 3)) {
                 echo json_encode(resposta(true, "Ação ignorada: duplicata detectada."));
                 break;
             }
 
-            echo json_encode(mov_entrada($conn, $produto_id, $quantidade, $_SESSION["usuario"]["id"]));
+            if (!function_exists('mov_entrada')) {
+                echo json_encode(resposta(false, "Função mov_entrada não encontrada. Verifique o arquivo movimentacoes.php"));
+                break;
+            }
+
+            // chama mov_entrada (essa função é responsável por atualizar produtos e inserir movimentacao)
+            $res = mov_entrada($conn, $produto_id, $quantidade, $_SESSION["usuario"]["id"] ?? null);
+
+            echo json_encode($res);
             break;
 
         case "saida":
             require_login();
-            $body = json_decode(file_get_contents("php://input"), true) ?? [];
-            $body = array_merge($_GET, $_POST, $body);
+            $body = read_body();
             $produto_id = (int)($body["produto_id"] ?? $body["id"] ?? 0);
             $quantidade = (int)($body["quantidade"] ?? 0);
 
@@ -196,12 +254,19 @@ try {
             }
 
             $hash = md5("saida|{$produto_id}|{$quantidade}|" . ($_SESSION["usuario"]["id"] ?? '0'));
-            if (is_duplicate_action("saida", $hash, 3)) {
+            $key  = "saida|{$produto_id}";
+            if (is_duplicate_action($key, $hash, 3)) {
                 echo json_encode(resposta(true, "Ação ignorada: duplicata detectada."));
                 break;
             }
 
-            echo json_encode(mov_saida($conn, $produto_id, $quantidade, $_SESSION["usuario"]["id"]));
+            if (!function_exists('mov_saida')) {
+                echo json_encode(resposta(false, "Função mov_saida não encontrada. Verifique o arquivo movimentacoes.php"));
+                break;
+            }
+
+            $res = mov_saida($conn, $produto_id, $quantidade, $_SESSION["usuario"]["id"] ?? null);
+            echo json_encode($res);
             break;
 
         case "listarmovimentacoes":
@@ -210,8 +275,8 @@ try {
                 "pagina"      => (int)($_GET["pagina"] ?? $_POST["pagina"] ?? 1),
                 "limite"      => (int)($_GET["limite"] ?? $_POST["limite"] ?? 10),
                 "tipo"        => $_GET["tipo"] ?? $_POST["tipo"] ?? "",
-                "produto_id"  => $_GET["produto_id"] ?? $_POST["produto_id"] ?? null,
-                "usuario_id"  => $_GET["usuario_id"] ?? $_POST["usuario_id"] ?? null,
+                "produto_id"  => !empty($_GET["produto_id"] ?? $_POST["produto_id"] ?? "") ? (int)($_GET["produto_id"] ?? $_POST["produto_id"]) : null,
+                "usuario_id"  => !empty($_GET["usuario_id"] ?? $_POST["usuario_id"] ?? "") ? (int)($_GET["usuario_id"] ?? $_POST["usuario_id"]) : null,
                 "usuario"     => $_GET["usuario"] ?? $_POST["usuario"] ?? "",
                 "data_inicio" => $_GET["data_inicio"] ?? $_POST["data_inicio"] ?? "",
                 "data_fim"    => $_GET["data_fim"] ?? $_POST["data_fim"] ?? "",
@@ -225,8 +290,8 @@ try {
                 "pagina"      => (int)($_GET["pagina"] ?? 1),
                 "limite"      => (int)($_GET["limite"] ?? 50),
                 "tipo"        => $_GET["tipo"] ?? "",
-                "produto_id"  => $_GET["produto_id"] ?? null,
-                "usuario_id"  => $_GET["usuario_id"] ?? null,
+                "produto_id"  => !empty($_GET["produto_id"] ?? "") ? (int)($_GET["produto_id"]) : null,
+                "usuario_id"  => !empty($_GET["usuario_id"] ?? "") ? (int)($_GET["usuario_id"]) : null,
                 "usuario"     => $_GET["usuario"] ?? "",
                 "data_inicio" => $_GET["data_inicio"] ?? "",
                 "data_fim"    => $_GET["data_fim"] ?? "",
