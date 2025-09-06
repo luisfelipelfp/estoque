@@ -6,11 +6,9 @@
 
 // Lista produtos (por padrão apenas ativos)
 function produtos_listar(mysqli $conn, bool $incluir_inativos = false): array {
-    if ($incluir_inativos) {
-        $sql = "SELECT id, nome, quantidade, ativo FROM produtos ORDER BY id DESC";
-    } else {
-        $sql = "SELECT id, nome, quantidade, ativo FROM produtos WHERE ativo = 1 ORDER BY id DESC";
-    }
+    $sql = $incluir_inativos
+        ? "SELECT id, nome, quantidade, ativo FROM produtos ORDER BY id DESC"
+        : "SELECT id, nome, quantidade, ativo FROM produtos WHERE ativo = 1 ORDER BY id DESC";
 
     $res = $conn->query($sql);
     $out = [];
@@ -18,6 +16,7 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = false): array {
         while ($row = $res->fetch_assoc()) {
             $out[] = $row;
         }
+        $res->free();
     }
     return $out; // o front já aceita array puro
 }
@@ -33,20 +32,20 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade = 0, ?in
     $stmt->bind_param("si", $nome, $quantidade);
 
     if (!$stmt->execute()) {
-        return ["sucesso" => false, "mensagem" => "Erro ao adicionar produto: " . $conn->error];
+        $erro = $conn->error;
+        $stmt->close();
+        return ["sucesso" => false, "mensagem" => "Erro ao adicionar produto: " . $erro];
     }
 
     $id = $conn->insert_id;
     $stmt->close();
 
-    // Se quantidade inicial > 0, registra movimentação de entrada
-    if ($quantidade > 0) {
-        $stmt2 = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id)
-                                 VALUES (?, ?, 'entrada', ?, NOW(), ?)");
-        $stmt2->bind_param("isii", $id, $nome, $quantidade, $usuario_id);
-        $stmt2->execute();
-        $stmt2->close();
-    }
+    // ⚠️ NÃO registra movimentação aqui.
+    // A movimentação inicial (se quantidade > 0) deve ser feita pelo actions.php chamando mov_entrada.
 
-    return ["sucesso" => true, "mensagem" => "Produto adicionado com sucesso."];
+    return [
+        "sucesso" => true,
+        "mensagem" => "Produto adicionado com sucesso.",
+        "id"       => $id
+    ];
 }
