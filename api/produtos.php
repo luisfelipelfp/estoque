@@ -21,14 +21,15 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = false): array {
     return $out; // o front já aceita array puro
 }
 
-// Adiciona novo produto (não registra movimentação)
-function produtos_adicionar(mysqli $conn, string $nome, int $quantidade = 0, ?int $usuario_id = null): array {
+// Adiciona novo produto (sempre começa com quantidade = 0)
+function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial = 0, ?int $usuario_id = null): array {
     if (trim($nome) === "") {
         return ["sucesso" => false, "mensagem" => "Nome do produto é obrigatório."];
     }
 
-    $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade, ativo) VALUES (?, ?, 1)");
-    $stmt->bind_param("si", $nome, $quantidade);
+    // insere produto sempre com 0 no banco
+    $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade, ativo) VALUES (?, 0, 1)");
+    $stmt->bind_param("s", $nome);
 
     if (!$stmt->execute()) {
         $erro = $conn->error;
@@ -39,12 +40,9 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade = 0, ?in
     $id = $conn->insert_id;
     $stmt->close();
 
-    // Retorna apenas os dados do produto criado
     return [
         "sucesso" => true,
         "mensagem" => "Produto adicionado com sucesso.",
-        "id"       => $id,
-        "nome"     => $nome,
-        "quantidade" => $quantidade
+        "id"       => $id
     ];
 }

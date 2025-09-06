@@ -129,8 +129,14 @@ try {
                 break;
             }
 
-            // ✅ produtos_adicionar já registra movimentação inicial, não precisa chamar mov_entrada aqui
-            $res = produtos_adicionar($conn, $nome, $quant, $_SESSION["usuario"]["id"]);
+            // adiciona produto sempre com estoque inicial = 0
+            $res = produtos_adicionar($conn, $nome, 0, $_SESSION["usuario"]["id"]);
+
+            // registra movimentação inicial se quantidade > 0
+            if ($res["sucesso"] && $quant > 0) {
+                mov_entrada($conn, $res["id"], $quant, $_SESSION["usuario"]["id"]);
+            }
+
             echo json_encode($res);
             break;
 
