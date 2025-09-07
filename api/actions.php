@@ -21,9 +21,6 @@ function resposta($sucesso, $mensagem = "", $extra = []) {
     return array_merge(["sucesso" => $sucesso, "mensagem" => $mensagem], $extra);
 }
 
-/**
- * Proteção contra duplicate requests por chave (ação + alvo)
- */
 function is_duplicate_action(string $key, string $hash, int $ttl_seconds = 3): bool {
     if (!isset($_SESSION['last_actions'])) {
         $_SESSION['last_actions'] = [];
@@ -108,7 +105,7 @@ try {
             ]));
             break;
 
-        // ---- Produtos (leitura) ----
+        // ---- Produtos ----
         case "listarprodutos":
         case "listar_produtos":
             echo json_encode(produtos_listar($conn));
@@ -119,7 +116,6 @@ try {
             echo json_encode(produtos_listar($conn, true));
             break;
 
-        // ---- Adicionar produto ----
         case "adicionar":
         case "adicionar_produto":
             require_login();
@@ -144,7 +140,6 @@ try {
                 break;
             }
 
-            // usa a função corrigida de produtos.php (ela evita duplicados)
             $res = produtos_adicionar($conn, $nome, 0, $_SESSION["usuario"]["id"]);
 
             if (!$res["sucesso"]) {
@@ -153,18 +148,11 @@ try {
             }
 
             if ($quant > 0) {
-                if (!function_exists('mov_entrada')) {
-                    echo json_encode(resposta(false, "Função mov_entrada não encontrada. Produto criado sem movimentação."));
-                    break;
-                }
-
                 $movRes = mov_entrada($conn, (int)$res["id"], $quant, $_SESSION["usuario"]["id"] ?? null);
-
                 if (!$movRes["sucesso"]) {
                     echo json_encode(resposta(false, "Produto criado, mas falha ao registrar movimentação inicial.", ["movimentacao" => $movRes]));
                     break;
                 }
-
                 echo json_encode(resposta(true, "Produto criado e movimentação inicial registrada.", [
                     "produto" => ["id" => $res["id"], "nome" => $nome, "quantidade" => $quant]
                 ]));
@@ -192,11 +180,6 @@ try {
                 break;
             }
 
-            if (!function_exists('mov_remover')) {
-                echo json_encode(resposta(false, "Função mov_remover não encontrada. Verifique movimentacoes.php"));
-                break;
-            }
-
             echo json_encode(mov_remover($conn, $produto_id, $_SESSION["usuario"]["id"] ?? null));
             break;
 
@@ -219,13 +202,7 @@ try {
                 break;
             }
 
-            if (!function_exists('mov_entrada')) {
-                echo json_encode(resposta(false, "Função mov_entrada não encontrada."));
-                break;
-            }
-
-            $res = mov_entrada($conn, $produto_id, $quantidade, $_SESSION["usuario"]["id"] ?? null);
-            echo json_encode($res);
+            echo json_encode(mov_entrada($conn, $produto_id, $quantidade, $_SESSION["usuario"]["id"] ?? null));
             break;
 
         case "saida":
@@ -246,41 +223,37 @@ try {
                 break;
             }
 
-            if (!function_exists('mov_saida')) {
-                echo json_encode(resposta(false, "Função mov_saida não encontrada."));
-                break;
-            }
-
-            $res = mov_saida($conn, $produto_id, $quantidade, $_SESSION["usuario"]["id"] ?? null);
-            echo json_encode($res);
+            echo json_encode(mov_saida($conn, $produto_id, $quantidade, $_SESSION["usuario"]["id"] ?? null));
             break;
 
         case "listarmovimentacoes":
         case "listar_movimentacoes":
+            $body = read_body();
             $filtros = [
-                "pagina"      => (int)($_GET["pagina"] ?? $_POST["pagina"] ?? 1),
-                "limite"      => (int)($_GET["limite"] ?? $_POST["limite"] ?? 10),
-                "tipo"        => $_GET["tipo"] ?? $_POST["tipo"] ?? "",
-                "produto_id"  => !empty($_GET["produto_id"] ?? $_POST["produto_id"] ?? "") ? (int)($_GET["produto_id"] ?? $_POST["produto_id"]) : null,
-                "usuario_id"  => !empty($_GET["usuario_id"] ?? $_POST["usuario_id"] ?? "") ? (int)($_GET["usuario_id"] ?? $_POST["usuario_id"]) : null,
-                "usuario"     => $_GET["usuario"] ?? $_POST["usuario"] ?? "",
-                "data_inicio" => $_GET["data_inicio"] ?? $_POST["data_inicio"] ?? "",
-                "data_fim"    => $_GET["data_fim"] ?? $_POST["data_fim"] ?? "",
+                "pagina"      => (int)($body["pagina"] ?? 1),
+                "limite"      => (int)($body["limite"] ?? 10),
+                "tipo"        => $body["tipo"] ?? "",
+                "produto_id"  => !empty($body["produto_id"]) ? (int)$body["produto_id"] : null,
+                "usuario_id"  => !empty($body["usuario_id"]) ? (int)$body["usuario_id"] : null,
+                "usuario"     => $body["usuario"] ?? "",
+                "data_inicio" => $body["data_inicio"] ?? "",
+                "data_fim"    => $body["data_fim"] ?? "",
             ];
             echo json_encode(mov_listar($conn, $filtros));
             break;
 
         // ---- Relatório ----
         case "relatorio":
+            $body = read_body();
             $filtros = [
-                "pagina"      => (int)($_GET["pagina"] ?? 1),
-                "limite"      => (int)($_GET["limite"] ?? 50),
-                "tipo"        => $_GET["tipo"] ?? "",
-                "produto_id"  => !empty($_GET["produto_id"] ?? "") ? (int)($_GET["produto_id"]) : null,
-                "usuario_id"  => !empty($_GET["usuario_id"] ?? "") ? (int)($_GET["usuario_id"]) : null,
-                "usuario"     => $_GET["usuario"] ?? "",
-                "data_inicio" => $_GET["data_inicio"] ?? "",
-                "data_fim"    => $_GET["data_fim"] ?? "",
+                "pagina"      => (int)($body["pagina"] ?? 1),
+                "limite"      => (int)($body["limite"] ?? 50),
+                "tipo"        => $body["tipo"] ?? "",
+                "produto_id"  => !empty($body["produto_id"]) ? (int)$body["produto_id"] : null,
+                "usuario_id"  => !empty($body["usuario_id"]) ? (int)$body["usuario_id"] : null,
+                "usuario"     => $body["usuario"] ?? "",
+                "data_inicio" => $body["data_inicio"] ?? "",
+                "data_fim"    => $body["data_fim"] ?? "",
             ];
             echo json_encode(relatorio($conn, $filtros));
             break;
