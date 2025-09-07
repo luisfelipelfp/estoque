@@ -28,7 +28,7 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
           <td>${m.tipo}</td>
           <td>${m.quantidade}</td>
           <td>${m.data}</td>
-          <td>${m.usuario_nome || ""}</td>
+          <td>${m.usuario || ""}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -45,16 +45,16 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
     e.preventDefault();
     const produto_id = document.querySelector("#filtroProduto")?.value || "";
     const tipo = document.querySelector("#filtroTipo")?.value || "";
-    const data_ini = document.querySelector("#filtroDataIni")?.value || "";
+    const data_inicio = document.querySelector("#filtroDataIni")?.value || ""; // corrigido
     const data_fim = document.querySelector("#filtroDataFim")?.value || "";
-    const busca = document.querySelector("#filtroBusca")?.value || ""; // 🔧 captura do campo de texto
+    const usuario = document.querySelector("#filtroBusca")?.value || ""; // corrigido
 
     const filtros = {};
     if (produto_id) filtros.produto_id = produto_id;
     if (tipo) filtros.tipo = tipo;
-    if (data_ini) filtros.data_ini = data_ini;
+    if (data_inicio) filtros.data_inicio = data_inicio; // nome igual ao PHP
     if (data_fim) filtros.data_fim = data_fim;
-    if (busca) filtros.busca = busca; // 🔧 envio correto para o backend
+    if (usuario) filtros.usuario = usuario; // nome igual ao PHP
 
     await listarMovimentacoes(filtros);
   });
