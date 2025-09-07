@@ -59,6 +59,42 @@ function read_body(): array {
     return array_merge($_GET, $_POST, $body);
 }
 
+/**
+ * Helper: checa duplicata no banco (usa _mov_is_duplicate se disponível)
+ * Retorna true se já existe movimentação idêntica nos últimos $window_seconds segundos.
+ */
+function db_mov_is_duplicate(mysqli $conn, int $produto_id, string $tipo, int $quantidade, ?int $usuario_id, int $window_seconds = 5): bool {
+    // Se a função do módulo já existir, use-a (mais consistente)
+    if (function_exists('_mov_is_duplicate')) {
+        try {
+            return _mov_is_duplicate($conn, $produto_id, $tipo, $quantidade, $usuario_id, $window_seconds);
+        } catch (Throwable $e) {
+            error_log("db_mov_is_duplicate: erro ao chamar _mov_is_duplicate: " . $e->getMessage());
+            // fallback para query manual abaixo
+        }
+    }
+
+    // Fallback: consulta manual
+    $sql = "SELECT 1 FROM movimentacoes
+            WHERE produto_id = ? AND tipo = ? AND quantidade = ?
+              AND IFNULL(usuario_id, 0) = IFNULL(?, 0)
+              AND data >= (NOW() - INTERVAL ? SECOND)
+            LIMIT 1";
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        error_log("db_mov_is_duplicate: prepare falhou: " . $conn->error);
+        return false;
+    }
+    $uid = $usuario_id === null ? 0 : (int)$usuario_id;
+    $stmt->bind_param("isiii", $produto_id, $tipo, $quantidade, $uid, $window_seconds);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $dup = $res && $res->num_rows > 0;
+    if ($res) $res->free();
+    $stmt->close();
+    return $dup;
+}
+
 $acao = strtolower(trim($_REQUEST["acao"] ?? ""));
 if ($acao === "") {
     echo json_encode(resposta(false, "Nenhuma ação especificada."));
@@ -142,15 +178,15 @@ try {
             }
 
             // prevenir duplicate submit por nome+quant+user nos próximos 3s
-            $hash = md5("adicionar|{$nome}|{$quant}|" . ($_SESSION["usuario"]["id"] ?? '0'));
-            $key  = "adicionar|".md5($nome);
+            $hash = md5("adicionar|" . $nome . "|" . $quant . "|" . ($_SESSION["usuario"]["id"] ?? '0'));
+            $key  = "adicionar|" . md5($nome . "|" . ($_SESSION["usuario"]["id"] ?? '0'));
             if (is_duplicate_action($key, $hash, 3)) {
                 echo json_encode(resposta(true, "Ação ignorada: duplicata detectada."));
                 break;
             }
 
             // adiciona produto sempre com estoque inicial = 0
-            $res = produtos_adicionar($conn, $nome, 0, $_SESSION["usuario"]["id"]);
+            $res = produtos_adicionar($conn, $nome, 0, $_SESSION["usuario"]["id"] ?? null);
 
             // se falhar ao criar produto, devolve erro
             if (!$res["sucesso"]) {
@@ -161,22 +197,26 @@ try {
             // registra movimentação inicial se quantidade > 0 (usando mov_entrada, que atualiza produtos)
             if ($quant > 0) {
                 if (!function_exists('mov_entrada')) {
-                    // importante: se mov_entrada não existir, removemos o produto para não deixar inconsistência
-                    // (apenas se quiser esse comportamento; aqui registramos erro)
                     echo json_encode(resposta(false, "Função mov_entrada não encontrada. Produto criado sem movimentação."));
                     break;
                 }
 
-                $movRes = mov_entrada($conn, (int)$res["id"], $quant, $_SESSION["usuario"]["id"] ?? null);
+                // Proteção extra: checa no DB se já existe movimentação igual recente
+                $uid = $_SESSION["usuario"]["id"] ?? null;
+                if (db_mov_is_duplicate($conn, (int)$res["id"], 'entrada', $quant, $uid, 5)) {
+                    error_log("adicionar: duplicata DB detectada ao tentar registrar movimentação inicial para produto {$res['id']}");
+                    echo json_encode(resposta(true, "Produto criado, movimentação inicial ignorada (duplicata detectada).", ["produto" => ["id" => $res["id"], "nome" => $nome, "quantidade" => $quant]]));
+                    break;
+                }
+
+                $movRes = mov_entrada($conn, (int)$res["id"], $quant, $uid);
 
                 // se mov_entrada falhar, retornamos erro com detalhes
                 if (!$movRes["sucesso"]) {
-                    // opcional: você pode querer deletar o produto recém-criado para manter consistência; aqui apenas retorna erro
                     echo json_encode(resposta(false, "Produto criado, mas falha ao registrar movimentação inicial.", ["movimentacao" => $movRes]));
                     break;
                 }
 
-                // tudo OK: devolve sucesso incluindo info da movimentação
                 echo json_encode(resposta(true, "Produto criado e movimentação inicial registrada.", ["produto" => ["id" => $res["id"], "nome" => $nome, "quantidade" => $quant]]));
                 break;
             }
@@ -196,8 +236,8 @@ try {
                 break;
             }
 
-            $hash = md5("remover|{$produto_id}|" . ($_SESSION["usuario"]["id"] ?? '0'));
-            $key  = "remover|{$produto_id}";
+            $hash = md5("remover|" . $produto_id . "|" . ($_SESSION["usuario"]["id"] ?? '0'));
+            $key  = "remover|" . $produto_id . "|" . ($_SESSION["usuario"]["id"] ?? '0');
             if (is_duplicate_action($key, $hash, 3)) {
                 echo json_encode(resposta(true, "Ação ignorada: duplicata detectada."));
                 break;
@@ -208,7 +248,15 @@ try {
                 break;
             }
 
-            echo json_encode(mov_remover($conn, $produto_id, $_SESSION["usuario"]["id"] ?? null));
+            // DB duplicate check (remoção)
+            $uid = $_SESSION["usuario"]["id"] ?? null;
+            if (db_mov_is_duplicate($conn, $produto_id, 'remocao', 0, $uid, 5)) {
+                error_log("remover: duplicata DB detectada para produto {$produto_id}");
+                echo json_encode(resposta(true, "Ação ignorada: duplicata detectada (DB)."));
+                break;
+            }
+
+            echo json_encode(mov_remover($conn, $produto_id, $uid));
             break;
 
         // ---- Movimentações ----
@@ -223,11 +271,11 @@ try {
                 break;
             }
 
-            // chave por produto evita colidir ações diferentes
+            // chave por produto+quantidade+user para evitar duplicata
             $hash = md5("entrada|{$produto_id}|{$quantidade}|" . ($_SESSION["usuario"]["id"] ?? '0'));
-            $key  = "entrada|{$produto_id}";
+            $key  = "entrada|" . md5("{$produto_id}|{$quantidade}|" . ($_SESSION["usuario"]["id"] ?? '0'));
             if (is_duplicate_action($key, $hash, 3)) {
-                echo json_encode(resposta(true, "Ação ignorada: duplicata detectada."));
+                echo json_encode(resposta(true, "Ação ignorada: duplicata detectada (sessão)."));
                 break;
             }
 
@@ -236,8 +284,16 @@ try {
                 break;
             }
 
+            // Proteção extra no DB: evita race conditions (verifica existência de movimentação idêntica recente)
+            $uid = $_SESSION["usuario"]["id"] ?? null;
+            if (db_mov_is_duplicate($conn, $produto_id, 'entrada', $quantidade, $uid, 5)) {
+                error_log("entrada: duplicata DB detectada para produto {$produto_id} quantidade {$quantidade} usuário {$uid}");
+                echo json_encode(resposta(true, "Ação ignorada: duplicata detectada (DB)."));
+                break;
+            }
+
             // chama mov_entrada (essa função é responsável por atualizar produtos e inserir movimentacao)
-            $res = mov_entrada($conn, $produto_id, $quantidade, $_SESSION["usuario"]["id"] ?? null);
+            $res = mov_entrada($conn, $produto_id, $quantidade, $uid);
 
             echo json_encode($res);
             break;
@@ -254,9 +310,9 @@ try {
             }
 
             $hash = md5("saida|{$produto_id}|{$quantidade}|" . ($_SESSION["usuario"]["id"] ?? '0'));
-            $key  = "saida|{$produto_id}";
+            $key  = "saida|" . md5("{$produto_id}|{$quantidade}|" . ($_SESSION["usuario"]["id"] ?? '0'));
             if (is_duplicate_action($key, $hash, 3)) {
-                echo json_encode(resposta(true, "Ação ignorada: duplicata detectada."));
+                echo json_encode(resposta(true, "Ação ignorada: duplicata detectada (sessão)."));
                 break;
             }
 
@@ -265,7 +321,14 @@ try {
                 break;
             }
 
-            $res = mov_saida($conn, $produto_id, $quantidade, $_SESSION["usuario"]["id"] ?? null);
+            $uid = $_SESSION["usuario"]["id"] ?? null;
+            if (db_mov_is_duplicate($conn, $produto_id, 'saida', $quantidade, $uid, 5)) {
+                error_log("saida: duplicata DB detectada para produto {$produto_id} quantidade {$quantidade} usuário {$uid}");
+                echo json_encode(resposta(true, "Ação ignorada: duplicata detectada (DB)."));
+                break;
+            }
+
+            $res = mov_saida($conn, $produto_id, $quantidade, $uid);
             echo json_encode($res);
             break;
 
