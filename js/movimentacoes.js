@@ -1,165 +1,88 @@
-// ==============================
-// js/movimentacoes.js (corrigido + global)
-// ==============================
+// js/movimentacoes.js
 
-// Flag global: só lista após o usuário pesquisar
-window._podeListarMovs = false;
+if (!window.__MOVIMENTACOES_JS_BOUND__) {
+  window.__MOVIMENTACOES_JS_BOUND__ = true;
 
-// ==============================
-// Mensagens auxiliares
-// ==============================
-function renderPlaceholderInicial() {
-    const tbody = document.querySelector("#tabelaMovimentacoes tbody");
-    if (!tbody) return;
-    tbody.innerHTML = `
-        <tr>
-            <td colspan="6" class="text-center text-muted">
-                Use os filtros acima para buscar movimentações
-            </td>
-        </tr>
-    `;
-}
-
-function renderNenhumResultado() {
-    const tbody = document.querySelector("#tabelaMovimentacoes tbody");
-    if (!tbody) return;
-    tbody.innerHTML = `
-        <tr>
-            <td colspan="6" class="text-center text-muted">
-                Nenhuma movimentação encontrada
-            </td>
-        </tr>
-    `;
-}
-
-// ==============================
-// Carregar opções de produto no filtro
-// ==============================
-async function preencherFiltroProdutos() {
+  // Lista de movimentações
+  async function listarMovimentacoes(filtros = {}) {
     try {
-        const resp = await apiRequest("listarprodutos"); // 👈 padronizado em minúsculo
-        const produtos = Array.isArray(resp) ? resp : (resp?.dados || []);
-        const select = document.getElementById("filtroProduto");
-        if (!select) return;
+      const resp = await apiRequest("listar_movimentacoes", filtros, "GET");
+      const movs = Array.isArray(resp) ? resp : (resp?.dados || resp || []);
+      const tbody = document.querySelector("#tabelaMovimentacoes tbody");
+      if (!tbody) return;
 
-        select.innerHTML = '<option value="">Todos os Produtos</option>';
-        produtos.forEach(produto => {
-            const option = document.createElement("option");
-            option.value = produto.id;
-            option.textContent = produto.nome;
-            select.appendChild(option);
-        });
-    } catch (error) {
-        console.error("Erro ao carregar produtos no filtro:", error);
+      tbody.innerHTML = "";
+
+      if (!movs.length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="6" class="text-center">Nenhuma movimentação encontrada</td>`;
+        tbody.appendChild(tr);
+        return;
+      }
+
+      movs.forEach(m => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${m.id}</td>
+          <td>${m.produto_nome || m.produto_id}</td>
+          <td>${m.tipo}</td>
+          <td>${m.quantidade}</td>
+          <td>${m.usuario_nome || ""}</td>
+          <td>${m.data}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } catch (err) {
+      console.error("Erro ao listar movimentações:", err);
     }
-}
+  }
 
-// ==============================
-// Listagem de movimentações
-// ==============================
-async function listarMovimentacoes(filtros = {}, force = false) {
+  // 🔑 Expondo para ser usado no produtos.js e main.js
+  window.listarMovimentacoes = listarMovimentacoes;
+
+  // Filtro de movimentações
+  document.querySelector("#formFiltroMov")?.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    const produto_id = document.querySelector("#filtroProduto")?.value || "";
+    const tipo = document.querySelector("#filtroTipo")?.value || "";
+    const data_ini = document.querySelector("#filtroDataIni")?.value || "";
+    const data_fim = document.querySelector("#filtroDataFim")?.value || "";
+
+    const filtros = {};
+    if (produto_id) filtros.produto_id = produto_id; // 🔧 corrigido
+    if (tipo) filtros.tipo = tipo;
+    if (data_ini) filtros.data_ini = data_ini;
+    if (data_fim) filtros.data_fim = data_fim;
+
+    await listarMovimentacoes(filtros);
+  });
+
+  // Preenche filtro de produtos dinamicamente
+  async function preencherFiltroProdutos() {
     try {
-        // Só lista após pesquisa ou se for forçado
-        if (!force && !window._podeListarMovs) {
-            renderPlaceholderInicial();
-            return;
-        }
+      const resp = await apiRequest("listar_produtos", null, "GET");
+      const produtos = Array.isArray(resp) ? resp : (resp?.dados || resp || []);
+      const select = document.querySelector("#filtroProduto");
+      if (!select) return;
 
-        // Normaliza filtros
-        const params = { ...filtros };
-
-        if (params.produto && !params.produto_id) {
-            if (!isNaN(params.produto) && params.produto !== "") {
-                params.produto_id = params.produto;
-            }
-            delete params.produto;
-        }
-
-        // Remove chaves vazias
-        Object.keys(params).forEach(k => {
-            if (params[k] === "" || params[k] === null || params[k] === undefined) {
-                delete params[k];
-            }
-        });
-
-        // 👇 corrigido: usar sempre minúsculo
-        const resposta = await apiRequest("listarmovimentacoes", params, "GET");
-        const movimentacoes = Array.isArray(resposta) ? resposta : (resposta?.dados || []);
-
-        const tabela = document.querySelector("#tabelaMovimentacoes tbody");
-        if (!tabela) return;
-        tabela.innerHTML = "";
-
-        if (!Array.isArray(movimentacoes) || movimentacoes.length === 0) {
-            renderNenhumResultado();
-            return;
-        }
-
-        movimentacoes.forEach(mov => {
-            // Usa diretamente o campo "usuario" que vem do banco
-            let usuario = mov.usuario && mov.usuario.trim() !== "" 
-                ? mov.usuario 
-                : "Sistema";
-
-            const row = `
-                <tr>
-                    <td>${mov.id}</td>
-                    <td>${mov.produto_nome ?? "-"}</td>
-                    <td>${mov.tipo}</td>
-                    <td>${mov.quantidade ?? "-"}</td>
-                    <td>${mov.data}</td>
-                    <td>${usuario}</td>
-                </tr>
-            `;
-            tabela.insertAdjacentHTML("beforeend", row);
-        });
-
-    } catch (error) {
-        console.error("Erro ao listar movimentações:", error);
-        renderNenhumResultado();
+      select.innerHTML = `<option value="">Todos</option>`;
+      produtos.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.nome;
+        select.appendChild(opt);
+      });
+    } catch (err) {
+      console.error("Erro ao preencher filtro de produtos:", err);
     }
-}
+  }
 
-// 🔑 Expondo a função globalmente (assim como no produtos.js)
-window.listarMovimentacoes = listarMovimentacoes;
+  // 🔑 Expondo globalmente para ser usado no produtos.js
+  window.preencherFiltroProdutos = preencherFiltroProdutos;
 
-// ==============================
-// Conexão do formulário de filtros
-// ==============================
-function conectarFormFiltros() {
-    const form = document.getElementById("formFiltrosMovimentacoes");
-    if (!form) return;
-
-    form.addEventListener("submit", async (e) => {
-        e.preventDefault();
-
-        // Marca que já pode listar
-        window._podeListarMovs = true;
-
-        const filtros = {
-            data_inicio: document.getElementById("filtroDataInicio").value,
-            data_fim: document.getElementById("filtroDataFim").value,
-            tipo: document.getElementById("filtroTipo").value,
-            produto: document.getElementById("filtroProduto").value
-        };
-
-        await listarMovimentacoes(filtros, true); // força a busca
-    });
-}
-
-// Mantido para evoluções futuras (entrada/saída via produtos.js)
-function conectarFormMovimentacoes() {
-    // vazio por enquanto
-}
-
-// ==============================
-// Inicialização
-// ==============================
-(async function initMovimentacoesModule() {
+  // Inicialização
+  window.addEventListener("DOMContentLoaded", async () => {
     await preencherFiltroProdutos();
-    conectarFormFiltros();
-    conectarFormMovimentacoes();
-
-    // Tabela começa com mensagem inicial
-    renderPlaceholderInicial();
-})();
+    await listarMovimentacoes();
+  });
+}

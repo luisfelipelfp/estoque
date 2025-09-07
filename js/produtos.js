@@ -57,7 +57,8 @@ if (!window.__PRODUTOS_JS_BOUND__) {
     rowBtns.forEach(b => b.disabled = true);
 
     try {
-      const payload = quantidade != null ? { id, quantidade } : { id };
+      // 🔧 corrigido: enviar produto_id em vez de id
+      const payload = quantidade != null ? { produto_id: id, quantidade } : { produto_id: id };
       const resp = await apiRequest(acao, payload, "POST");
       return resp;
     } catch (err) {
