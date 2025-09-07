@@ -45,16 +45,16 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
     e.preventDefault();
     const produto_id = document.querySelector("#filtroProduto")?.value || "";
     const tipo = document.querySelector("#filtroTipo")?.value || "";
-    const data_inicio = document.querySelector("#filtroDataIni")?.value || ""; // corrigido
+    const data_inicio = document.querySelector("#filtroDataIni")?.value || "";
     const data_fim = document.querySelector("#filtroDataFim")?.value || "";
-    const usuario = document.querySelector("#filtroBusca")?.value || ""; // corrigido
+    const usuario = document.querySelector("#filtroBusca")?.value || "";
 
     const filtros = {};
     if (produto_id) filtros.produto_id = produto_id;
     if (tipo) filtros.tipo = tipo;
-    if (data_inicio) filtros.data_inicio = data_inicio; // nome igual ao PHP
-    if (data_fim) filtros.data_fim = data_fim;
-    if (usuario) filtros.usuario = usuario; // nome igual ao PHP
+    if (data_inicio) filtros.data_inicio = data_inicio; // compatível com PHP
+    if (data_fim) filtros.data_fim = data_fim;         // compatível com PHP
+    if (usuario) filtros.usuario = usuario;            // compatível com PHP
 
     await listarMovimentacoes(filtros);
   });
