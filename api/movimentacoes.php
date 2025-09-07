@@ -13,42 +13,36 @@ function mov_listar(mysqli $conn, array $f): array {
     $bind = [];
     $types = "";
 
-    // Produto
     if (isset($f["produto_id"]) && $f["produto_id"] !== "" && $f["produto_id"] !== null) {
         $cond[] = "m.produto_id = ?";
         $bind[] = (int)$f["produto_id"];
         $types .= "i";
     }
 
-    // Tipo (entrada, saída, remoção)
     if (isset($f["tipo"]) && trim($f["tipo"]) !== "") {
         $cond[] = "m.tipo = ?";
         $bind[] = trim($f["tipo"]);
         $types .= "s";
     }
 
-    // Usuário ID
     if (isset($f["usuario_id"]) && $f["usuario_id"] !== "" && $f["usuario_id"] !== null) {
         $cond[] = "m.usuario_id = ?";
         $bind[] = (int)$f["usuario_id"];
         $types .= "i";
     }
 
-    // Usuário nome
     if (isset($f["usuario"]) && trim($f["usuario"]) !== "") {
         $cond[] = "COALESCE(u.nome, 'Sistema') LIKE ?";
         $bind[] = "%" . trim($f["usuario"]) . "%";
         $types .= "s";
     }
 
-    // Data inicial
     if (isset($f["data_inicio"]) && $f["data_inicio"] !== "") {
         $cond[] = "DATE(m.data) >= ?";
         $bind[] = $f["data_inicio"];
         $types .= "s";
     }
 
-    // Data final
     if (isset($f["data_fim"]) && $f["data_fim"] !== "") {
         $cond[] = "DATE(m.data) <= ?";
         $bind[] = $f["data_fim"];
@@ -57,7 +51,6 @@ function mov_listar(mysqli $conn, array $f): array {
 
     $where = $cond ? ("WHERE ".implode(" AND ", $cond)) : "";
 
-    // Total
     $sqlTotal = "SELECT COUNT(*) AS total
                    FROM movimentacoes m
               LEFT JOIN usuarios u ON u.id = m.usuario_id
@@ -70,7 +63,6 @@ function mov_listar(mysqli $conn, array $f): array {
     $resT->free();
     $stmtT->close();
 
-    // Dados
     $sql = "SELECT m.id, m.produto_id,
                    COALESCE(m.produto_nome, p.nome) AS produto_nome,
                    m.tipo, m.quantidade, m.data,
@@ -110,15 +102,15 @@ function mov_listar(mysqli $conn, array $f): array {
 
 /**
  * Helpers: checar duplicata recente (últimos N segundos)
- * OBS: simplificamos a checagem para não depender de usuario_id (evita problemas com NULL)
  */
-function _mov_is_duplicate(mysqli $conn, int $produto_id, string $tipo, int $quantidade, int $window_seconds = 5): bool {
+function _mov_is_duplicate(mysqli $conn, int $produto_id, string $tipo, int $quantidade, ?int $usuario_id, int $window_seconds = 5): bool {
     $sql = "SELECT 1 FROM movimentacoes
             WHERE produto_id = ? AND tipo = ? AND quantidade = ?
+              AND usuario_id <=> ?
               AND data >= (NOW() - INTERVAL ? SECOND)
             LIMIT 1";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("isii", $produto_id, $tipo, $quantidade, $window_seconds);
+    $stmt->bind_param("isiii", $produto_id, $tipo, $quantidade, $usuario_id, $window_seconds);
     $stmt->execute();
     $res = $stmt->get_result();
     $dup = $res && $res->num_rows > 0;
@@ -129,9 +121,6 @@ function _mov_is_duplicate(mysqli $conn, int $produto_id, string $tipo, int $qua
 
 /**
  * Registrar entrada de produto
- * - trava linha do produto (FOR UPDATE)
- * - checa duplicata APÓS travar (evita race condition)
- * - faz UPDATE produtos e INSERT movimentacoes dentro da mesma transação
  */
 function mov_entrada(mysqli $conn, int $produto_id, int $quantidade, ?int $usuario_id): array {
     if ($produto_id <= 0 || $quantidade <= 0) {
@@ -140,7 +129,6 @@ function mov_entrada(mysqli $conn, int $produto_id, int $quantidade, ?int $usuar
 
     $conn->begin_transaction();
     try {
-        // trava a linha do produto para evitar race conditions
         $stmt = $conn->prepare("SELECT nome FROM produtos WHERE id = ? FOR UPDATE");
         $stmt->bind_param("i", $produto_id);
         $stmt->execute();
@@ -155,13 +143,11 @@ function mov_entrada(mysqli $conn, int $produto_id, int $quantidade, ?int $usuar
         }
         $nome = $row["nome"];
 
-        // checagem de duplicata APÓS o lock (se outra requisição já inseriu uma movimentacao, abortamos)
-        if (_mov_is_duplicate($conn, $produto_id, 'entrada', $quantidade, 5)) {
+        if (_mov_is_duplicate($conn, $produto_id, 'entrada', $quantidade, $usuario_id, 5)) {
             $conn->rollback();
             return ["sucesso" => true, "mensagem" => "Ação ignorada: duplicata detectada."];
         }
 
-        // atualizar estoque
         $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?");
         $stmt->bind_param("ii", $quantidade, $produto_id);
         if (!$stmt->execute()) {
@@ -171,11 +157,13 @@ function mov_entrada(mysqli $conn, int $produto_id, int $quantidade, ?int $usuar
         }
         $stmt->close();
 
-        // inserir movimentação (grava também produto_nome)
-        $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id) VALUES (?, ?, 'entrada', ?, NOW(), ?)");
-        // Se usuario_id for nulo, bind_param com "i" aceita null em PHP mysqli mas para segurança usamos coercão:
-        $uid = $usuario_id === null ? null : (int)$usuario_id;
-        $stmt->bind_param("isii", $produto_id, $nome, $quantidade, $uid);
+        if ($usuario_id === null) {
+            $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id) VALUES (?, ?, 'entrada', ?, NOW(), NULL)");
+            $stmt->bind_param("isi", $produto_id, $nome, $quantidade);
+        } else {
+            $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id) VALUES (?, ?, 'entrada', ?, NOW(), ?)");
+            $stmt->bind_param("isii", $produto_id, $nome, $quantidade, $usuario_id);
+        }
         if (!$stmt->execute()) {
             $stmt->close();
             $conn->rollback();
@@ -193,7 +181,7 @@ function mov_entrada(mysqli $conn, int $produto_id, int $quantidade, ?int $usuar
 }
 
 /**
- * Registrar saída de produto (behavior similar a mov_entrada)
+ * Registrar saída de produto
  */
 function mov_saida(mysqli $conn, int $produto_id, int $quantidade, ?int $usuario_id): array {
     if ($produto_id <= 0 || $quantidade <= 0) {
@@ -202,7 +190,6 @@ function mov_saida(mysqli $conn, int $produto_id, int $quantidade, ?int $usuario
 
     $conn->begin_transaction();
     try {
-        // travar linha e ler estoque
         $stmt = $conn->prepare("SELECT nome, quantidade FROM produtos WHERE id = ? FOR UPDATE");
         $stmt->bind_param("i", $produto_id);
         $stmt->execute();
@@ -219,8 +206,7 @@ function mov_saida(mysqli $conn, int $produto_id, int $quantidade, ?int $usuario
         $estoque = (int)$row["quantidade"];
         $nome = $row["nome"];
 
-        // checagem de duplicata APÓS o lock (evita race condition)
-        if (_mov_is_duplicate($conn, $produto_id, 'saida', $quantidade, 5)) {
+        if (_mov_is_duplicate($conn, $produto_id, 'saida', $quantidade, $usuario_id, 5)) {
             $conn->rollback();
             return ["sucesso" => true, "mensagem" => "Ação ignorada: duplicata detectada."];
         }
@@ -230,7 +216,6 @@ function mov_saida(mysqli $conn, int $produto_id, int $quantidade, ?int $usuario
             return ["sucesso" => false, "mensagem" => "Estoque insuficiente."];
         }
 
-        // atualizar estoque
         $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?");
         $stmt->bind_param("ii", $quantidade, $produto_id);
         if (!$stmt->execute()) {
@@ -240,10 +225,13 @@ function mov_saida(mysqli $conn, int $produto_id, int $quantidade, ?int $usuario
         }
         $stmt->close();
 
-        // inserir movimentacao
-        $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id) VALUES (?, ?, 'saida', ?, NOW(), ?)");
-        $uid = $usuario_id === null ? null : (int)$usuario_id;
-        $stmt->bind_param("isii", $produto_id, $nome, $quantidade, $uid);
+        if ($usuario_id === null) {
+            $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id) VALUES (?, ?, 'saida', ?, NOW(), NULL)");
+            $stmt->bind_param("isi", $produto_id, $nome, $quantidade);
+        } else {
+            $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id) VALUES (?, ?, 'saida', ?, NOW(), ?)");
+            $stmt->bind_param("isii", $produto_id, $nome, $quantidade, $usuario_id);
+        }
         if (!$stmt->execute()) {
             $stmt->close();
             $conn->rollback();
@@ -270,7 +258,6 @@ function mov_remover(mysqli $conn, int $produto_id, ?int $usuario_id): array {
 
     $conn->begin_transaction();
     try {
-        // travar produto
         $stmt = $conn->prepare("SELECT nome FROM produtos WHERE id = ? FOR UPDATE");
         $stmt->bind_param("i", $produto_id);
         $stmt->execute();
@@ -285,15 +272,18 @@ function mov_remover(mysqli $conn, int $produto_id, ?int $usuario_id): array {
         }
         $nome = $row["nome"];
 
-        // checar duplicata de remoção (após lock)
-        if (_mov_is_duplicate($conn, $produto_id, 'remocao', 0, 5)) {
+        if (_mov_is_duplicate($conn, $produto_id, 'remocao', 0, $usuario_id, 5)) {
             $conn->rollback();
             return ["sucesso" => true, "mensagem" => "Ação ignorada: duplicata detectada."];
         }
 
-        $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id) VALUES (?, ?, 'remocao', 0, NOW(), ?)");
-        $uid = $usuario_id === null ? null : (int)$usuario_id;
-        $stmt->bind_param("isi", $produto_id, $nome, $uid);
+        if ($usuario_id === null) {
+            $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id) VALUES (?, ?, 'remocao', 0, NOW(), NULL)");
+            $stmt->bind_param("is", $produto_id, $nome);
+        } else {
+            $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, data, usuario_id) VALUES (?, ?, 'remocao', 0, NOW(), ?)");
+            $stmt->bind_param("isi", $produto_id, $nome, $usuario_id);
+        }
         if (!$stmt->execute()) {
             $stmt->close();
             $conn->rollback();
