@@ -27,8 +27,8 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
           <td>${m.produto_nome || m.produto_id}</td>
           <td>${m.tipo}</td>
           <td>${m.quantidade}</td>
-          <td>${m.usuario_nome || ""}</td>
           <td>${m.data}</td>
+          <td>${m.usuario_nome || ""}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -47,12 +47,14 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
     const tipo = document.querySelector("#filtroTipo")?.value || "";
     const data_ini = document.querySelector("#filtroDataIni")?.value || "";
     const data_fim = document.querySelector("#filtroDataFim")?.value || "";
+    const busca = document.querySelector("#filtroBusca")?.value || ""; // 🔧 captura do campo de texto
 
     const filtros = {};
-    if (produto_id) filtros.produto_id = produto_id; // 🔧 corrigido
+    if (produto_id) filtros.produto_id = produto_id;
     if (tipo) filtros.tipo = tipo;
     if (data_ini) filtros.data_ini = data_ini;
     if (data_fim) filtros.data_fim = data_fim;
+    if (busca) filtros.busca = busca; // 🔧 envio correto para o backend
 
     await listarMovimentacoes(filtros);
   });
