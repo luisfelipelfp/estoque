@@ -156,6 +156,16 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
   // Inicialização
   window.addEventListener("DOMContentLoaded", async () => {
     await preencherFiltroProdutos();
-    await listarMovimentacoes({}, paginaAtual);
+
+    // Deixa mensagem inicial na tabela (sem listar movimentações ainda)
+    const tbody = document.querySelector("#tabelaMovimentacoes tbody");
+    if (tbody) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" class="text-center text-muted">
+            Use os filtros para buscar movimentações
+          </td>
+        </tr>`;
+    }
   });
 }
