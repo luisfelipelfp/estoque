@@ -3,15 +3,6 @@
 if (!window.__MOVIMENTACOES_JS_BOUND__) {
   window.__MOVIMENTACOES_JS_BOUND__ = true;
 
-  // 🔧 Converte data de dd/mm/yyyy → yyyy-mm-dd
-  function normalizarDataBR(dataBR) {
-    if (!dataBR) return "";
-    const partes = dataBR.split("/");
-    if (partes.length !== 3) return "";
-    const [dia, mes, ano] = partes;
-    return `${ano}-${mes}-${dia}`;
-  }
-
   // Lista de movimentações
   async function listarMovimentacoes(filtros = {}) {
     try {
@@ -50,20 +41,20 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
   window.listarMovimentacoes = listarMovimentacoes;
 
   // Filtro de movimentações
-  document.querySelector("#formFiltroMov")?.addEventListener("submit", async function (e) {
+  document.querySelector("#formFiltrosMovimentacoes")?.addEventListener("submit", async function (e) {
     e.preventDefault();
+
     const produto_id = document.querySelector("#filtroProduto")?.value || "";
     const tipo = document.querySelector("#filtroTipo")?.value || "";
-    const data_inicio = normalizarDataBR(document.querySelector("#filtroDataIni")?.value || "");
-    const data_fim = normalizarDataBR(document.querySelector("#filtroDataFim")?.value || "");
-    const usuario = document.querySelector("#filtroBusca")?.value || "";
+    const data_inicio = document.querySelector("#filtroDataInicio")?.value || "";
+    const data_fim = document.querySelector("#filtroDataFim")?.value || "";
+    // não existe campo "usuario" no HTML atual → removido
 
     const filtros = {};
     if (produto_id) filtros.produto_id = produto_id;
     if (tipo) filtros.tipo = tipo;
     if (data_inicio) filtros.data_inicio = data_inicio;
     if (data_fim) filtros.data_fim = data_fim;
-    if (usuario) filtros.usuario = usuario;
 
     await listarMovimentacoes(filtros);
   });
@@ -76,7 +67,7 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
       const select = document.querySelector("#filtroProduto");
       if (!select) return;
 
-      select.innerHTML = `<option value="">Todos</option>`;
+      select.innerHTML = `<option value="">Todos os Produtos</option>`;
       produtos.forEach(p => {
         const opt = document.createElement("option");
         opt.value = p.id;
