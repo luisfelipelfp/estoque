@@ -40,13 +40,14 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
             ? "text-danger fw-bold"
             : "text-muted fw-bold";
 
+        // Corrigido campo do usuário (aceita usuario_nome ou usuario)
         tr.innerHTML = `
           <td>${m.id}</td>
           <td>${m.produto_nome || m.produto_id}</td>
           <td class="${tipoClass}">${m.tipo}</td>
           <td>${m.quantidade}</td>
           <td>${m.data}</td>
-          <td>${m.usuario || ""}</td>
+          <td>${m.usuario_nome || m.usuario || ""}</td>
         `;
         tbody.appendChild(tr);
       });
