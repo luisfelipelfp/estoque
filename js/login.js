@@ -10,23 +10,25 @@ document.addEventListener("DOMContentLoaded", () => {
     const email = document.getElementById("email").value.trim();
     const senha = document.getElementById("senha").value.trim();
 
+    console.log("DEBUG → Email digitado:", email);
+    console.log("DEBUG → Senha digitada:", senha);
+
     if (!email || !senha) {
       msgErro.textContent = "Preencha todos os campos.";
       return;
     }
 
     try {
-      // 🔑 Usa apiRequest (já inclui credentials: "include")
       const resp = await apiRequest("login", { email, senha }, "POST");
+      console.log("DEBUG → Resposta API:", resp);
 
       if (resp.sucesso) {
-        // Sessão fica no servidor, não precisa salvar localStorage
         window.location.href = "index.html";
       } else {
-        msgErro.textContent = resp.mensagem || "E-mail ou senha inválidos.";
+        msgErro.textContent = resp.mensagem || "Erro ao efetuar login.";
       }
     } catch (err) {
-      console.error("Erro no login:", err);
+      console.error("Erro inesperado no login:", err);
       msgErro.textContent = "Erro de conexão com o servidor.";
     }
   });
