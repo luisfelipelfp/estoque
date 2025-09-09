@@ -15,14 +15,19 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Usa apiRequest já existente em js/api.js
-    const resp = await apiRequest("login", { email, senha }, "POST");
+    try {
+      // 🔑 Usa apiRequest (já inclui credentials: "include")
+      const resp = await apiRequest("login", { email, senha }, "POST");
 
-    if (resp.sucesso) {
-      // Não precisa guardar no localStorage: sessão já está no servidor
-      window.location.href = "index.html";
-    } else {
-      msgErro.textContent = resp.mensagem || "Erro ao efetuar login.";
+      if (resp.sucesso) {
+        // Sessão fica no servidor, não precisa salvar localStorage
+        window.location.href = "index.html";
+      } else {
+        msgErro.textContent = resp.mensagem || "E-mail ou senha inválidos.";
+      }
+    } catch (err) {
+      console.error("Erro no login:", err);
+      msgErro.textContent = "Erro de conexão com o servidor.";
     }
   });
 });
