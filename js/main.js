@@ -1,5 +1,5 @@
 // ==============================
-// js/main.js (proteção de login + logout)
+// js/main.js (proteção de login + logout + inicialização)
 // ==============================
 
 async function verificarLogin() {
@@ -57,19 +57,25 @@ window.onload = async () => {
             btnLogout.addEventListener("click", logout);
         }
 
-        // Carregar lista de produtos se a função existir
+        // Carregar lista de produtos
         if (typeof window.listarProdutos === "function") {
             window.listarProdutos();
         } else if (typeof window.carregarProdutos === "function") {
-            // fallback se a função tiver outro nome
             window.carregarProdutos();
         } else {
             console.warn("Nenhuma função para listar produtos encontrada (listarProdutos ou carregarProdutos).");
         }
 
-        // Movimentações só aparecem após aplicar os filtros
-        if (typeof window.renderPlaceholderInicial === "function") {
-            window.renderPlaceholderInicial();
+        // Renderiza placeholder inicial das movimentações (sem carregar nada ainda)
+        const tabelaMovs = document.querySelector("#tabelaMovimentacoes tbody");
+        if (tabelaMovs) {
+            tabelaMovs.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center text-muted">
+                        Use os filtros para buscar movimentações
+                    </td>
+                </tr>
+            `;
         }
     } catch (error) {
         console.error("Erro durante inicialização da página:", error);

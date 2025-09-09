@@ -91,5 +91,29 @@
   <script src="js/produtos.js"></script>
   <script src="js/movimentacoes.js"></script>
   <script src="js/main.js"></script>
+
+  <!-- Script de autenticação -->
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      const usuarioSpan = document.getElementById("usuarioLogado");
+      const btnLogout = document.getElementById("btnLogout");
+
+      // Verifica usuário logado
+      const resp = await apiRequest("usuario_atual", null, "GET");
+
+      if (!resp.sucesso || !resp.logado) {
+        window.location.href = "login.html";
+        return;
+      }
+
+      usuarioSpan.textContent = resp.usuario?.nome || "Usuário";
+
+      // Botão logout
+      btnLogout.addEventListener("click", async () => {
+        await apiRequest("logout", null, "POST");
+        window.location.href = "login.html";
+      });
+    });
+  </script>
 </body>
 </html>

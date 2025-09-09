@@ -63,25 +63,25 @@ try {
         // ---- Autenticação ----
         case "login":
             $body = read_body();
-            $email = trim($body["email"] ?? "");
+            $login = trim($body["login"] ?? "");
             $senha = trim($body["senha"] ?? "");
 
-            if ($email === "" || $senha === "") {
+            if ($login === "" || $senha === "") {
                 echo json_encode(resposta(false, "Preencha todos os campos."));
                 break;
             }
 
-            $stmt = $conn->prepare("SELECT id, nome, email, senha, nivel FROM usuarios WHERE email = ? LIMIT 1");
-            $stmt->bind_param("s", $email);
+            $stmt = $conn->prepare("SELECT id, nome, login, senha_hash, nivel FROM usuarios WHERE login = ? LIMIT 1");
+            $stmt->bind_param("s", $login);
             $stmt->execute();
             $result = $stmt->get_result();
 
             if ($row = $result->fetch_assoc()) {
-                if (password_verify($senha, $row["senha"])) {
+                if (password_verify($senha, $row["senha_hash"])) {
                     $_SESSION["usuario"] = [
                         "id"    => $row["id"],
                         "nome"  => $row["nome"],
-                        "email" => $row["email"],
+                        "login" => $row["login"],
                         "nivel" => $row["nivel"]
                     ];
                     echo json_encode(resposta(true, "Login realizado.", ["usuario" => $_SESSION["usuario"]]));
