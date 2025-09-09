@@ -10,8 +10,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const email = document.getElementById("email").value.trim();
     const senha = document.getElementById("senha").value.trim();
 
-    console.log("DEBUG → Email digitado:", email);
-    console.log("DEBUG → Senha digitada:", senha);
+    console.log("DEBUG → Email/Login digitado:", email);
+    console.log("DEBUG → Senha digitada:", senha ? "******" : "(vazia)");
 
     if (!email || !senha) {
       msgErro.textContent = "Preencha todos os campos.";
@@ -19,10 +19,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     try {
-      const resp = await apiRequest("login", { email, senha }, "POST");
+      // 🔧 Envia tanto email quanto login para compatibilidade
+      const dados = { email, login: email, senha };
+
+      const resp = await apiRequest("login", dados, "POST");
       console.log("DEBUG → Resposta API:", resp);
 
       if (resp.sucesso) {
+        // Redireciona para a página principal
         window.location.href = "index.html";
       } else {
         msgErro.textContent = resp.mensagem || "Erro ao efetuar login.";
