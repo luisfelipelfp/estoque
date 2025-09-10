@@ -2,14 +2,26 @@
 session_start();
 header("Content-Type: application/json; charset=utf-8");
 
-require_once "db.php";
+require_once __DIR__ . "/db.php";
 $conn = db();
 
-$login = $_POST["login"] ?? "";
-$senha = $_POST["senha"] ?? "";
+function resposta($sucesso, $mensagem = "", $dados = null) {
+    return ["sucesso" => $sucesso, "mensagem" => $mensagem, "dados" => $dados];
+}
 
-$stmt = $conn->prepare("SELECT id, nome, login, senha_hash, nivel FROM usuarios WHERE login = ?");
-$stmt->bind_param("s", $login);
+$login = trim($_POST["login"] ?? "");
+$senha = trim($_POST["senha"] ?? "");
+
+if ($login === "" || $senha === "") {
+    echo json_encode(resposta(false, "Preencha login e senha."));
+    exit;
+}
+
+$stmt = $conn->prepare("SELECT id, nome, login, email, senha_hash, nivel 
+                        FROM usuarios 
+                        WHERE login = ? OR email = ?
+                        LIMIT 1");
+$stmt->bind_param("ss", $login, $login);
 $stmt->execute();
 $res = $stmt->get_result();
 $usuario = $res->fetch_assoc();
@@ -17,8 +29,7 @@ $usuario = $res->fetch_assoc();
 if ($usuario && password_verify($senha, $usuario["senha_hash"])) {
     unset($usuario["senha_hash"]);
     $_SESSION["usuario"] = $usuario;
-    echo json_encode(["sucesso" => true, "usuario" => $usuario]);
+    echo json_encode(resposta(true, "Login realizado.", ["usuario" => $usuario]));
 } else {
-    http_response_code(401);
-    echo json_encode(["erro" => "Login ou senha inválidos"]);
+    echo json_encode(resposta(false, "Login ou senha inválidos."));
 }

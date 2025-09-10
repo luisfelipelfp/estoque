@@ -2,27 +2,25 @@
 session_start();
 header("Content-Type: application/json; charset=utf-8");
 
-// 🔧 DEBUG: mostrar e logar erros
+// 🔧 DEBUG: logar erros
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 ini_set("log_errors", 1);
 ini_set("error_log", __DIR__ . "/debug.log");
 
+// Funções utilitárias
 function resposta($sucesso, $mensagem = "", $dados = null) {
     return ["sucesso" => $sucesso, "mensagem" => $mensagem, "dados" => $dados];
 }
-
 function read_body() {
     $body = file_get_contents("php://input");
     return json_decode($body, true) ?? [];
 }
 
-$conn = new mysqli("localhost", "root", "#Shakka01", "estoque");
-if ($conn->connect_error) {
-    echo json_encode(resposta(false, "Erro de conexão com o banco."));
-    exit;
-}
+// Usa conexão centralizada
+require_once __DIR__ . "/db.php";
+$conn = db();
 
 $acao = $_GET["acao"] ?? $_POST["acao"] ?? "";
 
@@ -31,7 +29,6 @@ switch ($acao) {
     // 🔑 LOGIN
     case "login":
         $body = read_body();
-        // aceita tanto "login" quanto "email"
         $login = trim($body["login"] ?? $body["email"] ?? "");
         $senha = trim($body["senha"] ?? "");
 
@@ -153,18 +150,14 @@ switch ($acao) {
         try {
             if ($tipo === "entrada") {
                 $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?");
+                $stmt->bind_param("ii", $quantidade, $produto_id);
+                $stmt->execute();
             } else {
                 $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ? AND quantidade >= ?");
                 $stmt->bind_param("iii", $quantidade, $produto_id, $quantidade);
                 if (!$stmt->execute() || $stmt->affected_rows === 0) {
                     throw new Exception("Estoque insuficiente.");
                 }
-                $stmt = null;
-            }
-
-            if ($stmt) {
-                $stmt->bind_param("ii", $quantidade, $produto_id);
-                $stmt->execute();
             }
 
             $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data) 
@@ -184,4 +177,3 @@ switch ($acao) {
         echo json_encode(resposta(false, "Ação inválida."));
         break;
 }
-?>
