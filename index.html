@@ -99,18 +99,22 @@
       const btnLogout = document.getElementById("btnLogout");
 
       // Verifica usuário logado
-      const resp = await apiRequest("usuario_atual", null, "GET");
+      const resp = await apiRequest("check_session", null, "GET");
 
-      if (!resp.sucesso || !resp.logado) {
+      if (!resp.sucesso) {
         window.location.href = "login.html";
         return;
       }
 
-      usuarioSpan.textContent = resp.usuario?.nome || "Usuário";
+      usuarioSpan.textContent = resp.dados?.usuario?.nome || "Usuário";
 
       // Botão logout
       btnLogout.addEventListener("click", async () => {
-        await apiRequest("logout", null, "POST");
+        try {
+          await fetch("api/logout.php", { method: "POST" });
+        } catch (e) {
+          console.error("Erro ao fazer logout:", e);
+        }
         window.location.href = "login.html";
       });
     });

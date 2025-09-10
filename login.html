@@ -38,8 +38,42 @@
     <div id="msgErro" class="text-danger text-center mt-3"></div>
   </div>
 
-  <!-- 🔗 Primeiro carrega api.js, depois login.js -->
-  <script src="js/api.js"></script>
-  <script src="js/login.js"></script>
+  <script>
+    document.getElementById("formLogin").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const email = document.getElementById("email").value.trim();
+      const senha = document.getElementById("senha").value.trim();
+      const msgErro = document.getElementById("msgErro");
+
+      msgErro.textContent = "";
+
+      if (!email || !senha) {
+        msgErro.textContent = "Preencha todos os campos.";
+        return;
+      }
+
+      try {
+        const response = await fetch("api/login.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ email, senha })
+        });
+
+        const result = await response.json();
+
+        if (result.sucesso) {
+          // redireciona para a página principal
+          window.location.href = "index.html";
+        } else {
+          msgErro.textContent = result.mensagem;
+        }
+      } catch (err) {
+        msgErro.textContent = "Erro na comunicação com o servidor.";
+        console.error(err);
+      }
+    });
+  </script>
+
 </body>
 </html>

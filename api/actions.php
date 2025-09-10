@@ -26,44 +26,6 @@ $acao = $_GET["acao"] ?? $_POST["acao"] ?? "";
 
 switch ($acao) {
 
-    // 🔑 LOGIN
-    case "login":
-        $body = read_body();
-        $email = trim($body["email"] ?? "");
-        $senha = trim($body["senha"] ?? "");
-
-        if ($email === "" || $senha === "") {
-            echo json_encode(resposta(false, "Preencha todos os campos."));
-            break;
-        }
-
-        $stmt = $conn->prepare("SELECT id, nome, email, senha, nivel 
-                                FROM usuarios 
-                                WHERE email = ? 
-                                LIMIT 1");
-        $stmt->bind_param("s", $email);
-        $stmt->execute();
-        $result = $stmt->get_result();
-
-        if ($row = $result->fetch_assoc()) {
-            if (password_verify($senha, $row["senha"])) {
-                unset($row["senha"]); // nunca expor hash
-                $_SESSION["usuario"] = $row;
-                echo json_encode(resposta(true, "Login realizado.", ["usuario" => $_SESSION["usuario"]]));
-            } else {
-                echo json_encode(resposta(false, "Senha incorreta."));
-            }
-        } else {
-            echo json_encode(resposta(false, "Usuário não encontrado."));
-        }
-        break;
-
-    // 🔑 LOGOUT
-    case "logout":
-        session_destroy();
-        echo json_encode(resposta(true, "Logout realizado."));
-        break;
-
     // 🔑 CHECA SE ESTÁ LOGADO
     case "check_session":
         if (isset($_SESSION["usuario"])) {
