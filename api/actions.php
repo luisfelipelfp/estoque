@@ -37,20 +37,21 @@ switch ($acao) {
             break;
         }
 
-        $stmt = $conn->prepare("SELECT id, nome, login, email, senha_hash, nivel 
+        // ✅ Corrigido: usa apenas colunas que existem
+        $stmt = $conn->prepare("SELECT id, nome, email, senha, nivel 
                                 FROM usuarios 
-                                WHERE login = ? OR email = ? 
+                                WHERE email = ? 
                                 LIMIT 1");
-        $stmt->bind_param("ss", $login, $login);
+        $stmt->bind_param("s", $login);
         $stmt->execute();
         $result = $stmt->get_result();
 
         if ($row = $result->fetch_assoc()) {
-            if (password_verify($senha, $row["senha_hash"])) {
+            if (password_verify($senha, $row["senha"])) {
                 $_SESSION["usuario"] = [
                     "id"    => $row["id"],
                     "nome"  => $row["nome"],
-                    "login" => $row["login"],
+                    "email" => $row["email"],
                     "nivel" => $row["nivel"]
                 ];
                 echo json_encode(resposta(true, "Login realizado.", ["usuario" => $_SESSION["usuario"]]));
@@ -177,3 +178,4 @@ switch ($acao) {
         echo json_encode(resposta(false, "Ação inválida."));
         break;
 }
+?>

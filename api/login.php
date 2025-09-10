@@ -9,7 +9,7 @@ function resposta($sucesso, $mensagem = "", $dados = null) {
     return ["sucesso" => $sucesso, "mensagem" => $mensagem, "dados" => $dados];
 }
 
-$login = trim($_POST["login"] ?? "");
+$login = trim($_POST["login"] ?? $_POST["email"] ?? "");
 $senha = trim($_POST["senha"] ?? "");
 
 if ($login === "" || $senha === "") {
@@ -17,17 +17,17 @@ if ($login === "" || $senha === "") {
     exit;
 }
 
-$stmt = $conn->prepare("SELECT id, nome, login, email, senha_hash, nivel 
+$stmt = $conn->prepare("SELECT id, nome, email, senha, nivel 
                         FROM usuarios 
-                        WHERE login = ? OR email = ?
+                        WHERE email = ?
                         LIMIT 1");
-$stmt->bind_param("ss", $login, $login);
+$stmt->bind_param("s", $login);
 $stmt->execute();
 $res = $stmt->get_result();
 $usuario = $res->fetch_assoc();
 
-if ($usuario && password_verify($senha, $usuario["senha_hash"])) {
-    unset($usuario["senha_hash"]);
+if ($usuario && password_verify($senha, $usuario["senha"])) {
+    unset($usuario["senha"]);
     $_SESSION["usuario"] = $usuario;
     echo json_encode(resposta(true, "Login realizado.", ["usuario" => $usuario]));
 } else {
