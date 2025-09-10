@@ -29,31 +29,26 @@ switch ($acao) {
     // 🔑 LOGIN
     case "login":
         $body = read_body();
-        $login = trim($body["login"] ?? $body["email"] ?? "");
+        $email = trim($body["email"] ?? "");
         $senha = trim($body["senha"] ?? "");
 
-        if ($login === "" || $senha === "") {
+        if ($email === "" || $senha === "") {
             echo json_encode(resposta(false, "Preencha todos os campos."));
             break;
         }
 
-        // ✅ Corrigido: usa apenas colunas que existem
         $stmt = $conn->prepare("SELECT id, nome, email, senha, nivel 
                                 FROM usuarios 
                                 WHERE email = ? 
                                 LIMIT 1");
-        $stmt->bind_param("s", $login);
+        $stmt->bind_param("s", $email);
         $stmt->execute();
         $result = $stmt->get_result();
 
         if ($row = $result->fetch_assoc()) {
             if (password_verify($senha, $row["senha"])) {
-                $_SESSION["usuario"] = [
-                    "id"    => $row["id"],
-                    "nome"  => $row["nome"],
-                    "email" => $row["email"],
-                    "nivel" => $row["nivel"]
-                ];
+                unset($row["senha"]); // nunca expor hash
+                $_SESSION["usuario"] = $row;
                 echo json_encode(resposta(true, "Login realizado.", ["usuario" => $_SESSION["usuario"]]));
             } else {
                 echo json_encode(resposta(false, "Senha incorreta."));

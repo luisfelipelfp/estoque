@@ -8,4 +8,4 @@ function resposta($sucesso, $mensagem = "", $dados = null) {
 
 session_destroy();
 echo json_encode(resposta(true, "Logout realizado."));
-   
+    
