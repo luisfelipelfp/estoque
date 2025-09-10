@@ -35,7 +35,9 @@ switch ($acao) {
         }
         break;
 
+    // ======================
     // PRODUTOS
+    // ======================
     case "listar_produtos":
         $result = $conn->query("SELECT * FROM produtos ORDER BY nome ASC");
         $produtos = $result->fetch_all(MYSQLI_ASSOC);
@@ -57,7 +59,7 @@ switch ($acao) {
         if ($stmt->execute()) {
             echo json_encode(resposta(true, "Produto adicionado."));
         } else {
-            echo json_encode(resposta(false, "Erro ao adicionar produto."));
+            echo json_encode(resposta(false, "Erro ao adicionar produto: " . $conn->error));
         }
         break;
 
@@ -68,22 +70,34 @@ switch ($acao) {
             break;
         }
 
-        // registra movimentação de remoção
-        $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data) 
-                                VALUES (?, 'remocao', 0, NOW())");
-        $stmt->bind_param("i", $id);
-        $stmt->execute();
+        $conn->begin_transaction();
+        try {
+            // registra movimentação de remoção
+            $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data) 
+                                    VALUES (?, 'remocao', 0, NOW())");
+            $stmt->bind_param("i", $id);
+            $stmt->execute();
 
-        $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
-        $stmt->bind_param("i", $id);
-        if ($stmt->execute()) {
+            // deleta produto
+            $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
+            $stmt->bind_param("i", $id);
+            $stmt->execute();
+
+            if ($stmt->affected_rows === 0) {
+                throw new Exception("Produto não encontrado.");
+            }
+
+            $conn->commit();
             echo json_encode(resposta(true, "Produto removido."));
-        } else {
-            echo json_encode(resposta(false, "Erro ao remover produto."));
+        } catch (Exception $e) {
+            $conn->rollback();
+            echo json_encode(resposta(false, "Erro ao remover produto: " . $e->getMessage()));
         }
         break;
 
+    // ======================
     // MOVIMENTAÇÕES
+    // ======================
     case "listar_movimentacoes":
         $result = $conn->query("SELECT m.id, p.nome AS produto, m.tipo, m.quantidade, m.data 
                                 FROM movimentacoes m 
@@ -113,7 +127,9 @@ switch ($acao) {
             } else {
                 $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ? AND quantidade >= ?");
                 $stmt->bind_param("iii", $quantidade, $produto_id, $quantidade);
-                if (!$stmt->execute() || $stmt->affected_rows === 0) {
+                $stmt->execute();
+
+                if ($stmt->affected_rows === 0) {
                     throw new Exception("Estoque insuficiente.");
                 }
             }
@@ -131,6 +147,9 @@ switch ($acao) {
         }
         break;
 
+    // ======================
+    // DEFAULT
+    // ======================
     default:
         echo json_encode(resposta(false, "Ação inválida."));
         break;
