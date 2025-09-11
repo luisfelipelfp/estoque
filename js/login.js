@@ -7,16 +7,17 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     msgErro.textContent = "";
 
+    // 🔧 Corrigido: agora pega o campo "login"
     const login = document.getElementById("login").value.trim();
     const senha = document.getElementById("senha").value.trim();
 
     if (!login || !senha) {
-      msgErro.textContent = "Preencha todos os campos.";
+      msgErro.textContent = "Preencha login e senha.";
       return;
     }
 
     try {
-      const dados = { login, senha };
+      const dados = { login, senha }; // 🔧 chave compatível com login.php
       const resp = await apiRequest("login", dados, "POST");
 
       if (resp.sucesso) {
