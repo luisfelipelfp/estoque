@@ -7,16 +7,16 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     msgErro.textContent = "";
 
-    const email = document.getElementById("email").value.trim();
+    const login = document.getElementById("login").value.trim();
     const senha = document.getElementById("senha").value.trim();
 
-    if (!email || !senha) {
+    if (!login || !senha) {
       msgErro.textContent = "Preencha todos os campos.";
       return;
     }
 
     try {
-      const dados = { email, senha };
+      const dados = { login, senha };
       const resp = await apiRequest("login", dados, "POST");
 
       if (resp.sucesso) {
