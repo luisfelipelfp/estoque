@@ -51,13 +51,13 @@
   <form id="formFiltrosMovimentacoes" class="mb-3 d-flex flex-wrap gap-2">
     <input type="date" id="filtroDataInicio" name="data_inicio" class="form-control">
     <input type="date" id="filtroDataFim" name="data_fim" class="form-control">
-    <select id="filtroTipo" name="tipo" class="form-control">
+    <select id="filtroTipo" name="tipo" class="form-select">
       <option value="">Todos</option>
       <option value="entrada">Entrada</option>
       <option value="saida">Saída</option>
       <option value="remocao">Remoção</option>
     </select>
-    <select id="filtroProduto" name="produto" class="form-control">
+    <select id="filtroProduto" name="produto_id" class="form-select">
       <option value="">Todos os Produtos</option>
     </select>
     <button type="submit" class="btn btn-secondary">🔍 Filtrar</button>
@@ -87,8 +87,8 @@
 
   <!-- Scripts na ordem correta -->
   <script src="js/api.js"></script>
+  <script src="js/main.js"></script>
   <script src="js/produtos.js"></script>
   <script src="js/movimentacoes.js"></script>
-  <script src="js/main.js"></script>
 </body>
 </html>
