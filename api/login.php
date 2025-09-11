@@ -15,7 +15,7 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     exit;
 }
 
-$login = trim($_POST["login"] ?? $_POST["email"] ?? "");
+$login = trim($_POST["login"] ?? "");
 $senha = trim($_POST["senha"] ?? "");
 
 if ($login === "" || $senha === "") {
@@ -23,22 +23,31 @@ if ($login === "" || $senha === "") {
     exit;
 }
 
-$stmt = $conn->prepare("SELECT id, nome, email, senha, nivel 
-                        FROM usuarios 
-                        WHERE email = ?
-                        LIMIT 1");
+// Verifica se login é um e-mail válido
+if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
+    $stmt = $conn->prepare("SELECT id, nome, email, senha, nivel 
+                            FROM usuarios 
+                            WHERE email = ?
+                            LIMIT 1");
+} else {
+    $stmt = $conn->prepare("SELECT id, nome, email, senha, nivel 
+                            FROM usuarios 
+                            WHERE nome = ?
+                            LIMIT 1");
+}
+
 $stmt->bind_param("s", $login);
 $stmt->execute();
 $res = $stmt->get_result();
 $usuario = $res->fetch_assoc();
 
 if ($usuario && password_verify($senha, $usuario["senha"])) {
-    unset($usuario["senha"]); // 🔒 não expor hash
+    unset($usuario["senha"]); // 🔒 nunca expor hash
     $_SESSION["usuario"] = $usuario;
 
     echo json_encode(resposta(true, "Login realizado.", [
         "usuario" => $usuario
     ]));
 } else {
-    echo json_encode(resposta(false, "Email ou senha inválidos."));
+    echo json_encode(resposta(false, "Usuário/e-mail ou senha inválidos."));
 }
