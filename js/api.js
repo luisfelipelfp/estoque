@@ -1,12 +1,13 @@
 // js/api.js
-const API_URL = "http://192.168.15.100/estoque/api/actions.php";
-const AUTH_URL = "http://192.168.15.100/estoque/api"; // login.php, logout.php, usuario.php ficam aqui
+const BASE_URL = "http://192.168.15.100/estoque/api";
+const API_URL = `${BASE_URL}/actions.php`;
+const AUTH_URL = BASE_URL; // login.php, logout.php, usuario.php ficam aqui
 
 async function apiRequest(acao, dados = null, metodo = "GET") {
   try {
     let url;
 
-    // Roteamento especial para autenticação
+    // 🔑 Rotas especiais de autenticação
     if (acao === "login") {
       url = `${AUTH_URL}/login.php`;
     } else if (acao === "logout") {
@@ -20,14 +21,15 @@ async function apiRequest(acao, dados = null, metodo = "GET") {
 
     let options = {
       method: metodo,
-      credentials: "include" // 🔑 mantém sessão PHP
+      credentials: "include" // 🔑 mantém sessão ativa no PHP
     };
 
     if (metodo === "GET" && dados) {
+      // Adiciona query string para GET
       const query = new URLSearchParams(dados).toString();
       url += (url.includes("?") ? "&" : "?") + query;
     } else if (metodo === "POST" && dados) {
-      // 🔧 normaliza chaves (id -> produto_id)
+      // 🔧 normaliza chaves (id -> produto_id) quando necessário
       if (dados.id && !dados.produto_id) {
         dados.produto_id = dados.id;
         delete dados.id;
@@ -37,9 +39,12 @@ async function apiRequest(acao, dados = null, metodo = "GET") {
     }
 
     const resp = await fetch(url, options);
-    if (!resp.ok) throw new Error(`Erro HTTP: ${resp.status}`);
+    if (!resp.ok) {
+      throw new Error(`Erro HTTP: ${resp.status} - ${resp.statusText}`);
+    }
 
-    return await resp.json();
+    const json = await resp.json();
+    return json;
   } catch (err) {
     console.error("Erro em apiRequest:", err);
     return { sucesso: false, mensagem: "Erro de comunicação com o servidor." };

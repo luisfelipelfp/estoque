@@ -16,9 +16,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     try {
-      // 🔧 compatibilidade (email ou login)
-      const dados = { email, login: email, senha };
-
+      const dados = { email, senha };
       const resp = await apiRequest("login", dados, "POST");
 
       if (resp.sucesso) {

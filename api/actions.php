@@ -2,7 +2,7 @@
 session_start();
 header("Content-Type: application/json; charset=utf-8");
 
-// 🔧 DEBUG: logar erros
+// 🔧 DEBUG
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
@@ -18,22 +18,13 @@ function read_body() {
     return json_decode($body, true) ?? [];
 }
 
-// Usa conexão centralizada
+// Conexão
 require_once __DIR__ . "/db.php";
 $conn = db();
 
 $acao = $_GET["acao"] ?? $_POST["acao"] ?? "";
 
 switch ($acao) {
-
-    // 🔑 CHECA SE ESTÁ LOGADO
-    case "check_session":
-        if (isset($_SESSION["usuario"])) {
-            echo json_encode(resposta(true, "Usuário logado.", ["usuario" => $_SESSION["usuario"]]));
-        } else {
-            echo json_encode(resposta(false, "Não logado."));
-        }
-        break;
 
     // ======================
     // PRODUTOS
@@ -72,7 +63,7 @@ switch ($acao) {
 
         $conn->begin_transaction();
         try {
-            // registra movimentação de remoção
+            // registra movimentação
             $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data) 
                                     VALUES (?, 'remocao', 0, NOW())");
             $stmt->bind_param("i", $id);
@@ -147,9 +138,6 @@ switch ($acao) {
         }
         break;
 
-    // ======================
-    // DEFAULT
-    // ======================
     default:
         echo json_encode(resposta(false, "Ação inválida."));
         break;

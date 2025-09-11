@@ -1,26 +1,21 @@
 // js/produtos.js
 
-// Evita registrar eventos 2x se o script for incluído mais de uma vez
 if (!window.__PRODUTOS_JS_BOUND__) {
   window.__PRODUTOS_JS_BOUND__ = true;
 
-  // Controle de chamadas em andamento (trava por produto/ação)
-  const inflight = new Set(); // ex: "entrada-5", "saida-5", "remover-5"
+  const inflight = new Set();
 
-  // Lista de produtos
   async function listarProdutos() {
     try {
       const resp = await apiRequest("listar_produtos", null, "GET");
-      const produtos = Array.isArray(resp) ? resp : (resp?.dados || resp || []);
+      const produtos = Array.isArray(resp?.dados) ? resp.dados : [];
       const tbody = document.querySelector("#tabelaProdutos tbody");
       if (!tbody) return;
 
       tbody.innerHTML = "";
 
       if (!produtos.length) {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="4" class="text-center">Nenhum produto encontrado</td>`;
-        tbody.appendChild(tr);
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center">Nenhum produto encontrado</td></tr>`;
         return;
       }
 
@@ -43,7 +38,6 @@ if (!window.__PRODUTOS_JS_BOUND__) {
     }
   }
 
-  // 🔑 Expondo a função globalmente para o main.js encontrar
   window.listarProdutos = listarProdutos;
 
   async function execAcao(acao, id, quantidade) {
@@ -54,23 +48,30 @@ if (!window.__PRODUTOS_JS_BOUND__) {
     inflight.add(key);
 
     const rowBtns = document.querySelectorAll(`button[data-id="${id}"]`);
-    rowBtns.forEach(b => b.disabled = true);
+    rowBtns.forEach(b => (b.disabled = true));
 
     try {
-      // 🔧 corrigido: enviar produto_id em vez de id
-      const payload = quantidade != null ? { produto_id: id, quantidade } : { produto_id: id };
-      const resp = await apiRequest(acao, payload, "POST");
-      return resp;
+      let payload;
+      if (acao === "entrada" || acao === "saida") {
+        payload = { produto_id: id, quantidade };
+        return await apiRequest("registrar_movimentacao", {
+          produto_id: id,
+          tipo: acao,
+          quantidade
+        }, "POST");
+      } else if (acao === "remover") {
+        payload = { id };
+        return await apiRequest("remover_produto", payload, "POST");
+      }
     } catch (err) {
       console.error(`Erro em ${acao}:`, err);
       return { sucesso: false, mensagem: "Erro de comunicação." };
     } finally {
       inflight.delete(key);
-      rowBtns.forEach(b => b.disabled = false);
+      rowBtns.forEach(b => (b.disabled = false));
     }
   }
 
-  // --- Funções globais ---
   window.entrada = async function (id) {
     const qtd = prompt("Quantidade de entrada:");
     if (qtd === null) return;
@@ -85,8 +86,8 @@ if (!window.__PRODUTOS_JS_BOUND__) {
       alert(resp.mensagem || "Entrada registrada.");
       await listarProdutos();
       if (typeof listarMovimentacoes === "function") await listarMovimentacoes();
-    } else if (resp) {
-      alert(resp.mensagem || "Erro ao registrar entrada.");
+    } else {
+      alert(resp?.mensagem || "Erro ao registrar entrada.");
     }
   };
 
@@ -104,8 +105,8 @@ if (!window.__PRODUTOS_JS_BOUND__) {
       alert(resp.mensagem || "Saída registrada.");
       await listarProdutos();
       if (typeof listarMovimentacoes === "function") await listarMovimentacoes();
-    } else if (resp) {
-      alert(resp.mensagem || "Erro ao registrar saída.");
+    } else {
+      alert(resp?.mensagem || "Erro ao registrar saída.");
     }
   };
 
@@ -117,13 +118,12 @@ if (!window.__PRODUTOS_JS_BOUND__) {
       alert(resp.mensagem || "Produto removido.");
       await listarProdutos();
       if (typeof listarMovimentacoes === "function") await listarMovimentacoes();
-    } else if (resp) {
-      alert(resp.mensagem || "Erro ao remover produto.");
+    } else {
+      alert(resp?.mensagem || "Erro ao remover produto.");
     }
   };
 
-  // --- Event delegation ---
-  document.addEventListener("click", function (e) {
+  document.addEventListener("click", e => {
     const btn = e.target.closest("button");
     if (!btn) return;
 
@@ -137,9 +137,8 @@ if (!window.__PRODUTOS_JS_BOUND__) {
     } else if (btn.classList.contains("btn-remover")) {
       window.remover(parseInt(id, 10));
     }
-  }, { once: false });
+  });
 
-  // --- Formulário de adicionar produto ---
   document.querySelector("#formAdicionarProduto")?.addEventListener("submit", async function (e) {
     e.preventDefault();
     const nome = (document.querySelector("#nomeProduto")?.value || "").trim();
@@ -148,7 +147,7 @@ if (!window.__PRODUTOS_JS_BOUND__) {
       return;
     }
     try {
-      const resp = await apiRequest("adicionar", { nome, quantidade: 0 }, "POST");
+      const resp = await apiRequest("adicionar_produto", { nome, quantidade: 0 }, "POST");
       if (resp?.sucesso) {
         this.reset();
         await listarProdutos();
@@ -162,7 +161,6 @@ if (!window.__PRODUTOS_JS_BOUND__) {
     }
   });
 
-  // Inicialização
   window.addEventListener("DOMContentLoaded", () => {
     listarProdutos();
   });

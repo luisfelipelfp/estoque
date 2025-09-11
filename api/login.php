@@ -9,6 +9,12 @@ function resposta($sucesso, $mensagem = "", $dados = null) {
     return ["sucesso" => $sucesso, "mensagem" => $mensagem, "dados" => $dados];
 }
 
+// 🔒 Aceita apenas POST
+if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+    echo json_encode(resposta(false, "Método inválido."));
+    exit;
+}
+
 $login = trim($_POST["login"] ?? $_POST["email"] ?? "");
 $senha = trim($_POST["senha"] ?? "");
 
@@ -27,9 +33,12 @@ $res = $stmt->get_result();
 $usuario = $res->fetch_assoc();
 
 if ($usuario && password_verify($senha, $usuario["senha"])) {
-    unset($usuario["senha"]); // 🔒 nunca expor o hash
+    unset($usuario["senha"]); // 🔒 não expor hash
     $_SESSION["usuario"] = $usuario;
-    echo json_encode(resposta(true, "Login realizado.", ["usuario" => $usuario]));
+
+    echo json_encode(resposta(true, "Login realizado.", [
+        "usuario" => $usuario
+    ]));
 } else {
     echo json_encode(resposta(false, "Email ou senha inválidos."));
 }
