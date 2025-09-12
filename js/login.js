@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     msgErro.textContent = "";
 
-    // 🔧 Corrigido: agora pega o campo "login"
+    // 📌 Captura os campos do formulário
     const login = document.getElementById("login").value.trim();
     const senha = document.getElementById("senha").value.trim();
 
@@ -17,13 +17,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     try {
-      const dados = { login, senha }; // 🔧 chave compatível com login.php
-      const resp = await apiRequest("login", dados, "POST");
+      // 🔧 Agora envia os dados no formato aceito pelo login.php
+      const dados = { login, senha };
+
+      const resp = await apiRequest("login.php", dados, "POST");
 
       if (resp.sucesso) {
+        // ✅ Login bem-sucedido → redireciona
         window.location.href = "index.html";
       } else {
-        msgErro.textContent = resp.mensagem || "Erro ao efetuar login.";
+        msgErro.textContent = resp.mensagem || "Usuário/e-mail ou senha inválidos.";
       }
     } catch (err) {
       console.error("Erro inesperado no login:", err);
