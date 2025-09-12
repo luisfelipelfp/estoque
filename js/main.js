@@ -3,12 +3,12 @@
 async function verificarLogin() {
   try {
     const resp = await apiRequest("usuario_atual", null, "GET");
-    if (!resp?.sucesso) {
+    if (!resp?.sucesso || !resp.usuario) {
       window.location.href = "login.html";
       return null;
     }
 
-    const usuario = resp.dados.usuario;
+    const usuario = resp.usuario; // ✅ corrigido: não existe resp.dados.usuario
     localStorage.setItem("usuario", JSON.stringify(usuario));
     return usuario;
   } catch (err) {
