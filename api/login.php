@@ -15,15 +15,22 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     exit;
 }
 
-$login = trim($_POST["login"] ?? "");
-$senha = trim($_POST["senha"] ?? "");
+// 🔄 Captura o corpo da requisição (JSON ou POST tradicional)
+$input = json_decode(file_get_contents("php://input"), true);
+if (is_array($input)) {
+    $login = trim($input["login"] ?? $input["email"] ?? "");
+    $senha = trim($input["senha"] ?? "");
+} else {
+    $login = trim($_POST["login"] ?? $_POST["email"] ?? "");
+    $senha = trim($_POST["senha"] ?? "");
+}
 
 if ($login === "" || $senha === "") {
     echo json_encode(resposta(false, "Preencha login e senha."));
     exit;
 }
 
-// Verifica se login é um e-mail válido
+// 🔍 Verifica se login é email ou usuário
 if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
     $stmt = $conn->prepare("SELECT id, nome, email, senha, nivel 
                             FROM usuarios 

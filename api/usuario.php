@@ -4,7 +4,7 @@ header("Content-Type: application/json; charset=utf-8");
 
 function resposta($logado, $usuario = null) {
     return [
-        "logado" => $logado,
+        "sucesso" => $logado,
         "usuario" => $usuario
     ];
 }
