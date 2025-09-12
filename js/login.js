@@ -17,14 +17,18 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     try {
-      // 🔧 Agora envia os dados no formato aceito pelo login.php
       const dados = { login, senha };
 
-      // ✅ Usa "login" → api.js converte corretamente para login.php
+      // 🔑 Faz a requisição para login.php via api.js
       const resp = await apiRequest("login", dados, "POST");
 
       if (resp.sucesso) {
-        // ✅ Login bem-sucedido → redireciona
+        // ✅ Pega usuário retornado e salva no localStorage
+        if (resp.dados?.usuario) {
+          localStorage.setItem("usuario", JSON.stringify(resp.dados.usuario));
+        }
+
+        // Redireciona para a home
         window.location.href = "index.html";
       } else {
         msgErro.textContent = resp.mensagem || "Usuário/e-mail ou senha inválidos.";

@@ -1,4 +1,4 @@
-// js/main.js (proteção de login + logout + inicialização)
+// js/main.js (proteção de login + inicialização)
 
 async function verificarLogin() {
   try {
@@ -8,24 +8,13 @@ async function verificarLogin() {
       return null;
     }
 
-    const usuario = resp.usuario; // ✅ corrigido: não existe resp.dados.usuario
+    const usuario = resp.usuario;
     localStorage.setItem("usuario", JSON.stringify(usuario));
     return usuario;
   } catch (err) {
     console.error("Erro ao verificar login:", err);
     alert("Erro de conexão com o servidor.");
     return null;
-  }
-}
-
-async function logout() {
-  try {
-    await apiRequest("logout", null, "POST");
-  } catch (err) {
-    console.error("Erro ao deslogar:", err);
-  } finally {
-    localStorage.removeItem("usuario");
-    window.location.href = "login.html";
   }
 }
 
@@ -39,11 +28,6 @@ window.onload = async () => {
     const usuarioSpan = document.getElementById("usuarioLogado");
     if (usuarioSpan) {
       usuarioSpan.textContent = `${usuario.nome} (${usuario.nivel})`;
-    }
-
-    const btnLogout = document.getElementById("btnLogout");
-    if (btnLogout) {
-      btnLogout.addEventListener("click", logout);
     }
 
     if (typeof window.listarProdutos === "function") {
