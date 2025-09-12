@@ -28,13 +28,14 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
 $input = json_decode(file_get_contents("php://input"), true);
 if (is_array($input)) {
     $login = trim($input["login"] ?? $input["email"] ?? "");
-    $senha = trim($input["senha"] ?? "");
+    $senha = $input["senha"] ?? "";
 } else {
     $login = trim($_POST["login"] ?? $_POST["email"] ?? "");
-    $senha = trim($_POST["senha"] ?? "");
+    $senha = $_POST["senha"] ?? "";
 }
 
-debug_log("Recebido login = '$login' | senha = " . ($senha !== "" ? "[preenchida]" : "[vazia]"));
+// ⚠️ DEBUG: logar senha recebida (apenas para teste, depois remover!)
+debug_log("Recebido login = '$login' | senha = '" . $senha . "' (len=" . strlen($senha) . ")");
 
 if ($login === "" || $senha === "") {
     debug_log("Falhou -> login ou senha vazios");
@@ -64,15 +65,21 @@ $usuario = $res->fetch_assoc();
 
 debug_log("Resultado consulta = " . json_encode($usuario));
 
-if ($usuario && password_verify($senha, $usuario["senha"])) {
-    unset($usuario["senha"]); // 🔒 nunca expor hash
-    $_SESSION["usuario"] = $usuario;
+if ($usuario) {
+    $verificacao = password_verify($senha, $usuario["senha"]);
+    debug_log("password_verify() retornou = " . ($verificacao ? "true" : "false"));
 
-    debug_log("Login bem-sucedido para usuário ID " . $usuario["id"]);
-    echo json_encode(resposta(true, "Login realizado.", [
-        "usuario" => $usuario
-    ]));
-} else {
-    debug_log("Falhou -> senha inválida ou usuário não encontrado");
-    echo json_encode(resposta(false, "Usuário/e-mail ou senha inválidos."));
+    if ($verificacao) {
+        unset($usuario["senha"]); // 🔒 nunca expor hash
+        $_SESSION["usuario"] = $usuario;
+
+        debug_log("Login bem-sucedido para usuário ID " . $usuario["id"]);
+        echo json_encode(resposta(true, "Login realizado.", [
+            "usuario" => $usuario
+        ]));
+        exit;
+    }
 }
+
+debug_log("Falhou -> senha inválida ou usuário não encontrado");
+echo json_encode(resposta(false, "Usuário/e-mail ou senha inválidos."));
