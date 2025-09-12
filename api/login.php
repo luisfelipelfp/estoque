@@ -25,7 +25,11 @@ if (is_array($input)) {
     $senha = trim($_POST["senha"] ?? "");
 }
 
+// 🔍 Debug inicial
+error_log("LOGIN DEBUG: Recebido login = '$login' | senha = " . ($senha !== "" ? "[preenchida]" : "[vazia]"));
+
 if ($login === "" || $senha === "") {
+    error_log("LOGIN DEBUG: Falhou -> login ou senha vazios");
     echo json_encode(resposta(false, "Preencha login e senha."));
     exit;
 }
@@ -36,11 +40,13 @@ if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
                             FROM usuarios 
                             WHERE email = ?
                             LIMIT 1");
+    error_log("LOGIN DEBUG: Consultando por email");
 } else {
     $stmt = $conn->prepare("SELECT id, nome, email, senha, nivel 
                             FROM usuarios 
                             WHERE nome = ?
                             LIMIT 1");
+    error_log("LOGIN DEBUG: Consultando por nome de usuário");
 }
 
 $stmt->bind_param("s", $login);
@@ -48,13 +54,17 @@ $stmt->execute();
 $res = $stmt->get_result();
 $usuario = $res->fetch_assoc();
 
+error_log("LOGIN DEBUG: Resultado consulta = " . json_encode($usuario));
+
 if ($usuario && password_verify($senha, $usuario["senha"])) {
     unset($usuario["senha"]); // 🔒 nunca expor hash
     $_SESSION["usuario"] = $usuario;
 
+    error_log("LOGIN DEBUG: Login bem-sucedido para usuário ID " . $usuario["id"]);
     echo json_encode(resposta(true, "Login realizado.", [
         "usuario" => $usuario
     ]));
 } else {
+    error_log("LOGIN DEBUG: Falhou -> senha inválida ou usuário não encontrado");
     echo json_encode(resposta(false, "Usuário/e-mail ou senha inválidos."));
 }
