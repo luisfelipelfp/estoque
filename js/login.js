@@ -20,7 +20,8 @@ document.addEventListener("DOMContentLoaded", () => {
       // 🔧 Agora envia os dados no formato aceito pelo login.php
       const dados = { login, senha };
 
-      const resp = await apiRequest("login.php", dados, "POST");
+      // ✅ Usa "login" → api.js converte corretamente para login.php
+      const resp = await apiRequest("login", dados, "POST");
 
       if (resp.sucesso) {
         // ✅ Login bem-sucedido → redireciona
