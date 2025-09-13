@@ -66,7 +66,9 @@ function relatorio(mysqli $conn, array $filtros = []): array {
               LEFT JOIN usuarios u ON u.id = m.usuario_id
                   $where";
     $stmtT = $conn->prepare($sqlTotal);
-    if ($bind) $stmtT->bind_param($types, ...$bind);
+    if ($bind) {
+        $stmtT->bind_param($types, ...$bind);
+    }
     $stmtT->execute();
     $total = (int)($stmtT->get_result()->fetch_assoc()["total"] ?? 0);
     $stmtT->close();
@@ -93,7 +95,9 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $stmt = $conn->prepare($sql);
 
     if ($bind) {
-        $stmt->bind_param($types . "ii", ...$bind, $limite, $offset);
+        // 🔹 Corrigido: junta tudo antes de desempacotar
+        $params = array_merge($bind, [$limite, $offset]);
+        $stmt->bind_param($types . "ii", ...$params);
     } else {
         $stmt->bind_param("ii", $limite, $offset);
     }
