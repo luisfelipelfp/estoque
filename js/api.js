@@ -47,6 +47,58 @@ async function apiRequest(acao, dados = null, metodo = "GET") {
     return json;
   } catch (err) {
     console.error("Erro em apiRequest:", err);
+
+    // 🔧 envia para o servidor (debug.log)
+    try {
+      fetch(`${BASE_URL}/log.php`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          origem: "apiRequest",
+          mensagem: err.message,
+          stack: err.stack
+        })
+      });
+    } catch (e) {
+      console.warn("Falha ao enviar log para servidor:", e);
+    }
+
     return { sucesso: false, mensagem: "Erro de comunicação com o servidor." };
   }
 }
+
+// ==========================
+// 🔧 Captura erros globais
+// ==========================
+window.onerror = function (msg, url, linha, coluna, erro) {
+  console.error("Erro JS global:", msg, url, linha, coluna, erro);
+
+  fetch(`${BASE_URL}/log.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      origem: "window.onerror",
+      mensagem: msg,
+      arquivo: url,
+      linha: linha,
+      coluna: coluna,
+      stack: erro && erro.stack ? erro.stack : null
+    })
+  });
+
+  return false; // deixa o erro aparecer no console também
+};
+
+window.onunhandledrejection = function (event) {
+  console.error("Promise não tratada:", event.reason);
+
+  fetch(`${BASE_URL}/log.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      origem: "unhandledrejection",
+      mensagem: event.reason ? event.reason.message || event.reason : "Erro desconhecido",
+      stack: event.reason && event.reason.stack ? event.reason.stack : null
+    })
+  });
+};
