@@ -66,7 +66,7 @@ switch ($acao) {
     // ======================
     // MOVIMENTAÇÕES & RELATÓRIOS
     // ======================
-    case "listar_movimentacoes": // 🔄 agora é alias do relatório
+    case "listar_movimentacoes": // 🔄 alias do relatório
     case "listar_relatorios":
         $filtros = [
             "produto_id"  => $_GET["produto_id"] ?? null,
@@ -81,7 +81,15 @@ switch ($acao) {
 
         try {
             $rel = relatorio($conn, $filtros);
-            echo json_encode(resposta(true, "", $rel));
+
+            // garante consistência
+            $dados = $rel["dados"] ?? (is_array($rel) ? $rel : []);
+            $total = $rel["total"] ?? count($dados);
+
+            echo json_encode(resposta(true, "", [
+                "dados" => $dados,
+                "total" => $total
+            ]));
         } catch (Throwable $e) {
             error_log("Erro relatorio: " . $e->getMessage());
             echo json_encode(resposta(false, "Erro ao gerar relatório."));

@@ -16,7 +16,7 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $offset = ($pagina - 1) * $limite;
 
     // ======================
-    // Total de registros (sem LIMIT/OFFSET)
+    // Filtros
     // ======================
     $cond = [];
     $bind = [];
@@ -38,7 +38,7 @@ function relatorio(mysqli $conn, array $filtros = []): array {
         $types .= "i";
     }
     if (!empty($filtros["usuario"])) {
-        $cond[] = "COALESCE(u.nome, 'Sistema') LIKE ?";
+        $cond[] = "u.nome LIKE ?";
         $bind[] = "%" . $filtros["usuario"] . "%";
         $types .= "s";
     }
@@ -55,6 +55,9 @@ function relatorio(mysqli $conn, array $filtros = []): array {
 
     $where = $cond ? "WHERE " . implode(" AND ", $cond) : "";
 
+    // ======================
+    // Contagem total
+    // ======================
     $sqlTotal = "SELECT COUNT(*) AS total
                    FROM movimentacoes m
               LEFT JOIN usuarios u ON u.id = m.usuario_id
@@ -66,16 +69,37 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $stmtT->close();
 
     // ======================
-    // Dados via mov_listar()
+    // Dados (com JOIN de usuários e produtos)
     // ======================
-    $movs = mov_listar($conn, [
-        "pagina"     => $pagina,
-        "limite"     => $limite,
-        "tipo"       => $filtros["tipo"]       ?? null,
-        "produto_id" => $filtros["produto_id"] ?? null,
-        "data_ini"   => $filtros["data_inicio"] ?? null,
-        "data_fim"   => $filtros["data_fim"]    ?? null,
-    ]);
+    $sql = "SELECT m.id,
+                   m.produto_id,
+                   p.nome AS produto_nome,
+                   m.tipo,
+                   m.quantidade,
+                   m.data,
+                   m.usuario_id,
+                   u.nome AS usuario
+              FROM movimentacoes m
+         LEFT JOIN produtos p ON p.id = m.produto_id
+         LEFT JOIN usuarios u ON u.id = m.usuario_id
+              $where
+          ORDER BY m.data DESC
+             LIMIT ? OFFSET ?";
+    $stmt = $conn->prepare($sql);
+
+    if ($bind) {
+        $stmt->bind_param($types . "ii", ...$bind, $limite, $offset);
+    } else {
+        $stmt->bind_param("ii", $limite, $offset);
+    }
+
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $movs = [];
+    while ($row = $result->fetch_assoc()) {
+        $movs[] = $row;
+    }
+    $stmt->close();
 
     return [
         "sucesso"  => true,
@@ -84,6 +108,6 @@ function relatorio(mysqli $conn, array $filtros = []): array {
         "limite"   => $limite,
         "paginas"  => (int)ceil($total / $limite),
         "dados"    => $movs,
-        "produtos" => produtos_listar($conn, true), // inclui inativos/removidos também
+        "produtos" => produtos_listar($conn, true),
     ];
 }

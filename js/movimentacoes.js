@@ -11,12 +11,17 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
       filtros.pagina = pagina;
       filtros.limite = limitePorPagina;
 
-      // 🔹 usa "listar_relatorios" em vez de "listar_movimentacoes" para trazer mais informações
+      // 🔹 chama listar_relatorios (alias de listar_movimentacoes)
       const resp = await apiRequest("listar_relatorios", filtros, "GET");
-      const movs = Array.isArray(resp?.dados) ? resp.dados : [];
 
-      // usa total vindo da API ou calcula pelo tamanho retornado
-      const total = Number(resp?.total) || movs.length;
+      // garante compatibilidade com diferentes formatos de retorno
+      const dados = resp?.dados || {};
+      const movs = Array.isArray(dados?.dados)
+        ? dados.dados
+        : Array.isArray(resp?.dados)
+        ? resp.dados
+        : [];
+      const total = Number(dados?.total || resp?.total || movs.length);
 
       const tbody = document.querySelector("#tabelaMovimentacoes tbody");
       if (!tbody) return;
@@ -44,7 +49,7 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
           <td class="${tipoClass}">${m.tipo}</td>
           <td>${m.quantidade}</td>
           <td>${m.data}</td>
-          <td>${m.usuario || "Sistema"}</td>
+          <td>${m.usuario_nome || m.usuario || "Sistema"}</td>
         `;
         tbody.appendChild(tr);
       });
