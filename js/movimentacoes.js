@@ -11,7 +11,8 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
       filtros.pagina = pagina;
       filtros.limite = limitePorPagina;
 
-      const resp = await apiRequest("listar_movimentacoes", filtros, "GET");
+      // 🔹 usa "listar_relatorios" em vez de "listar_movimentacoes" para trazer mais informações
+      const resp = await apiRequest("listar_relatorios", filtros, "GET");
       const movs = Array.isArray(resp?.dados) ? resp.dados : [];
 
       // usa total vindo da API ou calcula pelo tamanho retornado
@@ -39,11 +40,11 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
 
         tr.innerHTML = `
           <td>${m.id}</td>
-          <td>${m.produto || m.produto_nome || m.produto_id}</td>
+          <td>${m.produto_nome || m.produto || m.produto_id}</td>
           <td class="${tipoClass}">${m.tipo}</td>
           <td>${m.quantidade}</td>
           <td>${m.data}</td>
-          <td>${m.usuario || ""}</td>
+          <td>${m.usuario || "Sistema"}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -137,5 +138,6 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
 
   window.addEventListener("DOMContentLoaded", async () => {
     await preencherFiltroProdutos();
+    await listarMovimentacoes({}, paginaAtual); // 🔹 já carrega primeira página
   });
 }

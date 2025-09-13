@@ -21,6 +21,7 @@ function read_body() {
 // Conexão
 require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/movimentacoes.php";
+require_once __DIR__ . "/relatorios.php"; 
 $conn = db();
 
 $acao = $_GET["acao"] ?? $_POST["acao"] ?? "";
@@ -63,19 +64,28 @@ switch ($acao) {
         break;
 
     // ======================
-    // MOVIMENTAÇÕES
+    // MOVIMENTAÇÕES & RELATÓRIOS
     // ======================
-    case "listar_movimentacoes":
+    case "listar_movimentacoes": // 🔄 agora é alias do relatório
+    case "listar_relatorios":
         $filtros = [
-            "produto_id" => $_GET["produto_id"] ?? null,
-            "tipo"       => $_GET["tipo"] ?? null,
-            "data_ini"   => $_GET["data_ini"] ?? null,
-            "data_fim"   => $_GET["data_fim"] ?? null,
-            "pagina"     => $_GET["pagina"] ?? 1,
-            "limite"     => $_GET["limite"] ?? 50,
+            "produto_id"  => $_GET["produto_id"] ?? null,
+            "tipo"        => $_GET["tipo"] ?? null,
+            "usuario_id"  => $_GET["usuario_id"] ?? null,
+            "usuario"     => $_GET["usuario"] ?? null,
+            "data_inicio" => $_GET["data_inicio"] ?? ($_GET["data_ini"] ?? null),
+            "data_fim"    => $_GET["data_fim"] ?? null,
+            "pagina"      => $_GET["pagina"] ?? 1,
+            "limite"      => $_GET["limite"] ?? 50,
         ];
-        $movs = mov_listar($conn, $filtros);
-        echo json_encode(resposta(true, "", $movs));
+
+        try {
+            $rel = relatorio($conn, $filtros);
+            echo json_encode(resposta(true, "", $rel));
+        } catch (Throwable $e) {
+            error_log("Erro relatorio: " . $e->getMessage());
+            echo json_encode(resposta(false, "Erro ao gerar relatório."));
+        }
         break;
 
     case "registrar_movimentacao":
@@ -88,6 +98,9 @@ switch ($acao) {
         echo json_encode($res);
         break;
 
+    // ======================
+    // DEFAULT
+    // ======================
     default:
         echo json_encode(resposta(false, "Ação inválida."));
         break;
