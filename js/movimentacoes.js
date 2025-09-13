@@ -14,7 +14,9 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
       const resp = await apiRequest("listar_movimentacoes", filtros, "GET");
       const movs = Array.isArray(resp?.dados) ? resp.dados : [];
 
-      const total = resp?.total || movs.length;
+      // usa total vindo da API ou calcula pelo tamanho retornado
+      const total = Number(resp?.total) || movs.length;
+
       const tbody = document.querySelector("#tabelaMovimentacoes tbody");
       if (!tbody) return;
 
@@ -41,7 +43,7 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
           <td class="${tipoClass}">${m.tipo}</td>
           <td>${m.quantidade}</td>
           <td>${m.data}</td>
-          <td>${m.usuario_nome || m.usuario || ""}</td>
+          <td>${m.usuario || ""}</td>
         `;
         tbody.appendChild(tr);
       });

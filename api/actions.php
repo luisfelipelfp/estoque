@@ -24,6 +24,9 @@ $conn = db();
 
 $acao = $_GET["acao"] ?? $_POST["acao"] ?? "";
 
+// Recupera o usuário logado da sessão
+$usuario_id = $_SESSION["usuario_id"] ?? null;
+
 switch ($acao) {
 
     // ======================
@@ -63,10 +66,10 @@ switch ($acao) {
 
         $conn->begin_transaction();
         try {
-            // registra movimentação
-            $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data) 
-                                    VALUES (?, 'remocao', 0, NOW())");
-            $stmt->bind_param("i", $id);
+            // registra movimentação com usuario_id
+            $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario_id) 
+                                    VALUES (?, 'remocao', 0, NOW(), ?)");
+            $stmt->bind_param("ii", $id, $usuario_id);
             $stmt->execute();
 
             // deleta produto
@@ -90,9 +93,10 @@ switch ($acao) {
     // MOVIMENTAÇÕES
     // ======================
     case "listar_movimentacoes":
-        $result = $conn->query("SELECT m.id, p.nome AS produto, m.tipo, m.quantidade, m.data 
-                                FROM movimentacoes m 
-                                JOIN produtos p ON m.produto_id = p.id 
+        $result = $conn->query("SELECT m.id, p.nome AS produto, m.tipo, m.quantidade, m.data, u.nome AS usuario
+                                FROM movimentacoes m
+                                LEFT JOIN produtos p ON m.produto_id = p.id
+                                LEFT JOIN usuarios u ON m.usuario_id = u.id
                                 ORDER BY m.data DESC");
         $movs = $result->fetch_all(MYSQLI_ASSOC);
         echo json_encode(resposta(true, "", $movs));
@@ -125,9 +129,10 @@ switch ($acao) {
                 }
             }
 
-            $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data) 
-                                    VALUES (?, ?, ?, NOW())");
-            $stmt->bind_param("isi", $produto_id, $tipo, $quantidade);
+            // registra movimentação com usuario_id
+            $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario_id) 
+                                    VALUES (?, ?, ?, NOW(), ?)");
+            $stmt->bind_param("isii", $produto_id, $tipo, $quantidade, $usuario_id);
             $stmt->execute();
 
             $conn->commit();
