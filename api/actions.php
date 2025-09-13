@@ -20,11 +20,10 @@ function read_body() {
 
 // Conexão
 require_once __DIR__ . "/db.php";
+require_once __DIR__ . "/movimentacoes.php";
 $conn = db();
 
 $acao = $_GET["acao"] ?? $_POST["acao"] ?? "";
-
-// Recupera o usuário logado da sessão
 $usuario_id = $_SESSION["usuario_id"] ?? null;
 
 switch ($acao) {
@@ -59,46 +58,23 @@ switch ($acao) {
 
     case "remover_produto":
         $id = (int)($_GET["id"] ?? 0);
-        if ($id <= 0) {
-            echo json_encode(resposta(false, "ID inválido."));
-            break;
-        }
-
-        $conn->begin_transaction();
-        try {
-            // registra movimentação com usuario_id
-            $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario_id) 
-                                    VALUES (?, 'remocao', 0, NOW(), ?)");
-            $stmt->bind_param("ii", $id, $usuario_id);
-            $stmt->execute();
-
-            // deleta produto
-            $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
-            $stmt->bind_param("i", $id);
-            $stmt->execute();
-
-            if ($stmt->affected_rows === 0) {
-                throw new Exception("Produto não encontrado.");
-            }
-
-            $conn->commit();
-            echo json_encode(resposta(true, "Produto removido."));
-        } catch (Exception $e) {
-            $conn->rollback();
-            echo json_encode(resposta(false, "Erro ao remover produto: " . $e->getMessage()));
-        }
+        $res = mov_remover($conn, $id, $usuario_id);
+        echo json_encode($res);
         break;
 
     // ======================
     // MOVIMENTAÇÕES
     // ======================
     case "listar_movimentacoes":
-        $result = $conn->query("SELECT m.id, p.nome AS produto, m.tipo, m.quantidade, m.data, u.nome AS usuario
-                                FROM movimentacoes m
-                                LEFT JOIN produtos p ON m.produto_id = p.id
-                                LEFT JOIN usuarios u ON m.usuario_id = u.id
-                                ORDER BY m.data DESC");
-        $movs = $result->fetch_all(MYSQLI_ASSOC);
+        $filtros = [
+            "produto_id" => $_GET["produto_id"] ?? null,
+            "tipo"       => $_GET["tipo"] ?? null,
+            "data_ini"   => $_GET["data_ini"] ?? null,
+            "data_fim"   => $_GET["data_fim"] ?? null,
+            "pagina"     => $_GET["pagina"] ?? 1,
+            "limite"     => $_GET["limite"] ?? 50,
+        ];
+        $movs = mov_listar($conn, $filtros);
         echo json_encode(resposta(true, "", $movs));
         break;
 
@@ -108,43 +84,11 @@ switch ($acao) {
         $tipo = $body["tipo"] ?? "";
         $quantidade = (int)($body["quantidade"] ?? 0);
 
-        if ($produto_id <= 0 || !in_array($tipo, ["entrada", "saida"]) || $quantidade <= 0) {
-            echo json_encode(resposta(false, "Dados inválidos."));
-            break;
-        }
-
-        $conn->begin_transaction();
-        try {
-            if ($tipo === "entrada") {
-                $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?");
-                $stmt->bind_param("ii", $quantidade, $produto_id);
-                $stmt->execute();
-            } else {
-                $stmt = $conn->prepare("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ? AND quantidade >= ?");
-                $stmt->bind_param("iii", $quantidade, $produto_id, $quantidade);
-                $stmt->execute();
-
-                if ($stmt->affected_rows === 0) {
-                    throw new Exception("Estoque insuficiente.");
-                }
-            }
-
-            // registra movimentação com usuario_id
-            $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, data, usuario_id) 
-                                    VALUES (?, ?, ?, NOW(), ?)");
-            $stmt->bind_param("isii", $produto_id, $tipo, $quantidade, $usuario_id);
-            $stmt->execute();
-
-            $conn->commit();
-            echo json_encode(resposta(true, "Movimentação registrada."));
-        } catch (Exception $e) {
-            $conn->rollback();
-            echo json_encode(resposta(false, $e->getMessage()));
-        }
+        $res = mov_registrar($conn, $produto_id, $tipo, $quantidade, $usuario_id);
+        echo json_encode($res);
         break;
 
     default:
         echo json_encode(resposta(false, "Ação inválida."));
         break;
 }
-?>
