@@ -42,14 +42,17 @@ function relatorio(mysqli $conn, array $filtros = []): array {
         $bind[] = "%" . $filtros["usuario"] . "%";
         $types .= "s";
     }
-    if (!empty($filtros["data_inicio"])) {
-        $cond[] = "DATE(m.data) >= ?";
-        $bind[] = $filtros["data_inicio"];
+
+    // 🔹 aceita tanto data_ini quanto data_inicio
+    if (!empty($filtros["data_inicio"] ?? $filtros["data_ini"])) {
+        $dataInicio = $filtros["data_inicio"] ?? $filtros["data_ini"];
+        $cond[] = "m.data >= ?";
+        $bind[] = $dataInicio . " 00:00:00";
         $types .= "s";
     }
     if (!empty($filtros["data_fim"])) {
-        $cond[] = "DATE(m.data) <= ?";
-        $bind[] = $filtros["data_fim"];
+        $cond[] = "m.data <= ?";
+        $bind[] = $filtros["data_fim"] . " 23:59:59";
         $types .= "s";
     }
 
@@ -71,20 +74,22 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     // ======================
     // Dados (com JOIN de usuários e produtos)
     // ======================
-    $sql = "SELECT m.id,
-                   m.produto_id,
-                   p.nome AS produto_nome,
-                   m.tipo,
-                   m.quantidade,
-                   m.data,
-                   m.usuario_id,
-                   u.nome AS usuario
-              FROM movimentacoes m
-         LEFT JOIN produtos p ON p.id = m.produto_id
-         LEFT JOIN usuarios u ON u.id = m.usuario_id
-              $where
-          ORDER BY m.data DESC
-             LIMIT ? OFFSET ?";
+    $sql = "SELECT 
+                m.id,
+                m.produto_id,
+                COALESCE(p.nome, m.produto_nome) AS produto_nome,
+                m.tipo,
+                m.quantidade,
+                m.data,
+                m.usuario_id,
+                COALESCE(u.nome, 'Sistema') AS usuario
+            FROM movimentacoes m
+       LEFT JOIN produtos p ON p.id = m.produto_id
+       LEFT JOIN usuarios u ON u.id = m.usuario_id
+            $where
+        ORDER BY m.data DESC, m.id DESC
+           LIMIT ? OFFSET ?";
+
     $stmt = $conn->prepare($sql);
 
     if ($bind) {
@@ -97,7 +102,16 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $result = $stmt->get_result();
     $movs = [];
     while ($row = $result->fetch_assoc()) {
-        $movs[] = $row;
+        $movs[] = [
+            "id"           => (int)$row["id"],
+            "produto_id"   => (int)$row["produto_id"],
+            "produto_nome" => $row["produto_nome"] ?? "",
+            "tipo"         => $row["tipo"],
+            "quantidade"   => (int)$row["quantidade"],
+            "data"         => $row["data"],
+            "usuario_id"   => (int)$row["usuario_id"],
+            "usuario"      => $row["usuario"] ?? "Sistema",
+        ];
     }
     $stmt->close();
 

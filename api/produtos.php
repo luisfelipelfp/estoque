@@ -5,7 +5,12 @@
  */
 require_once __DIR__ . "/movimentacoes.php";
 
-// Lista produtos (por padrão apenas ativos)
+/**
+ * Lista produtos
+ * @param mysqli $conn
+ * @param bool $incluir_inativos Se true, lista todos, senão apenas ativos
+ * @return array
+ */
 function produtos_listar(mysqli $conn, bool $incluir_inativos = false): array {
     $sql = $incluir_inativos
         ? "SELECT id, nome, quantidade, ativo FROM produtos ORDER BY id DESC"
@@ -22,7 +27,14 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = false): array {
     return $out; // o front já aceita array puro
 }
 
-// Adiciona novo produto
+/**
+ * Adiciona um novo produto
+ * @param mysqli $conn
+ * @param string $nome Nome do produto
+ * @param int $quantidade_inicial Quantidade inicial (se > 0 gera movimentação de entrada)
+ * @param int|null $usuario_id Usuário que criou o produto
+ * @return array
+ */
 function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial = 0, ?int $usuario_id = null): array {
     if (trim($nome) === "") {
         return ["sucesso" => false, "mensagem" => "Nome do produto é obrigatório."];
@@ -30,7 +42,19 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
 
     $conn->begin_transaction();
     try {
-        // Insere produto SEM quantidade (sempre começa 0)
+        // Verifica duplicidade
+        $stmtCheck = $conn->prepare("SELECT id FROM produtos WHERE nome = ?");
+        $stmtCheck->bind_param("s", $nome);
+        $stmtCheck->execute();
+        $resCheck = $stmtCheck->get_result();
+        if ($resCheck->num_rows > 0) {
+            $stmtCheck->close();
+            $conn->rollback();
+            return ["sucesso" => false, "mensagem" => "Já existe um produto com esse nome."];
+        }
+        $stmtCheck->close();
+
+        // Insere produto (quantidade começa em 0)
         $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade, ativo) VALUES (?, 0, 1)");
         $stmt->bind_param("s", $nome);
         if (!$stmt->execute()) {
@@ -42,18 +66,18 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
         $id = $conn->insert_id;
         $stmt->close();
 
-        // Se foi passada quantidade inicial > 0, usa mov_entrada
+        // Se quantidade inicial > 0 → gera movimentação de entrada
         if ($quantidade_inicial > 0) {
             $res = mov_entrada($conn, $id, $quantidade_inicial, $usuario_id);
             if (!$res["sucesso"]) {
                 $conn->rollback();
-                return $res; // já retorna erro
+                return $res; // já retorna o erro
             }
         }
 
         $conn->commit();
         return [
-            "sucesso" => true,
+            "sucesso"  => true,
             "mensagem" => "Produto adicionado com sucesso.",
             "id"       => $id
         ];
