@@ -1,0 +1,7 @@
+/* Estilo para a linha de "nenhuma movimentação encontrada" */
+#tabelaMovimentacoes tbody tr td.text-muted {
+    font-style: italic;
+    color: #6c757d; /* cinza Bootstrap */
+    text-align: center;
+    background-color: #f8f9fa; /* leve cinza de fundo */
+}

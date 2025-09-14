@@ -5,12 +5,17 @@
   <title>Estoque da Gordinha e do Careca</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
+  <!-- Bootstrap -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css">
+
+  <!-- CSS customizados -->
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/produtos.css">
+  <link rel="stylesheet" href="css/movimentacoes.css">
 </head>
 <body class="container py-4">
 
-  <!-- Header com usuário logado e logout -->
+  <!-- Header -->
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="mb-0">📦 Estoque da Gordinha e do Careca</h1>
     <div>
@@ -82,10 +87,10 @@
     </tbody>
   </table>
 
-  <!-- Paginação movimentações -->
+  <!-- Paginação -->
   <div id="paginacaoMovs" class="mt-2"></div>
 
-  <!-- Scripts na ordem correta -->
+  <!-- Scripts -->
   <script src="js/api.js"></script>
   <script src="js/logout.js"></script>
   <script src="js/main.js"></script>

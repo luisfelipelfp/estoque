@@ -1,0 +1,28 @@
+/* Reset básico */
+body, h1, h2, h3, p, table {
+    margin: 0;
+    padding: 0;
+    font-family: Verdana, sans-serif;
+}
+
+/* Corpo */
+body {
+    background-color: #f8f9fa;
+    padding: 20px;
+}
+
+/* Títulos */
+h1, h2 {
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+h1 {
+    background-color: #0d6efd;
+    color: white;
+    padding: 20px;
+    border-radius: 10px;
+    font-size: 1.8rem;
+    text-align: center;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}

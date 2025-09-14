@@ -1,0 +1,12 @@
+/* Estoque baixo */
+.estoque-baixo {
+    background-color: #ffcccc !important; /* vermelho claro */
+    color: #900 !important; /* texto vermelho escuro */
+    font-weight: bold;
+}
+
+/* Formulário adicionar produto */
+#formAdicionarProduto input,
+#formAdicionarProduto button {
+    height: 45px;
+}

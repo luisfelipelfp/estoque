@@ -1,0 +1,43 @@
+/* Container principal */
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* Tabelas */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+    font-family: Verdana, sans-serif;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+table th, table td {
+    border: 1px solid #dee2e6;
+    padding: 10px;
+    text-align: center;
+}
+
+table th {
+    background-color: #e9ecef;
+    font-weight: bold;
+}
+
+.table td,
+.table th {
+    vertical-align: middle;
+}
+
+/* Formulários */
+form {
+    margin-bottom: 20px;
+}
+
+input[type="text"], input[type="date"], select {
+    padding: 6px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-family: Verdana, sans-serif;
+}
