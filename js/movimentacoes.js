@@ -8,13 +8,26 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
 
   async function listarMovimentacoes(filtros = {}, pagina = 1) {
     try {
+      const tbody = document.querySelector("#tabelaMovimentacoes tbody");
+      if (!tbody) return;
+
+      // 🚨 Se não tiver filtro → mostra aviso e não consulta API
+      if (!Object.keys(filtros).length) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="text-center text-muted">
+              Use os filtros para buscar movimentações
+            </td>
+          </tr>`;
+        document.querySelector("#paginacaoMovs").innerHTML = "";
+        return;
+      }
+
       filtros.pagina = pagina;
       filtros.limite = limitePorPagina;
 
-      // 🔹 chama listar_relatorios (alias de listar_movimentacoes)
       const resp = await apiRequest("listar_relatorios", filtros, "GET");
 
-      // garante compatibilidade com diferentes formatos de retorno
       const dados = resp?.dados || {};
       const movs = Array.isArray(dados?.dados)
         ? dados.dados
@@ -22,9 +35,6 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
         ? resp.dados
         : [];
       const total = Number(dados?.total || resp?.total || movs.length);
-
-      const tbody = document.querySelector("#tabelaMovimentacoes tbody");
-      if (!tbody) return;
 
       tbody.innerHTML = "";
 
@@ -143,6 +153,6 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
 
   window.addEventListener("DOMContentLoaded", async () => {
     await preencherFiltroProdutos();
-    await listarMovimentacoes({}, paginaAtual); // 🔹 já carrega primeira página
+    // 🚫 não chama listarMovimentacoes sem filtros
   });
 }
