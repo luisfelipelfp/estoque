@@ -1,4 +1,21 @@
-/* Estilo para a linha de "nenhuma movimentação encontrada" */
+/* ===== Estilos específicos da área de Movimentações ===== */
+
+/* Tabela de movimentações */
+#tabelaMovimentacoes {
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+#tabelaMovimentacoes th {
+    background-color: #e9ecef;
+    font-weight: bold;
+}
+
+#tabelaMovimentacoes td {
+    vertical-align: middle;
+}
+
+/* Linha de aviso inicial */
 #tabelaMovimentacoes tbody tr td.text-muted {
     font-style: italic;
     color: #6c757d; /* cinza Bootstrap */

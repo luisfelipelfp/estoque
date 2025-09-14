@@ -1,0 +1,45 @@
+/* ===== Estilos exclusivos da tela de login ===== */
+
+/* Centralização da página (já temos via Bootstrap, aqui é só reforço) */
+body {
+    background-color: #f8f9fa;
+    font-family: Verdana, sans-serif;
+}
+
+/* Card do login */
+.card {
+    border-radius: 12px;
+    border: 1px solid #dee2e6;
+    background-color: #ffffff;
+}
+
+/* Título */
+.card h3 {
+    font-weight: bold;
+    color: #0d6efd;
+}
+
+/* Botão de login */
+.card button[type="submit"] {
+    height: 45px;
+    font-weight: bold;
+    font-size: 1rem;
+    transition: 0.2s ease-in-out;
+}
+
+.card button[type="submit"]:hover {
+    opacity: 0.9;
+    transform: scale(1.02);
+}
+
+/* Campos de input */
+.card input.form-control {
+    height: 45px;
+    border-radius: 8px;
+}
+
+/* Mensagem de erro */
+#msgErro {
+    font-size: 0.9rem;
+    font-weight: bold;
+}

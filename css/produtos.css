@@ -1,8 +1,18 @@
-/* Estoque baixo */
-.estoque-baixo {
-    background-color: #ffcccc !important; /* vermelho claro */
-    color: #900 !important; /* texto vermelho escuro */
+/* ===== Estilos específicos da área de Produtos ===== */
+
+/* Tabela de produtos */
+#tabelaProdutos {
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+#tabelaProdutos th {
+    background-color: #e9ecef;
     font-weight: bold;
+}
+
+#tabelaProdutos td {
+    vertical-align: middle;
 }
 
 /* Formulário adicionar produto */
