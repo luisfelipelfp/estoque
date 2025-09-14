@@ -59,6 +59,22 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $where = $cond ? "WHERE " . implode(" AND ", $cond) : "";
 
     // ======================
+    // Bloqueia se não houver filtros
+    // ======================
+    if (!$cond) {
+        return [
+            "sucesso"  => true,
+            "total"    => 0,
+            "pagina"   => $pagina,
+            "limite"   => $limite,
+            "paginas"  => 0,
+            "dados"    => [],
+            "produtos" => produtos_listar($conn, true),
+            "aviso"    => "Nenhum filtro aplicado — nenhum resultado retornado."
+        ];
+    }
+
+    // ======================
     // Contagem total
     // ======================
     $sqlTotal = "SELECT COUNT(*) AS total
