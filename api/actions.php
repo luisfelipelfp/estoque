@@ -59,6 +59,24 @@ try {
             break;
 
         case "remover_produto":
+            if (!$usuario_id) {
+                echo json_encode(resposta(false, "Usuário não autenticado."));
+                break;
+            }
+
+            // 🔐 Verifica nível de acesso do usuário
+            $stmt = $conn->prepare("SELECT nivel FROM usuarios WHERE id = ?");
+            $stmt->bind_param("i", $usuario_id);
+            $stmt->execute();
+            $stmt->bind_result($nivel);
+            $stmt->fetch();
+            $stmt->close();
+
+            if ($nivel !== "admin") {
+                echo json_encode(resposta(false, "Ação permitida apenas para administradores."));
+                break;
+            }
+
             $id = (int)($_GET["id"] ?? 0);
             $res = mov_remover($conn, $id, $usuario_id);
             echo json_encode($res);
