@@ -43,9 +43,9 @@ function relatorio(mysqli $conn, array $filtros = []): array {
         $types .= "s";
     }
 
-    // 🔹 aceita tanto data_ini quanto data_inicio
-    if (!empty($filtros["data_inicio"] ?? $filtros["data_ini"])) {
-        $dataInicio = $filtros["data_inicio"] ?? $filtros["data_ini"];
+    // 🔹 aceita tanto data_ini quanto data_inicio (sem warnings)
+    $dataInicio = $filtros["data_inicio"] ?? ($filtros["data_ini"] ?? null);
+    if (!empty($dataInicio)) {
         $cond[] = "m.data >= ?";
         $bind[] = $dataInicio . " 00:00:00";
         $types .= "s";
