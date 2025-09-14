@@ -20,7 +20,7 @@
     <h1 class="mb-0">📦 Estoque da Gordinha e do Careca</h1>
     <div>
       <span id="usuarioLogado" class="me-3 fw-bold text-primary"></span>
-      <button id="btnLogout" class="btn btn-outline-danger btn-sm">Sair</button>
+      <button id="btnLogout" class="btn btn-outline-danger btn-sm" aria-label="Sair do sistema">Sair</button>
     </div>
   </div>
 
@@ -34,7 +34,7 @@
       placeholder="Nome do produto" 
       required
     >
-    <button type="submit" class="btn btn-primary">➕ Adicionar Produto</button>
+    <button type="submit" class="btn btn-primary" aria-label="Adicionar produto">➕ Adicionar Produto</button>
   </form>
 
   <!-- Tabela produtos -->
@@ -42,10 +42,10 @@
   <table id="tabelaProdutos" class="table table-bordered table-striped shadow-sm">
     <thead>
       <tr>
-        <th>ID</th>
-        <th>Nome</th>
-        <th>Quantidade</th>
-        <th>Ações</th>
+        <th scope="col">ID</th>
+        <th scope="col">Nome</th>
+        <th scope="col">Quantidade</th>
+        <th scope="col">Ações</th>
       </tr>
     </thead>
     <tbody></tbody>
@@ -65,19 +65,19 @@
     <select id="filtroProduto" name="produto_id" class="form-select">
       <option value="">Todos os Produtos</option>
     </select>
-    <button type="submit" class="btn btn-secondary">🔍 Filtrar</button>
+    <button type="submit" class="btn btn-secondary" aria-label="Filtrar movimentações">🔍 Filtrar</button>
   </form>
 
   <!-- Tabela movimentações -->
   <table id="tabelaMovimentacoes" class="table table-bordered table-striped shadow-sm">
     <thead>
       <tr>
-        <th>ID</th>
-        <th>Produto</th>
-        <th>Tipo</th>
-        <th>Quantidade</th>
-        <th>Data</th>
-        <th>Usuário</th>
+        <th scope="col">ID</th>
+        <th scope="col">Produto</th>
+        <th scope="col">Tipo</th>
+        <th scope="col">Quantidade</th>
+        <th scope="col">Data</th>
+        <th scope="col">Usuário</th>
       </tr>
     </thead>
     <tbody>
@@ -98,4 +98,3 @@
   <script src="js/movimentacoes.js"></script>
 </body>
 </html>
-  

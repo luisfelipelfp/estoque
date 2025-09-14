@@ -26,6 +26,7 @@
           id="login" 
           name="login" 
           placeholder="Digite seu usuário ou e-mail" 
+          autocomplete="username"
           required>
       </div>
       <div class="mb-3">
@@ -36,9 +37,10 @@
           id="senha" 
           name="senha" 
           placeholder="Digite sua senha" 
+          autocomplete="current-password"
           required>
       </div>
-      <button type="submit" class="btn btn-primary w-100">Entrar</button>
+      <button type="submit" class="btn btn-primary w-100 fw-bold">Entrar</button>
     </form>
 
     <div id="msgErro" class="text-danger text-center mt-3"></div>
@@ -49,4 +51,3 @@
   <script src="js/login.js"></script>
 </body>
 </html>
-    
