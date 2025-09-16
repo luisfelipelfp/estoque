@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Relatórios - Estoque</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="container mt-4">
+    <h2 class="mb-4">📊 Relatórios de Movimentações</h2>
+
+    <!-- Filtros -->
+    <form id="form-filtros" class="row g-3 mb-4">
+      <div class="col-md-3">
+        <label for="dataInicio" class="form-label">Data Início</label>
+        <input type="date" id="dataInicio" name="dataInicio" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label for="dataFim" class="form-label">Data Fim</label>
+        <input type="date" id="dataFim" name="dataFim" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label for="usuario" class="form-label">Usuário</label>
+        <select id="usuario" name="usuario" class="form-select">
+          <option value="">Todos</option>
+          <!-- Carregado via API -->
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label for="tipo" class="form-label">Tipo</label>
+        <select id="tipo" name="tipo" class="form-select">
+          <option value="">Todos</option>
+          <option value="entrada">Entrada</option>
+          <option value="saida">Saída</option>
+          <option value="remocao">Remoção</option>
+        </select>
+      </div>
+      <div class="col-12 text-end">
+        <button type="button" class="btn btn-primary" id="btn-filtrar">Filtrar</button>
+      </div>
+    </form>
+
+    <!-- Tabela de Resultados -->
+    <div class="table-responsive mb-4">
+      <table class="table table-striped" id="tabelaRelatorios">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Produto</th>
+            <th>Tipo</th>
+            <th>Quantidade</th>
+            <th>Usuário</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Preenchido via JS -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Exportações -->
+    <div class="mb-4">
+      <button class="btn btn-danger" id="btn-pdf">📄 Exportar PDF</button>
+      <button class="btn btn-success" id="btn-excel">📊 Exportar Excel</button>
+    </div>
+
+    <!-- Gráficos -->
+    <div class="row">
+      <div class="col-md-6 mb-4">
+        <canvas id="graficoBarras"></canvas>
+      </div>
+      <div class="col-md-6 mb-4">
+        <canvas id="graficoPizza"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Aqui você pode chamar sua API para buscar usuários e preencher o <select>
+    async function carregarUsuarios() {
+      try {
+        const resp = await fetch("api/actions.php?acao=listar_usuarios");
+        const usuarios = await resp.json();
+        const select = document.getElementById("usuario");
+
+        usuarios.forEach(u => {
+          const opt = document.createElement("option");
+          opt.value = u.id;
+          opt.textContent = u.nome;
+          select.appendChild(opt);
+        });
+      } catch (err) {
+        console.error("Erro ao carregar usuários:", err);
+      }
+    }
+
+    // Evento de filtro
+    document.getElementById("btn-filtrar").addEventListener("click", async () => {
+      const filtros = {
+        dataInicio: document.getElementById("dataInicio").value,
+        dataFim: document.getElementById("dataFim").value,
+        usuario: document.getElementById("usuario").value,
+        tipo: document.getElementById("tipo").value
+      };
+
+      const query = new URLSearchParams(filtros).toString();
+      const resp = await fetch("api/actions.php?acao=relatorio&" + query);
+      const dados = await resp.json();
+
+      const tbody = document.querySelector("#tabelaRelatorios tbody");
+      tbody.innerHTML = "";
+
+      dados.forEach(item => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${item.data}</td>
+          <td>${item.produto}</td>
+          <td>${item.tipo}</td>
+          <td>${item.quantidade}</td>
+          <td>${item.usuario}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // (Depois: atualizar gráficos aqui também)
+    });
+
+    carregarUsuarios();
+  </script>
+</body>
+</html>
