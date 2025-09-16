@@ -40,7 +40,6 @@ try {
             break;
 
         case "adicionar_produto":
-            // necessita estar autenticado (opcional: permitir apenas operadores/admin)
             if (!$usuario_id) {
                 echo json_encode(resposta(false, "Usuário não autenticado."));
                 break;
@@ -70,7 +69,7 @@ try {
                 break;
             }
 
-            // 🔐 Verifica nível de acesso do usuário (só admin permite remoção)
+            // 🔐 Apenas admin pode remover
             $stmt = $conn->prepare("SELECT nivel FROM usuarios WHERE id = ?");
             $stmt->bind_param("i", $usuario_id);
             $stmt->execute();
@@ -97,8 +96,6 @@ try {
         // USUÁRIOS
         // ======================
         case "listar_usuarios":
-            // Lista usuários sem expor hashes de senha
-            // Requer autenticação
             if (!$usuario_id) {
                 echo json_encode(resposta(false, "Usuário não autenticado."));
                 break;
@@ -108,8 +105,7 @@ try {
             $usuarios = [];
             if ($res) {
                 while ($row = $res->fetch_assoc()) {
-                    // remove qualquer campo sensível (caso exista)
-                    unset($row['senha']);
+                    unset($row['senha']); // não expõe senha
                     $usuarios[] = $row;
                 }
                 $res->free();
@@ -120,7 +116,7 @@ try {
         // ======================
         // MOVIMENTAÇÕES & RELATÓRIOS
         // ======================
-        case "listar_movimentacoes": // 🔄 alias do relatório
+        case "listar_movimentacoes": 
         case "listar_relatorios":
             $filtros = [
                 "produto_id"  => $_GET["produto_id"] ?? null,
@@ -129,23 +125,25 @@ try {
                 "usuario"     => $_GET["usuario"] ?? null,
                 "data_inicio" => $_GET["data_inicio"] ?? ($_GET["data_ini"] ?? null),
                 "data_fim"    => $_GET["data_fim"] ?? null,
-                "pagina"      => $_GET["pagina"] ?? 1,
-                "limite"      => $_GET["limite"] ?? 50,
+                "pagina"      => (int)($_GET["pagina"] ?? 1),
+                "limite"      => (int)($_GET["limite"] ?? 50),
             ];
 
-            // chama a função que retorna o relatório
             $rel = relatorio($conn, $filtros);
 
-            // garante consistência do formato retornado para o front
-            $dados = $rel["dados"] ?? (is_array($rel) ? $rel : []);
-            $total = $rel["total"] ?? count($dados);
+            // Padroniza resposta
+            $dados   = $rel["dados"]   ?? (is_array($rel) ? $rel : []);
+            $total   = $rel["total"]   ?? count($dados);
+            $pagina  = $rel["pagina"]  ?? (int)$filtros["pagina"];
+            $limite  = $rel["limite"]  ?? (int)$filtros["limite"];
+            $paginas = $rel["paginas"] ?? (int)ceil($total / ($limite ?: 50));
 
             echo json_encode(resposta(true, "", [
-                "dados" => $dados,
-                "total" => $total,
-                "pagina" => $rel["pagina"] ?? (int)$filtros["pagina"],
-                "limite" => $rel["limite"] ?? (int)$filtros["limite"],
-                "paginas" => $rel["paginas"] ?? (int)ceil($total/($filtros["limite"]?:50))
+                "dados"   => $dados,
+                "total"   => $total,
+                "pagina"  => $pagina,
+                "limite"  => $limite,
+                "paginas" => $paginas
             ]));
             break;
 
@@ -167,11 +165,7 @@ try {
         // ======================
         // EXPORT (PLACEHOLDERS)
         // ======================
-        // Observação: implementar exportação real (PDF/Excel) requer biblioteca e decisão de fluxo.
-        // Deixo aqui placeholders que podem ser implementados posteriormente.
         case "export_relatorio_csv":
-            // Exemplo: receber filtros, gerar CSV e devolver base64 ou caminho para download.
-            // Para não bloquear, retornamos mensagem de placeholder.
             echo json_encode(resposta(false, "Exportação CSV não implementada. (TODO)"));
             break;
 
