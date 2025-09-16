@@ -11,7 +11,6 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
       const tbody = document.querySelector("#tabelaMovimentacoes tbody");
       if (!tbody) return;
 
-      // 🚨 Se não tiver filtro → mostra aviso e não consulta API
       if (!Object.keys(filtros).length) {
         tbody.innerHTML = `
           <tr>
@@ -153,6 +152,5 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
 
   window.addEventListener("DOMContentLoaded", async () => {
     await preencherFiltroProdutos();
-    // 🚫 não chama listarMovimentacoes sem filtros
   });
 }

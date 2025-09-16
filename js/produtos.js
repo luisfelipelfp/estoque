@@ -51,17 +51,14 @@ if (!window.__PRODUTOS_JS_BOUND__) {
     rowBtns.forEach(b => (b.disabled = true));
 
     try {
-      let payload;
       if (acao === "entrada" || acao === "saida") {
-        payload = { produto_id: id, quantidade };
         return await apiRequest("registrar_movimentacao", {
           produto_id: id,
           tipo: acao,
           quantidade
         }, "POST");
       } else if (acao === "remover") {
-        payload = { id };
-        return await apiRequest("remover_produto", payload, "POST");
+        return await apiRequest("remover_produto", { id }, "POST");
       }
     } catch (err) {
       console.error(`Erro em ${acao}:`, err);

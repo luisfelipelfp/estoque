@@ -34,8 +34,13 @@ async function apiRequest(acao, dados = null, metodo = "GET") {
         dados.produto_id = dados.id;
         delete dados.id;
       }
-      options.headers = { "Content-Type": "application/json" };
-      options.body = JSON.stringify(dados);
+
+      // 👉 Enviar como FormData (compatível com $_POST do PHP)
+      const formData = new FormData();
+      for (const k in dados) {
+        formData.append(k, dados[k]);
+      }
+      options.body = formData;
     }
 
     const resp = await fetch(url, options);
