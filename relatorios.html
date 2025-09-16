@@ -29,15 +29,15 @@
   <form id="form-filtros" class="row g-3 mb-4">
     <div class="col-md-3">
       <label for="dataInicio" class="form-label">Data Início</label>
-      <input type="date" id="dataInicio" name="dataInicio" class="form-control">
+      <input type="date" id="dataInicio" name="data_inicio" class="form-control">
     </div>
     <div class="col-md-3">
       <label for="dataFim" class="form-label">Data Fim</label>
-      <input type="date" id="dataFim" name="dataFim" class="form-control">
+      <input type="date" id="dataFim" name="data_fim" class="form-control">
     </div>
     <div class="col-md-3">
       <label for="usuario" class="form-label">Usuário</label>
-      <select id="usuario" name="usuario" class="form-select">
+      <select id="usuario" name="usuario_id" class="form-select">
         <option value="">Todos</option>
       </select>
     </div>
@@ -129,12 +129,15 @@
       const tbody = document.querySelector("#tabelaRelatorios tbody");
       tbody.innerHTML = "";
 
-      if (!res.sucesso || res.dados.length === 0) {
+      // 🔹 O backend retorna {sucesso, dados: {dados, total, ...}}
+      const dados = (res.sucesso && res.dados && Array.isArray(res.dados.dados)) ? res.dados.dados : [];
+
+      if (dados.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">Nenhum registro encontrado</td></tr>`;
         return;
       }
 
-      res.dados.forEach(item => {
+      dados.forEach(item => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${item.data}</td>
@@ -146,7 +149,7 @@
         tbody.appendChild(tr);
       });
 
-      atualizarGraficos(res.dados);
+      atualizarGraficos(dados);
     });
 
     // Gráficos
