@@ -11,7 +11,7 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <!-- CSS customizados (mesmos do index) -->
+  <!-- CSS customizados -->
   <link rel="stylesheet" href="css/base.css">
 </head>
 <body class="container py-4">
@@ -39,7 +39,6 @@
       <label for="usuario" class="form-label">Usuário</label>
       <select id="usuario" name="usuario" class="form-select">
         <option value="">Todos</option>
-        <!-- Carregado via API -->
       </select>
     </div>
     <div class="col-md-3">
@@ -56,7 +55,7 @@
     </div>
   </form>
 
-  <!-- Tabela de Resultados -->
+  <!-- Tabela -->
   <div class="table-responsive mb-4">
     <table class="table table-bordered table-striped shadow-sm" id="tabelaRelatorios">
       <thead>
@@ -99,15 +98,17 @@
     async function carregarUsuarios() {
       try {
         const resp = await fetch("api/actions.php?acao=listar_usuarios");
-        const usuarios = await resp.json();
+        const res = await resp.json();
         const select = document.getElementById("usuario");
 
-        usuarios.forEach(u => {
-          const opt = document.createElement("option");
-          opt.value = u.id;
-          opt.textContent = u.nome;
-          select.appendChild(opt);
-        });
+        if (res.sucesso && Array.isArray(res.dados)) {
+          res.dados.forEach(u => {
+            const opt = document.createElement("option");
+            opt.value = u.id;
+            opt.textContent = u.nome;
+            select.appendChild(opt);
+          });
+        }
       } catch (err) {
         console.error("Erro ao carregar usuários:", err);
       }
@@ -115,25 +116,25 @@
 
     document.getElementById("btn-filtrar").addEventListener("click", async () => {
       const filtros = {
-        dataInicio: document.getElementById("dataInicio").value,
-        dataFim: document.getElementById("dataFim").value,
-        usuario: document.getElementById("usuario").value,
+        data_inicio: document.getElementById("dataInicio").value,
+        data_fim: document.getElementById("dataFim").value,
+        usuario_id: document.getElementById("usuario").value,
         tipo: document.getElementById("tipo").value
       };
 
       const query = new URLSearchParams(filtros).toString();
-      const resp = await fetch("api/actions.php?acao=relatorio&" + query);
-      const dados = await resp.json();
+      const resp = await fetch("api/actions.php?acao=listar_relatorios&" + query);
+      const res = await resp.json();
 
       const tbody = document.querySelector("#tabelaRelatorios tbody");
       tbody.innerHTML = "";
 
-      if (dados.length === 0) {
+      if (!res.sucesso || res.dados.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">Nenhum registro encontrado</td></tr>`;
         return;
       }
 
-      dados.forEach(item => {
+      res.dados.forEach(item => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${item.data}</td>
@@ -145,7 +146,7 @@
         tbody.appendChild(tr);
       });
 
-      atualizarGraficos(dados);
+      atualizarGraficos(res.dados);
     });
 
     // Gráficos
@@ -158,7 +159,6 @@
       const contagem = { entrada: 0, saida: 0, remocao: 0 };
       dados.forEach(d => contagem[d.tipo]++);
 
-      // Barras
       if (graficoBarras) graficoBarras.destroy();
       graficoBarras = new Chart(ctxBarras, {
         type: "bar",
@@ -172,7 +172,6 @@
         }
       });
 
-      // Pizza
       if (graficoPizza) graficoPizza.destroy();
       graficoPizza = new Chart(ctxPizza, {
         type: "pie",
