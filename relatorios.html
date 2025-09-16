@@ -16,7 +16,7 @@
 </head>
 <body class="container py-4">
 
-  <!-- Navbar (mesma do index.html) -->
+  <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark rounded mb-4 px-3">
     <a class="navbar-brand fw-bold text-white" href="index.html">📦 Estoque</a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -54,6 +54,12 @@
     <div class="col-md-3">
       <label for="usuario" class="form-label">Usuário</label>
       <select id="usuario" name="usuario_id" class="form-select">
+        <option value="">Todos</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label for="produto" class="form-label">Produto</label>
+      <select id="produto" name="produto_id" class="form-select">
         <option value="">Todos</option>
       </select>
     </div>
@@ -131,11 +137,31 @@
       }
     }
 
+    async function carregarProdutos() {
+      try {
+        const resp = await fetch("api/produtos.php?acao=listar");
+        const produtos = await resp.json();
+        const select = document.getElementById("produto");
+
+        if (Array.isArray(produtos)) {
+          produtos.forEach(p => {
+            const opt = document.createElement("option");
+            opt.value = p.id;
+            opt.textContent = p.nome;
+            select.appendChild(opt);
+          });
+        }
+      } catch (err) {
+        console.error("Erro ao carregar produtos:", err);
+      }
+    }
+
     document.getElementById("btn-filtrar").addEventListener("click", async () => {
       const filtros = {
         data_inicio: document.getElementById("dataInicio").value,
         data_fim: document.getElementById("dataFim").value,
         usuario_id: document.getElementById("usuario").value,
+        produto_id: document.getElementById("produto").value,
         tipo: document.getElementById("tipo").value
       };
 
@@ -205,6 +231,7 @@
     }
 
     carregarUsuarios();
+    carregarProdutos();
   </script>
 </body>
 </html>
