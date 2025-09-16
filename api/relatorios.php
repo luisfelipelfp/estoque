@@ -8,7 +8,7 @@ require_once __DIR__ . "/movimentacoes.php";
 require_once __DIR__ . "/produtos.php";
 
 /**
- * Gera relatório de movimentações
+ * Gera relatório de movimentações com filtros
  */
 function relatorio(mysqli $conn, array $filtros = []): array {
     $pagina = max(1, (int)($filtros["pagina"] ?? 1));
@@ -16,10 +16,10 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $offset = ($pagina - 1) * $limite;
 
     // ======================
-    // Filtros
+    // Filtros dinâmicos
     // ======================
-    $cond = [];
-    $bind = [];
+    $cond  = [];
+    $bind  = [];
     $types = "";
 
     if (!empty($filtros["tipo"])) {
@@ -43,7 +43,6 @@ function relatorio(mysqli $conn, array $filtros = []): array {
         $types .= "s";
     }
 
-    // 🔹 aceita tanto data_ini quanto data_inicio (sem warnings)
     $dataInicio = $filtros["data_inicio"] ?? ($filtros["data_ini"] ?? null);
     if (!empty($dataInicio)) {
         $cond[] = "m.data >= ?";
@@ -59,7 +58,7 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $where = $cond ? "WHERE " . implode(" AND ", $cond) : "";
 
     // ======================
-    // Bloqueia se não houver filtros
+    // Bloqueio sem filtros
     // ======================
     if (!$cond) {
         return [
@@ -90,7 +89,7 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $stmtT->close();
 
     // ======================
-    // Dados (com JOIN de usuários e produtos)
+    // Dados (JOIN produtos/usuarios)
     // ======================
     $sql = "SELECT 
                 m.id,
@@ -111,7 +110,6 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $stmt = $conn->prepare($sql);
 
     if ($bind) {
-        // 🔹 Corrigido: junta tudo antes de desempacotar
         $params = array_merge($bind, [$limite, $offset]);
         $stmt->bind_param($types . "ii", ...$params);
     } else {
@@ -125,12 +123,12 @@ function relatorio(mysqli $conn, array $filtros = []): array {
         $movs[] = [
             "id"           => (int)$row["id"],
             "produto_id"   => (int)$row["produto_id"],
-            "produto_nome" => $row["produto_nome"] ?? "",
-            "tipo"         => $row["tipo"],
+            "produto_nome" => (string)($row["produto_nome"] ?? ""),
+            "tipo"         => (string)$row["tipo"],
             "quantidade"   => (int)$row["quantidade"],
-            "data"         => $row["data"],
+            "data"         => (string)$row["data"],
             "usuario_id"   => (int)$row["usuario_id"],
-            "usuario"      => $row["usuario"] ?? "Sistema",
+            "usuario"      => (string)($row["usuario"] ?? "Sistema"),
         ];
     }
     $stmt->close();
@@ -143,5 +141,6 @@ function relatorio(mysqli $conn, array $filtros = []): array {
         "paginas"  => (int)ceil($total / $limite),
         "dados"    => $movs,
         "produtos" => produtos_listar($conn, true),
+        "aviso"    => $total === 0 ? "Nenhum registro encontrado para os filtros aplicados." : null
     ];
 }

@@ -33,7 +33,7 @@
       </ul>
       <div class="d-flex align-items-center">
         <span id="usuarioLogado" class="me-3 fw-bold text-info"></span>
-        <button id="btnLogout" class="btn btn-outline-danger btn-sm" aria-label="Sair do sistema">Sair</button>
+        <button id="btnLogout" class="btn btn-outline-danger btn-sm">Sair</button>
       </div>
     </div>
   </nav>
@@ -73,14 +73,15 @@
       </select>
     </div>
     <div class="col-12 text-end">
-      <button type="button" class="btn btn-primary" id="btn-filtrar">🔍 Filtrar</button>
+      <button type="button" class="btn btn-primary me-2" id="btn-filtrar">🔍 Filtrar</button>
+      <button type="reset" class="btn btn-secondary" id="btn-limpar">🧹 Limpar</button>
     </div>
   </form>
 
   <!-- Tabela -->
   <div class="table-responsive mb-4">
     <table class="table table-bordered table-striped shadow-sm" id="tabelaRelatorios">
-      <thead>
+      <thead class="table-dark">
         <tr>
           <th>Data</th>
           <th>Produto</th>
@@ -139,12 +140,12 @@
 
     async function carregarProdutos() {
       try {
-        const resp = await fetch("api/produtos.php?acao=listar");
-        const produtos = await resp.json();
+        const resp = await fetch("api/actions.php?acao=listar_produtos");
+        const res = await resp.json();
         const select = document.getElementById("produto");
 
-        if (Array.isArray(produtos)) {
-          produtos.forEach(p => {
+        if (res.sucesso && Array.isArray(res.dados)) {
+          res.dados.forEach(p => {
             const opt = document.createElement("option");
             opt.value = p.id;
             opt.textContent = p.nome;
@@ -172,10 +173,11 @@
       const tbody = document.querySelector("#tabelaRelatorios tbody");
       tbody.innerHTML = "";
 
-      const dados = (res.sucesso && res.dados && Array.isArray(res.dados.dados)) ? res.dados.dados : [];
+      const dados = (res.sucesso && Array.isArray(res.dados)) ? res.dados : [];
 
       if (dados.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">Nenhum registro encontrado</td></tr>`;
+        atualizarGraficos([]);
         return;
       }
 
@@ -192,6 +194,12 @@
       });
 
       atualizarGraficos(dados);
+    });
+
+    document.getElementById("btn-limpar").addEventListener("click", () => {
+      document.querySelector("#tabelaRelatorios tbody").innerHTML =
+        `<tr><td colspan="5" class="text-center text-muted">Use os filtros para buscar movimentações</td></tr>`;
+      atualizarGraficos([]);
     });
 
     // Gráficos
