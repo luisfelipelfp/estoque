@@ -1,5 +1,9 @@
 <?php
-session_start();
+// Inicia a sessão apenas se ainda não estiver ativa
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 header("Content-Type: application/json; charset=utf-8");
 
 // 🔧 DEBUG PHP
@@ -18,18 +22,20 @@ function read_body() {
     return json_decode($body, true) ?? [];
 }
 
-// Conexão
+// Conexão e dependências
 require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/movimentacoes.php";
 require_once __DIR__ . "/relatorios.php";
 $conn = db();
 
+// Recupera usuário da sessão
+$usuario = $_SESSION["usuario"] ?? null;
+$usuario_id = $usuario["id"] ?? null;
+
 $acao = $_GET["acao"] ?? $_POST["acao"] ?? "";
-$usuario_id = $_SESSION["usuario_id"] ?? null;
 
 try {
     switch ($acao) {
-
         // ======================
         // PRODUTOS
         // ======================
