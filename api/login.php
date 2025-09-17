@@ -1,6 +1,31 @@
 <?php
+// =======================================
+// Sessão e configuração do cookie
+// =======================================
+session_set_cookie_params([
+    "lifetime" => 0,
+    "path" => "/",
+    "domain" => "",        // usa o domínio atual (192.168.15.100)
+    "secure" => false,     // mudar para true se usar HTTPS
+    "httponly" => true,
+    "samesite" => "Lax"    // pode usar "None" se precisar entre domínios
+]);
 session_start();
+
+// =======================================
+// Headers padrão + CORS
+// =======================================
 header("Content-Type: application/json; charset=utf-8");
+header("Access-Control-Allow-Origin: http://192.168.15.100"); // ajuste se acessar de outro host
+header("Access-Control-Allow-Credentials: true");
+header("Access-Control-Allow-Headers: Content-Type");
+header("Access-Control-Allow-Methods: POST, OPTIONS");
+
+// Se for uma pré-verificação (CORS preflight)
+if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
+    http_response_code(200);
+    exit;
+}
 
 require_once __DIR__ . "/db.php";
 $conn = db();
@@ -34,7 +59,6 @@ if (is_array($input)) {
     $senha = $_POST["senha"] ?? "";
 }
 
-// ⚠️ DEBUG: logar senha recebida (apenas para teste, depois remover!)
 debug_log("Recebido login = '$login' | senha = '" . $senha . "' (len=" . strlen($senha) . ")");
 
 if ($login === "" || $senha === "") {
