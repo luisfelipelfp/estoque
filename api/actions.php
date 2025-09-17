@@ -7,8 +7,8 @@ if (session_status() === PHP_SESSION_NONE) {
 header("Content-Type: application/json; charset=utf-8");
 
 // 🔧 DEBUG PHP
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+ini_set('display_errors', 0); // ❌ não mostrar no navegador (quebra JSON)
+ini_set('display_startup_errors', 0);
 error_reporting(E_ALL);
 ini_set("log_errors", 1);
 ini_set("error_log", __DIR__ . "/debug.log");
@@ -50,7 +50,6 @@ try {
                 echo json_encode(resposta(false, "Usuário não autenticado."));
                 break;
             }
-
             $body = read_body();
             $nome = trim($body["nome"] ?? "");
             $quantidade = (int)($body["quantidade"] ?? 0);
@@ -74,7 +73,6 @@ try {
                 echo json_encode(resposta(false, "Usuário não autenticado."));
                 break;
             }
-
             // 🔐 Apenas admin pode remover
             $stmt = $conn->prepare("SELECT nivel FROM usuarios WHERE id = ?");
             $stmt->bind_param("i", $usuario_id);
@@ -124,6 +122,10 @@ try {
         // ======================
         case "listar_movimentacoes": 
         case "listar_relatorios":
+            if (!$usuario_id) {
+                echo json_encode(resposta(false, "Usuário não autenticado."));
+                break;
+            }
             $filtros = [
                 "produto_id"  => $_GET["produto_id"] ?? null,
                 "tipo"        => $_GET["tipo"] ?? null,
@@ -136,8 +138,6 @@ try {
             ];
 
             $rel = relatorio($conn, $filtros);
-
-            // Padroniza resposta
             $dados   = $rel["dados"]   ?? (is_array($rel) ? $rel : []);
             $total   = $rel["total"]   ?? count($dados);
             $pagina  = $rel["pagina"]  ?? (int)$filtros["pagina"];
@@ -158,7 +158,6 @@ try {
                 echo json_encode(resposta(false, "Usuário não autenticado."));
                 break;
             }
-
             $body = read_body();
             $produto_id = (int)($body["produto_id"] ?? 0);
             $tipo = $body["tipo"] ?? "";
