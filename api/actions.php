@@ -208,4 +208,3 @@ try {
     error_log("Erro global: " . $e->getMessage() . " em " . $e->getFile() . ":" . $e->getLine());
     echo json_encode(resposta(false, "Erro interno no servidor."));
 }
-         
