@@ -4,6 +4,9 @@
  * Funções para geração de relatórios de movimentações e produtos
  */
 
+// 🔒 Garante que o usuário está logado
+require_once __DIR__ . "/auth.php";
+
 require_once __DIR__ . "/movimentacoes.php";
 require_once __DIR__ . "/produtos.php";
 

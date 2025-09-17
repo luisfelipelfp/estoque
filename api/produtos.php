@@ -3,13 +3,14 @@
  * produtos.php
  * Funções para manipulação de produtos
  */
+
+// 🔒 Garante que o usuário está logado
+require_once __DIR__ . "/auth.php";
+
 require_once __DIR__ . "/movimentacoes.php";
 
 /**
  * Lista produtos
- * @param mysqli $conn
- * @param bool $incluir_inativos Se true, lista todos, senão apenas ativos
- * @return array
  */
 function produtos_listar(mysqli $conn, bool $incluir_inativos = false): array {
     $sql = $incluir_inativos
@@ -24,16 +25,11 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = false): array {
         }
         $res->free();
     }
-    return $out; // o front já aceita array puro
+    return $out;
 }
 
 /**
  * Adiciona um novo produto
- * @param mysqli $conn
- * @param string $nome Nome do produto
- * @param int $quantidade_inicial Quantidade inicial (se > 0 gera movimentação de entrada)
- * @param int|null $usuario_id Usuário que criou o produto
- * @return array
  */
 function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial = 0, ?int $usuario_id = null): array {
     if (trim($nome) === "") {
@@ -54,7 +50,7 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
         }
         $stmtCheck->close();
 
-        // Insere produto (quantidade começa em 0)
+        // Insere produto
         $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade, ativo) VALUES (?, 0, 1)");
         $stmt->bind_param("s", $nome);
         if (!$stmt->execute()) {
@@ -71,7 +67,7 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
             $res = mov_entrada($conn, $id, $quantidade_inicial, $usuario_id);
             if (!$res["sucesso"]) {
                 $conn->rollback();
-                return $res; // já retorna o erro
+                return $res;
             }
         }
 

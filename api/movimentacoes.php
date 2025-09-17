@@ -4,6 +4,9 @@
  * Funções para listar e registrar movimentações (entrada/saida/remocao).
  */
 
+// 🔒 Garante que o usuário está logado
+require_once __DIR__ . "/auth.php";
+
 function mov_listar(mysqli $conn, array $f): array {
     $pagina = max(1, (int)($f["pagina"] ?? 1));
     $limite = max(1, min(100, (int)($f["limite"] ?? 50)));
@@ -33,7 +36,6 @@ function mov_listar(mysqli $conn, array $f): array {
         $params[] = "%" . $f["usuario"] . "%";
         $types .= "s";
     }
-    // 🔹 padronizei data_ini/data_inicio
     if (!empty($f["data_inicio"] ?? $f["data_ini"])) {
         $dataInicio = $f["data_inicio"] ?? $f["data_ini"];
         $where[] = "m.data >= ?";

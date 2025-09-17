@@ -1,6 +1,31 @@
 <?php
+// =======================================
+// Sessão e configuração do cookie
+// =======================================
+session_set_cookie_params([
+    "lifetime" => 0,
+    "path" => "/",
+    "domain" => "",        // usa o domínio atual (192.168.15.100)
+    "secure" => false,     // true se usar HTTPS
+    "httponly" => true,
+    "samesite" => "Lax"
+]);
 session_start();
+
+// =======================================
+// Headers padrão + CORS
+// =======================================
 header("Content-Type: application/json; charset=utf-8");
+header("Access-Control-Allow-Origin: http://192.168.15.100"); // ajuste se acessar de outro host
+header("Access-Control-Allow-Credentials: true");
+header("Access-Control-Allow-Headers: Content-Type");
+header("Access-Control-Allow-Methods: POST, OPTIONS");
+
+// Se for uma pré-verificação (CORS preflight)
+if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
+    http_response_code(200);
+    exit;
+}
 
 // 📂 Caminho do log
 $logFile = __DIR__ . "/debug.log";
