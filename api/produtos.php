@@ -83,3 +83,4 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
         return ["sucesso" => false, "mensagem" => "Erro interno ao adicionar produto."];
     }
 }
+      

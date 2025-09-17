@@ -96,3 +96,4 @@ function mov_listar(mysqli $conn, array $f): array {
 
     return $dados;
 }
+    

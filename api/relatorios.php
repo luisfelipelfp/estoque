@@ -147,3 +147,4 @@ function relatorio(mysqli $conn, array $filtros = []): array {
         "aviso"    => $total === 0 ? "Nenhum registro encontrado para os filtros aplicados." : null
     ];
 }
+     
