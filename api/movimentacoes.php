@@ -1,10 +1,9 @@
 <?php
 /**
  * movimentacoes.php
- * Funções para listar e registrar movimentações (entrada/saida/remocao).
+ * Funções para listar, registrar e remover movimentações.
  */
 
-// 🔒 Garante que o usuário está logado
 require_once __DIR__ . "/auth.php";
 
 function mov_listar(mysqli $conn, array $f): array {
@@ -96,4 +95,60 @@ function mov_listar(mysqli $conn, array $f): array {
 
     return $dados;
 }
-    
+
+/**
+ * Registrar movimentação (entrada / saída)
+ */
+function mov_registrar(mysqli $conn, int $produto_id, string $tipo, int $quantidade, int $usuario_id): array {
+    if ($produto_id <= 0 || $quantidade <= 0 || !in_array($tipo, ["entrada","saida"])) {
+        return ["sucesso" => false, "mensagem" => "Dados inválidos."];
+    }
+
+    if ($tipo === "saida") {
+        $sql = "UPDATE produtos SET quantidade = quantidade - ? WHERE id = ? AND quantidade >= ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("iii", $quantidade, $produto_id, $quantidade);
+    } else {
+        $sql = "UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("ii", $quantidade, $produto_id);
+    }
+
+    if (!$stmt->execute() || $stmt->affected_rows <= 0) {
+        return ["sucesso" => false, "mensagem" => "Falha ao atualizar estoque."];
+    }
+    $stmt->close();
+
+    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, usuario_id) VALUES (?, ?, ?, ?)");
+    $stmt->bind_param("isii", $produto_id, $tipo, $quantidade, $usuario_id);
+    $ok = $stmt->execute();
+    $stmt->close();
+
+    return $ok
+        ? ["sucesso" => true, "mensagem" => "Movimentação registrada."]
+        : ["sucesso" => false, "mensagem" => "Erro ao registrar movimentação."];
+}
+
+/**
+ * Remover produto (somente admin)
+ */
+function mov_remover(mysqli $conn, int $produto_id, int $usuario_id): array {
+    if ($produto_id <= 0) {
+        return ["sucesso" => false, "mensagem" => "ID inválido."];
+    }
+
+    $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
+    $stmt->bind_param("i", $produto_id);
+    $ok = $stmt->execute();
+    $stmt->close();
+
+    if ($ok) {
+        $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, usuario_id) VALUES (?, 'remocao', 0, ?)");
+        $stmt->bind_param("ii", $produto_id, $usuario_id);
+        $stmt->execute();
+        $stmt->close();
+
+        return ["sucesso" => true, "mensagem" => "Produto removido com sucesso."];
+    }
+    return ["sucesso" => false, "mensagem" => "Erro ao remover produto."];
+}
