@@ -17,9 +17,16 @@ ini_set("error_log", __DIR__ . "/debug.log");
 function resposta($sucesso, $mensagem = "", $dados = null) {
     return ["sucesso" => $sucesso, "mensagem" => $mensagem, "dados" => $dados];
 }
+
 function read_body() {
     $body = file_get_contents("php://input");
-    return json_decode($body, true) ?? [];
+    $data = json_decode($body, true);
+
+    // Se não veio JSON, retorna $_POST (caso FormData)
+    if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
+        return $data;
+    }
+    return $_POST ?? [];
 }
 
 // Conexão e dependências
@@ -32,7 +39,11 @@ $conn = db();
 $usuario = $_SESSION["usuario"] ?? null;
 $usuario_id = $usuario["id"] ?? null;
 
-$acao = $_GET["acao"] ?? $_POST["acao"] ?? "";
+// 🔑 Ação pode vir de GET, POST ou JSON
+$acao = $_REQUEST["acao"] ?? "";
+
+// 🔍 Corpo pode vir como JSON ou FormData
+$body = read_body();
 
 try {
     switch ($acao) {
@@ -50,7 +61,7 @@ try {
                 echo json_encode(resposta(false, "Usuário não autenticado."));
                 break;
             }
-            $body = read_body();
+
             $nome = trim($body["nome"] ?? "");
             $quantidade = (int)($body["quantidade"] ?? 0);
 
@@ -86,7 +97,7 @@ try {
                 break;
             }
 
-            $id = (int)($_GET["id"] ?? 0);
+            $id = (int)($body["id"] ?? $_GET["id"] ?? 0);
             if ($id <= 0) {
                 echo json_encode(resposta(false, "ID inválido."));
                 break;
@@ -158,7 +169,7 @@ try {
                 echo json_encode(resposta(false, "Usuário não autenticado."));
                 break;
             }
-            $body = read_body();
+
             $produto_id = (int)($body["produto_id"] ?? 0);
             $tipo = $body["tipo"] ?? "";
             $quantidade = (int)($body["quantidade"] ?? 0);
@@ -182,7 +193,6 @@ try {
         // LOG DE ERROS JS
         // ======================
         case "log_js_error":
-            $body = read_body();
             $mensagem = $body["mensagem"] ?? "Erro JS desconhecido";
             $arquivo  = $body["arquivo"] ?? "";
             $linha    = $body["linha"] ?? "";

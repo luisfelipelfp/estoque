@@ -37,6 +37,10 @@ async function apiRequest(acao, dados = null, metodo = "GET") {
 
       // 👉 Enviar como FormData (compatível com $_POST do PHP)
       const formData = new FormData();
+
+      // 🔑 Inclui a ação no corpo também
+      formData.append("acao", acao);
+
       for (const k in dados) {
         formData.append(k, dados[k]);
       }

@@ -162,3 +162,4 @@ if (!window.__PRODUTOS_JS_BOUND__) {
     listarProdutos();
   });
 }
+        
