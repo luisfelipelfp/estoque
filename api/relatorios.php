@@ -4,9 +4,8 @@
  * Funções para geração de relatórios de movimentações e produtos
  */
 
-// 🔒 Garante que o usuário está logado
 require_once __DIR__ . "/auth.php";
-
+require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/movimentacoes.php";
 require_once __DIR__ . "/produtos.php";
 
@@ -18,9 +17,6 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $limite = max(1, (int)($filtros["limite"] ?? 50));
     $offset = ($pagina - 1) * $limite;
 
-    // ======================
-    // Filtros dinâmicos
-    // ======================
     $cond  = [];
     $bind  = [];
     $types = "";
@@ -60,9 +56,6 @@ function relatorio(mysqli $conn, array $filtros = []): array {
 
     $where = $cond ? "WHERE " . implode(" AND ", $cond) : "";
 
-    // ======================
-    // Bloqueio sem filtros
-    // ======================
     if (!$cond) {
         return [
             "sucesso"  => true,
@@ -76,9 +69,6 @@ function relatorio(mysqli $conn, array $filtros = []): array {
         ];
     }
 
-    // ======================
-    // Contagem total
-    // ======================
     $sqlTotal = "SELECT COUNT(*) AS total
                    FROM movimentacoes m
               LEFT JOIN usuarios u ON u.id = m.usuario_id
@@ -91,9 +81,6 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $total = (int)($stmtT->get_result()->fetch_assoc()["total"] ?? 0);
     $stmtT->close();
 
-    // ======================
-    // Dados (JOIN produtos/usuarios)
-    // ======================
     $sql = "SELECT 
                 m.id,
                 m.produto_id,
@@ -147,4 +134,3 @@ function relatorio(mysqli $conn, array $filtros = []): array {
         "aviso"    => $total === 0 ? "Nenhum registro encontrado para os filtros aplicados." : null
     ];
 }
-     

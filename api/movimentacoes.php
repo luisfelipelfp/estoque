@@ -5,7 +5,11 @@
  */
 
 require_once __DIR__ . "/auth.php";
+require_once __DIR__ . "/db.php";
 
+/**
+ * Listar movimentações com filtros
+ */
 function mov_listar(mysqli $conn, array $f): array {
     $pagina = max(1, (int)($f["pagina"] ?? 1));
     $limite = max(1, min(100, (int)($f["limite"] ?? 50)));
@@ -137,14 +141,22 @@ function mov_remover(mysqli $conn, int $produto_id, int $usuario_id): array {
         return ["sucesso" => false, "mensagem" => "ID inválido."];
     }
 
+    // Captura o nome antes de remover
+    $stmt = $conn->prepare("SELECT nome FROM produtos WHERE id = ?");
+    $stmt->bind_param("i", $produto_id);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $nomeProduto = $res->fetch_assoc()["nome"] ?? null;
+    $stmt->close();
+
     $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
     $stmt->bind_param("i", $produto_id);
     $ok = $stmt->execute();
     $stmt->close();
 
     if ($ok) {
-        $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, usuario_id) VALUES (?, 'remocao', 0, ?)");
-        $stmt->bind_param("ii", $produto_id, $usuario_id);
+        $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, usuario_id) VALUES (?, ?, 'remocao', 0, ?)");
+        $stmt->bind_param("isi", $produto_id, $nomeProduto, $usuario_id);
         $stmt->execute();
         $stmt->close();
 
