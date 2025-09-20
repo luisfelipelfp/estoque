@@ -6,7 +6,6 @@
 
 // 🔒 Garante que o usuário está logado
 require_once __DIR__ . "/auth.php";
-
 require_once __DIR__ . "/movimentacoes.php";
 
 /**
@@ -21,7 +20,12 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = false): array {
     $out = [];
     if ($res) {
         while ($row = $res->fetch_assoc()) {
-            $out[] = $row;
+            $out[] = [
+                "id"         => (int)$row["id"],
+                "nome"       => $row["nome"],
+                "quantidade" => (int)$row["quantidade"],
+                "ativo"      => (int)$row["ativo"],
+            ];
         }
         $res->free();
     }
@@ -62,12 +66,12 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
         $id = $conn->insert_id;
         $stmt->close();
 
-        // Se quantidade inicial > 0 → gera movimentação de entrada
+        // Se quantidade inicial > 0 → registra movimentação de entrada
         if ($quantidade_inicial > 0) {
-            $res = mov_entrada($conn, $id, $quantidade_inicial, $usuario_id);
-            if (!$res["sucesso"]) {
+            $resMov = mov_registrar($conn, $id, "entrada", $quantidade_inicial, $usuario_id ?? 0);
+            if (!$resMov["sucesso"]) {
                 $conn->rollback();
-                return $res;
+                return $resMov;
             }
         }
 
@@ -83,4 +87,3 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
         return ["sucesso" => false, "mensagem" => "Erro interno ao adicionar produto."];
     }
 }
-      

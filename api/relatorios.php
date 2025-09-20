@@ -4,7 +4,6 @@
  * Funções para geração de relatórios de movimentações e produtos
  */
 
-require_once __DIR__ . "/auth.php";
 require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/movimentacoes.php";
 require_once __DIR__ . "/produtos.php";
@@ -56,19 +55,7 @@ function relatorio(mysqli $conn, array $filtros = []): array {
 
     $where = $cond ? "WHERE " . implode(" AND ", $cond) : "";
 
-    if (!$cond) {
-        return [
-            "sucesso"  => true,
-            "total"    => 0,
-            "pagina"   => $pagina,
-            "limite"   => $limite,
-            "paginas"  => 0,
-            "dados"    => [],
-            "produtos" => produtos_listar($conn, true),
-            "aviso"    => "Nenhum filtro aplicado — nenhum resultado retornado."
-        ];
-    }
-
+    // Sempre retornar estrutura, mesmo sem filtros
     $sqlTotal = "SELECT COUNT(*) AS total
                    FROM movimentacoes m
               LEFT JOIN usuarios u ON u.id = m.usuario_id
