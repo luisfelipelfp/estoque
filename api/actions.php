@@ -33,11 +33,13 @@ function read_body() {
 require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/movimentacoes.php";
 require_once __DIR__ . "/relatorios.php";
+require_once __DIR__ . "/produtos.php";
 $conn = db();
 
 // Recupera usuário da sessão
 $usuario = $_SESSION["usuario"] ?? null;
 $usuario_id = $usuario["id"] ?? null;
+$usuario_nivel = $usuario["nivel"] ?? null;
 
 // 🔑 Ação pode vir de GET, POST ou JSON
 $acao = $_REQUEST["acao"] ?? "";
@@ -51,8 +53,8 @@ try {
         // PRODUTOS
         // ======================
         case "listar_produtos":
-            $result = $conn->query("SELECT id, nome, quantidade, ativo FROM produtos ORDER BY nome ASC");
-            $produtos = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+            $incluir_inativos = isset($_GET["inativos"]) && $_GET["inativos"] == "1";
+            $produtos = produtos_listar($conn, $incluir_inativos);
             echo json_encode(resposta(true, "", $produtos));
             break;
 
@@ -65,18 +67,8 @@ try {
             $nome = trim($body["nome"] ?? "");
             $quantidade = (int)($body["quantidade"] ?? 0);
 
-            if ($nome === "" || $quantidade < 0) {
-                echo json_encode(resposta(false, "Dados inválidos."));
-                break;
-            }
-
-            $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade) VALUES (?, ?)");
-            $stmt->bind_param("si", $nome, $quantidade);
-            if ($stmt->execute()) {
-                echo json_encode(resposta(true, "Produto adicionado.", ["id" => $conn->insert_id]));
-            } else {
-                echo json_encode(resposta(false, "Erro ao adicionar produto: " . $conn->error));
-            }
+            $res = produtos_adicionar($conn, $nome, $quantidade, $usuario_id);
+            echo json_encode($res);
             break;
 
         case "remover_produto":
@@ -84,15 +76,7 @@ try {
                 echo json_encode(resposta(false, "Usuário não autenticado."));
                 break;
             }
-            // 🔐 Apenas admin pode remover
-            $stmt = $conn->prepare("SELECT nivel FROM usuarios WHERE id = ?");
-            $stmt->bind_param("i", $usuario_id);
-            $stmt->execute();
-            $stmt->bind_result($nivel);
-            $stmt->fetch();
-            $stmt->close();
-
-            if ($nivel !== "admin") {
+            if ($usuario_nivel !== "admin") {
                 echo json_encode(resposta(false, "Ação permitida apenas para administradores."));
                 break;
             }
@@ -137,6 +121,7 @@ try {
                 echo json_encode(resposta(false, "Usuário não autenticado."));
                 break;
             }
+
             $filtros = [
                 "produto_id"  => $_GET["produto_id"] ?? null,
                 "tipo"        => $_GET["tipo"] ?? null,
@@ -149,19 +134,7 @@ try {
             ];
 
             $rel = relatorio($conn, $filtros);
-            $dados   = $rel["dados"]   ?? (is_array($rel) ? $rel : []);
-            $total   = $rel["total"]   ?? count($dados);
-            $pagina  = $rel["pagina"]  ?? (int)$filtros["pagina"];
-            $limite  = $rel["limite"]  ?? (int)$filtros["limite"];
-            $paginas = $rel["paginas"] ?? (int)ceil($total / ($limite ?: 50));
-
-            echo json_encode(resposta(true, "", [
-                "dados"   => $dados,
-                "total"   => $total,
-                "pagina"  => $pagina,
-                "limite"  => $limite,
-                "paginas" => $paginas
-            ]));
+            echo json_encode($rel);
             break;
 
         case "registrar_movimentacao":
