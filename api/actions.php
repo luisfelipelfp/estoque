@@ -1,10 +1,34 @@
 <?php
-// Inicia a sessão apenas se ainda não estiver ativa
+// =======================================
+// api/actions.php
+// Roteador de ações (produtos, usuários, relatórios...)
+// =======================================
+
+// Sessão e configuração do cookie
+session_set_cookie_params([
+    "lifetime" => 0,
+    "path"     => "/",
+    "domain"   => "",        // usa o domínio atual
+    "secure"   => false,     // true se usar HTTPS
+    "httponly" => true,
+    "samesite" => "Lax"
+]);
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Headers padrão + CORS
 header("Content-Type: application/json; charset=utf-8");
+header("Access-Control-Allow-Origin: http://192.168.15.100"); // ajuste se acessar de outro host
+header("Access-Control-Allow-Credentials: true");
+header("Access-Control-Allow-Headers: Content-Type");
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+
+// Se for uma pré-verificação (CORS preflight)
+if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
+    http_response_code(200);
+    exit;
+}
 
 // 🔧 DEBUG PHP
 ini_set('display_errors', 0); // ❌ não mostrar no navegador (quebra JSON)
@@ -29,23 +53,36 @@ function read_body() {
     return $_POST ?? [];
 }
 
+// Função de log de auditoria
+function auditoria_log($usuario, $acao, $dados = []) {
+    $logFile = __DIR__ . "/debug.log";
+    $data = date("Y-m-d H:i:s");
+    $uid  = $usuario["id"] ?? "anon";
+    $nome = $usuario["nome"] ?? "desconhecido";
+    $json = json_encode($dados, JSON_UNESCAPED_UNICODE);
+    $linha = "[AUDITORIA][$data][user:$uid|$nome] ação='$acao' dados=$json\n";
+    file_put_contents($logFile, $linha, FILE_APPEND);
+}
+
 // Conexão e dependências
 require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/movimentacoes.php";
 require_once __DIR__ . "/relatorios.php";
 require_once __DIR__ . "/produtos.php";
-$conn = db();
 
-// Recupera usuário da sessão
-$usuario = $_SESSION["usuario"] ?? null;
-$usuario_id = $usuario["id"] ?? null;
+// 🔑 Middleware de autenticação
+require_once __DIR__ . "/auth.php"; // já define $usuario se autenticado
+$usuario_id    = $usuario["id"]    ?? null;
 $usuario_nivel = $usuario["nivel"] ?? null;
 
-// 🔑 Ação pode vir de GET, POST ou JSON
+// Ação pode vir de GET, POST ou JSON
 $acao = $_REQUEST["acao"] ?? "";
 
 // 🔍 Corpo pode vir como JSON ou FormData
 $body = read_body();
+
+// Sempre logar tentativas de ação
+auditoria_log($usuario, $acao, $body ?: $_GET);
 
 try {
     switch ($acao) {
@@ -54,28 +91,19 @@ try {
         // ======================
         case "listar_produtos":
             $incluir_inativos = isset($_GET["inativos"]) && $_GET["inativos"] == "1";
-            $produtos = produtos_listar($conn, $incluir_inativos);
+            $produtos = produtos_listar(db(), $incluir_inativos);
             echo json_encode(resposta(true, "", $produtos));
             break;
 
         case "adicionar_produto":
-            if (!$usuario_id) {
-                echo json_encode(resposta(false, "Usuário não autenticado."));
-                break;
-            }
-
             $nome = trim($body["nome"] ?? "");
             $quantidade = (int)($body["quantidade"] ?? 0);
 
-            $res = produtos_adicionar($conn, $nome, $quantidade, $usuario_id);
+            $res = produtos_adicionar(db(), $nome, $quantidade, $usuario_id);
             echo json_encode($res);
             break;
 
         case "remover_produto":
-            if (!$usuario_id) {
-                echo json_encode(resposta(false, "Usuário não autenticado."));
-                break;
-            }
             if ($usuario_nivel !== "admin") {
                 echo json_encode(resposta(false, "Ação permitida apenas para administradores."));
                 break;
@@ -87,7 +115,7 @@ try {
                 break;
             }
 
-            $res = mov_remover($conn, $id, $usuario_id);
+            $res = mov_remover(db(), $id, $usuario_id);
             echo json_encode($res);
             break;
 
@@ -95,11 +123,7 @@ try {
         // USUÁRIOS
         // ======================
         case "listar_usuarios":
-            if (!$usuario_id) {
-                echo json_encode(resposta(false, "Usuário não autenticado."));
-                break;
-            }
-
+            $conn = db();
             $res = $conn->query("SELECT id, nome, email, nivel, criado_em FROM usuarios ORDER BY nome ASC");
             $usuarios = [];
             if ($res) {
@@ -115,13 +139,8 @@ try {
         // ======================
         // MOVIMENTAÇÕES & RELATÓRIOS
         // ======================
-        case "listar_movimentacoes": 
+        case "listar_movimentacoes":
         case "listar_relatorios":
-            if (!$usuario_id) {
-                echo json_encode(resposta(false, "Usuário não autenticado."));
-                break;
-            }
-
             $filtros = [
                 "produto_id"  => $_GET["produto_id"] ?? null,
                 "tipo"        => $_GET["tipo"] ?? null,
@@ -133,21 +152,16 @@ try {
                 "limite"      => (int)($_GET["limite"] ?? 50),
             ];
 
-            $rel = relatorio($conn, $filtros);
+            $rel = relatorio(db(), $filtros);
             echo json_encode($rel);
             break;
 
         case "registrar_movimentacao":
-            if (!$usuario_id) {
-                echo json_encode(resposta(false, "Usuário não autenticado."));
-                break;
-            }
-
             $produto_id = (int)($body["produto_id"] ?? 0);
             $tipo = $body["tipo"] ?? "";
             $quantidade = (int)($body["quantidade"] ?? 0);
 
-            $res = mov_registrar($conn, $produto_id, $tipo, $quantidade, $usuario_id);
+            $res = mov_registrar(db(), $produto_id, $tipo, $quantidade, $usuario_id);
             echo json_encode($res);
             break;
 
