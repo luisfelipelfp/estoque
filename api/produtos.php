@@ -4,8 +4,6 @@
  * Funções para manipulação de produtos
  */
 
-// 🔒 Garante que o usuário está logado
-require_once __DIR__ . "/auth.php";
 require_once __DIR__ . "/movimentacoes.php";
 
 /**
@@ -16,18 +14,19 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = false): array {
         ? "SELECT id, nome, quantidade, ativo FROM produtos ORDER BY id DESC"
         : "SELECT id, nome, quantidade, ativo FROM produtos WHERE ativo = 1 ORDER BY id DESC";
 
-    $res = $conn->query($sql);
     $out = [];
-    if ($res) {
+    if ($res = $conn->query($sql)) {
         while ($row = $res->fetch_assoc()) {
             $out[] = [
                 "id"         => (int)$row["id"],
-                "nome"       => $row["nome"],
+                "nome"       => (string)$row["nome"],
                 "quantidade" => (int)$row["quantidade"],
                 "ativo"      => (int)$row["ativo"],
             ];
         }
         $res->free();
+    } else {
+        error_log("produtos_listar falhou: " . $conn->error);
     }
     return $out;
 }
@@ -36,7 +35,8 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = false): array {
  * Adiciona um novo produto
  */
 function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial = 0, ?int $usuario_id = null): array {
-    if (trim($nome) === "") {
+    $nome = trim($nome);
+    if ($nome === "") {
         return ["sucesso" => false, "mensagem" => "Nome do produto é obrigatório."];
     }
 
@@ -44,10 +44,14 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
     try {
         // Verifica duplicidade
         $stmtCheck = $conn->prepare("SELECT id FROM produtos WHERE nome = ?");
+        if (!$stmtCheck) {
+            $conn->rollback();
+            return ["sucesso" => false, "mensagem" => "Erro ao preparar consulta de duplicidade: " . $conn->error];
+        }
         $stmtCheck->bind_param("s", $nome);
         $stmtCheck->execute();
         $resCheck = $stmtCheck->get_result();
-        if ($resCheck->num_rows > 0) {
+        if ($resCheck && $resCheck->num_rows > 0) {
             $stmtCheck->close();
             $conn->rollback();
             return ["sucesso" => false, "mensagem" => "Já existe um produto com esse nome."];
@@ -56,9 +60,13 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
 
         // Insere produto
         $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade, ativo) VALUES (?, 0, 1)");
+        if (!$stmt) {
+            $conn->rollback();
+            return ["sucesso" => false, "mensagem" => "Erro ao preparar inserção: " . $conn->error];
+        }
         $stmt->bind_param("s", $nome);
         if (!$stmt->execute()) {
-            $erro = $conn->error;
+            $erro = $stmt->error;
             $stmt->close();
             $conn->rollback();
             return ["sucesso" => false, "mensagem" => "Erro ao adicionar produto: " . $erro];

@@ -5,6 +5,7 @@
  */
 
 require_once __DIR__ . "/db.php";
+require_once __DIR__ . "/utils.php";
 
 /**
  * Listar movimentações com filtros
@@ -96,7 +97,7 @@ function mov_listar(mysqli $conn, array $f): array {
     $res->free();
     $stmt->close();
 
-    return $dados;
+    return resposta(true, "", $dados);
 }
 
 /**
@@ -104,7 +105,7 @@ function mov_listar(mysqli $conn, array $f): array {
  */
 function mov_registrar(mysqli $conn, int $produto_id, string $tipo, int $quantidade, int $usuario_id): array {
     if ($produto_id <= 0 || $quantidade <= 0 || !in_array($tipo, ["entrada","saida"])) {
-        return ["sucesso" => false, "mensagem" => "Dados inválidos."];
+        return resposta(false, "Dados inválidos.");
     }
 
     if ($tipo === "saida") {
@@ -118,7 +119,8 @@ function mov_registrar(mysqli $conn, int $produto_id, string $tipo, int $quantid
     }
 
     if (!$stmt->execute() || $stmt->affected_rows <= 0) {
-        return ["sucesso" => false, "mensagem" => "Falha ao atualizar estoque."];
+        debug_log("Falha ao atualizar estoque produto_id=$produto_id tipo=$tipo qtd=$quantidade");
+        return resposta(false, "Falha ao atualizar estoque.");
     }
     $stmt->close();
 
@@ -127,9 +129,11 @@ function mov_registrar(mysqli $conn, int $produto_id, string $tipo, int $quantid
     $ok = $stmt->execute();
     $stmt->close();
 
+    debug_log("Movimentação registrada produto_id=$produto_id tipo=$tipo qtd=$quantidade user=$usuario_id");
+
     return $ok
-        ? ["sucesso" => true, "mensagem" => "Movimentação registrada."]
-        : ["sucesso" => false, "mensagem" => "Erro ao registrar movimentação."];
+        ? resposta(true, "Movimentação registrada.")
+        : resposta(false, "Erro ao registrar movimentação.");
 }
 
 /**
@@ -137,10 +141,9 @@ function mov_registrar(mysqli $conn, int $produto_id, string $tipo, int $quantid
  */
 function mov_remover(mysqli $conn, int $produto_id, int $usuario_id): array {
     if ($produto_id <= 0) {
-        return ["sucesso" => false, "mensagem" => "ID inválido."];
+        return resposta(false, "ID inválido.");
     }
 
-    // Captura o nome antes de remover
     $stmt = $conn->prepare("SELECT nome FROM produtos WHERE id = ?");
     $stmt->bind_param("i", $produto_id);
     $stmt->execute();
@@ -159,7 +162,9 @@ function mov_remover(mysqli $conn, int $produto_id, int $usuario_id): array {
         $stmt->execute();
         $stmt->close();
 
-        return ["sucesso" => true, "mensagem" => "Produto removido com sucesso."];
+        debug_log("Produto removido id=$produto_id nome=$nomeProduto user=$usuario_id");
+        return resposta(true, "Produto removido com sucesso.");
     }
-    return ["sucesso" => false, "mensagem" => "Erro ao remover produto."];
+
+    return resposta(false, "Erro ao remover produto.");
 }

@@ -7,6 +7,7 @@
 require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/movimentacoes.php";
 require_once __DIR__ . "/produtos.php";
+require_once __DIR__ . "/utils.php";
 
 /**
  * Gera relatório de movimentações com filtros
@@ -55,7 +56,6 @@ function relatorio(mysqli $conn, array $filtros = []): array {
 
     $where = $cond ? "WHERE " . implode(" AND ", $cond) : "";
 
-    // Sempre retornar estrutura, mesmo sem filtros
     $sqlTotal = "SELECT COUNT(*) AS total
                    FROM movimentacoes m
               LEFT JOIN usuarios u ON u.id = m.usuario_id
@@ -110,8 +110,9 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     }
     $stmt->close();
 
-    return [
-        "sucesso"  => true,
+    debug_log("Relatório gerado total=$total filtros=" . json_encode($filtros));
+
+    return resposta(true, "", [
         "total"    => $total,
         "pagina"   => $pagina,
         "limite"   => $limite,
@@ -119,5 +120,5 @@ function relatorio(mysqli $conn, array $filtros = []): array {
         "dados"    => $movs,
         "produtos" => produtos_listar($conn, true),
         "aviso"    => $total === 0 ? "Nenhum registro encontrado para os filtros aplicados." : null
-    ];
+    ]);
 }
