@@ -29,9 +29,9 @@ if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
     exit;
 }
 
-// Logout
 debug_log("Iniciando logout...", "logout.php");
 
+// Limpa sessão
 $_SESSION = [];
 
 if (ini_get("session.use_cookies")) {
@@ -45,4 +45,4 @@ if (ini_get("session.use_cookies")) {
 session_destroy();
 
 debug_log("Sessão destruída com sucesso", "logout.php");
-echo json_encode(resposta(true, "Logout realizado com sucesso."));
+json_response(true, "Logout realizado com sucesso.", null, 200);

@@ -56,6 +56,7 @@ function relatorio(mysqli $conn, array $filtros = []): array {
 
     $where = $cond ? "WHERE " . implode(" AND ", $cond) : "";
 
+    // Total de registros
     $sqlTotal = "SELECT COUNT(*) AS total
                    FROM movimentacoes m
               LEFT JOIN usuarios u ON u.id = m.usuario_id
@@ -68,6 +69,7 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $total = (int)($stmtT->get_result()->fetch_assoc()["total"] ?? 0);
     $stmtT->close();
 
+    // Dados
     $sql = "SELECT 
                 m.id,
                 m.produto_id,

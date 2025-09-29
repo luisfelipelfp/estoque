@@ -137,7 +137,7 @@ function mov_registrar(mysqli $conn, int $produto_id, string $tipo, int $quantid
 }
 
 /**
- * Remover produto (somente admin)
+ * Remover produto (mantém registro histórico)
  */
 function mov_remover(mysqli $conn, int $produto_id, int $usuario_id): array {
     if ($produto_id <= 0) {
@@ -151,7 +151,12 @@ function mov_remover(mysqli $conn, int $produto_id, int $usuario_id): array {
     $nomeProduto = $res->fetch_assoc()["nome"] ?? null;
     $stmt->close();
 
-    $stmt = $conn->prepare("DELETE FROM produtos WHERE id = ?");
+    if (!$nomeProduto) {
+        return resposta(false, "Produto não encontrado.");
+    }
+
+    // Marca como inativo em vez de excluir
+    $stmt = $conn->prepare("UPDATE produtos SET ativo = 0 WHERE id = ?");
     $stmt->bind_param("i", $produto_id);
     $ok = $stmt->execute();
     $stmt->close();
@@ -162,8 +167,8 @@ function mov_remover(mysqli $conn, int $produto_id, int $usuario_id): array {
         $stmt->execute();
         $stmt->close();
 
-        debug_log("Produto removido id=$produto_id nome=$nomeProduto user=$usuario_id");
-        return resposta(true, "Produto removido com sucesso.");
+        debug_log("Produto marcado como inativo id=$produto_id nome=$nomeProduto user=$usuario_id");
+        return resposta(true, "Produto removido (inativado) com sucesso.");
     }
 
     return resposta(false, "Erro ao remover produto.");

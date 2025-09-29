@@ -67,6 +67,9 @@ require_once __DIR__ . "/movimentacoes.php";
 require_once __DIR__ . "/relatorios.php";
 require_once __DIR__ . "/produtos.php";
 
+// Conexão
+$conn = db();
+
 // Middleware de autenticação
 require_once __DIR__ . "/auth.php"; 
 $usuario_id    = $usuario["id"]    ?? null;
@@ -83,15 +86,18 @@ try {
     switch ($acao) {
         // Produtos
         case "listar_produtos":
-            echo json_encode(produtos_listar($conn));
+            echo json_encode(resposta(true, "", produtos_listar($conn)));
             break;
 
         case "adicionar_produto":
-            echo json_encode(produto_adicionar($conn, $body));
+            $nome  = trim($body["nome"] ?? "");
+            $qtd   = (int)($body["quantidade"] ?? 0);
+            echo json_encode(produtos_adicionar($conn, $nome, $qtd, $usuario_id));
             break;
 
         case "remover_produto":
-            echo json_encode(produto_remover($conn, $body["id"] ?? null));
+            $id = (int)($body["id"] ?? 0);
+            echo json_encode(mov_remover($conn, $id, $usuario_id));
             break;
 
         // Movimentações
@@ -100,12 +106,15 @@ try {
             break;
 
         case "registrar_movimentacao":
-            echo json_encode(mov_registrar($conn, $body));
+            $produto_id = (int)($body["produto_id"] ?? 0);
+            $tipo       = $body["tipo"] ?? "";
+            $quantidade = (int)($body["quantidade"] ?? 0);
+            echo json_encode(mov_registrar($conn, $produto_id, $tipo, $quantidade, $usuario_id));
             break;
 
         // Relatórios
         case "relatorio_movimentacoes":
-            echo json_encode(relatorio_movimentacoes($conn, $_GET));
+            echo json_encode(relatorio($conn, $_GET));
             break;
 
         // Autenticação

@@ -37,8 +37,7 @@ if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
 // Aceita apenas POST
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     debug_log("Método inválido: " . $_SERVER["REQUEST_METHOD"], "login.php");
-    echo json_encode(resposta(false, "Método inválido."));
-    exit;
+    json_response(false, "Método inválido.", null, 405);
 }
 
 // Captura entrada JSON ou POST
@@ -54,8 +53,7 @@ if (is_array($input)) {
 debug_log("Recebido login = '$login' | senha (len=" . strlen($senha) . ")", "login.php");
 
 if ($login === "" || $senha === "") {
-    echo json_encode(resposta(false, "Preencha login e senha."));
-    exit;
+    json_response(false, "Preencha login e senha.", null, 400);
 }
 
 // Consulta por email ou usuário
@@ -79,9 +77,8 @@ if ($usuario && password_verify($senha, $usuario["senha"])) {
     $_SESSION["usuario"] = $usuario;
 
     debug_log("Login bem-sucedido para usuário ID " . $usuario["id"], "login.php");
-    echo json_encode(resposta(true, "Login realizado.", ["usuario" => $usuario]));
-    exit;
+    json_response(true, "Login realizado com sucesso.", ["usuario" => $usuario], 200);
 }
 
 debug_log("Falhou -> senha inválida ou usuário não encontrado", "login.php");
-echo json_encode(resposta(false, "Usuário/e-mail ou senha inválidos."));
+json_response(false, "Usuário/e-mail ou senha inválidos.", null, 401);

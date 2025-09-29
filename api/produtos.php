@@ -5,6 +5,7 @@
  */
 
 require_once __DIR__ . "/movimentacoes.php";
+require_once __DIR__ . "/utils.php";
 
 /**
  * Lista produtos
@@ -37,7 +38,7 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = false): array {
 function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial = 0, ?int $usuario_id = null): array {
     $nome = trim($nome);
     if ($nome === "") {
-        return ["sucesso" => false, "mensagem" => "Nome do produto é obrigatório."];
+        return resposta(false, "Nome do produto é obrigatório.");
     }
 
     $conn->begin_transaction();
@@ -46,7 +47,7 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
         $stmtCheck = $conn->prepare("SELECT id FROM produtos WHERE nome = ?");
         if (!$stmtCheck) {
             $conn->rollback();
-            return ["sucesso" => false, "mensagem" => "Erro ao preparar consulta de duplicidade: " . $conn->error];
+            return resposta(false, "Erro ao preparar consulta: " . $conn->error);
         }
         $stmtCheck->bind_param("s", $nome);
         $stmtCheck->execute();
@@ -54,7 +55,7 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
         if ($resCheck && $resCheck->num_rows > 0) {
             $stmtCheck->close();
             $conn->rollback();
-            return ["sucesso" => false, "mensagem" => "Já existe um produto com esse nome."];
+            return resposta(false, "Já existe um produto com esse nome.");
         }
         $stmtCheck->close();
 
@@ -62,19 +63,19 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
         $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade, ativo) VALUES (?, 0, 1)");
         if (!$stmt) {
             $conn->rollback();
-            return ["sucesso" => false, "mensagem" => "Erro ao preparar inserção: " . $conn->error];
+            return resposta(false, "Erro ao preparar inserção: " . $conn->error);
         }
         $stmt->bind_param("s", $nome);
         if (!$stmt->execute()) {
             $erro = $stmt->error;
             $stmt->close();
             $conn->rollback();
-            return ["sucesso" => false, "mensagem" => "Erro ao adicionar produto: " . $erro];
+            return resposta(false, "Erro ao adicionar produto: " . $erro);
         }
         $id = $conn->insert_id;
         $stmt->close();
 
-        // Se quantidade inicial > 0 → registra movimentação de entrada
+        // Se quantidade inicial > 0 → registra movimentação
         if ($quantidade_inicial > 0) {
             $resMov = mov_registrar($conn, $id, "entrada", $quantidade_inicial, $usuario_id ?? 0);
             if (!$resMov["sucesso"]) {
@@ -84,15 +85,10 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
         }
 
         $conn->commit();
-        return [
-            "sucesso"  => true,
-            "mensagem" => "Produto adicionado com sucesso.",
-            "id"       => $id
-        ];
+        return resposta(true, "Produto adicionado com sucesso.", ["id" => $id]);
     } catch (Throwable $e) {
         $conn->rollback();
         error_log("produtos_adicionar erro: " . $e->getMessage());
-        return ["sucesso" => false, "mensagem" => "Erro interno ao adicionar produto."];
+        return resposta(false, "Erro interno ao adicionar produto.");
     }
 }
-      
