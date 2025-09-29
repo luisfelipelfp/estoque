@@ -1,9 +1,10 @@
 <?php
 // =======================================
 // api/actions.php
-// Roteador de ações
+// Roteador central de ações
 // =======================================
 
+// Configura sessão
 session_set_cookie_params([
     "lifetime" => 0,
     "path"     => "/",
@@ -16,6 +17,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Utils (resposta, etc.)
 require_once __DIR__ . "/utils.php";
 
 // Headers padrão + CORS
@@ -25,18 +27,20 @@ header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 
+// Pré-flight
 if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
     http_response_code(200);
     exit;
 }
 
-// 🔧 DEBUG PHP
+// 🔧 DEBUG / LOG
 ini_set("display_errors", 0);
 ini_set("display_startup_errors", 0);
 error_reporting(E_ALL);
 ini_set("log_errors", 1);
 ini_set("error_log", __DIR__ . "/debug.log");
 
+// Leitura do corpo JSON ou POST
 function read_body() {
     $body = file_get_contents("php://input");
     $data = json_decode($body, true);
@@ -57,7 +61,7 @@ function auditoria_log($usuario, $acao, $dados = []) {
     file_put_contents($logFile, $linha, FILE_APPEND);
 }
 
-// Conexão e dependências
+// Dependências
 require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/movimentacoes.php";
 require_once __DIR__ . "/relatorios.php";
@@ -68,7 +72,7 @@ require_once __DIR__ . "/auth.php";
 $usuario_id    = $usuario["id"]    ?? null;
 $usuario_nivel = $usuario["nivel"] ?? null;
 
-// Ação
+// Identificação da ação
 $acao = $_REQUEST["acao"] ?? "";
 $body = read_body();
 
@@ -77,7 +81,44 @@ auditoria_log($usuario, $acao, $body ?: $_GET);
 
 try {
     switch ($acao) {
-        // ... (restante do switch sem alterações, só usa resposta() de utils.php)
+        // Produtos
+        case "listar_produtos":
+            echo json_encode(produtos_listar($conn));
+            break;
+
+        case "adicionar_produto":
+            echo json_encode(produto_adicionar($conn, $body));
+            break;
+
+        case "remover_produto":
+            echo json_encode(produto_remover($conn, $body["id"] ?? null));
+            break;
+
+        // Movimentações
+        case "listar_movimentacoes":
+            echo json_encode(mov_listar($conn, $_GET));
+            break;
+
+        case "registrar_movimentacao":
+            echo json_encode(mov_registrar($conn, $body));
+            break;
+
+        // Relatórios
+        case "relatorio_movimentacoes":
+            echo json_encode(relatorio_movimentacoes($conn, $_GET));
+            break;
+
+        // Autenticação
+        case "login":
+            require_once __DIR__ . "/login.php";
+            break;
+
+        case "logout":
+            require_once __DIR__ . "/logout.php";
+            break;
+
+        default:
+            echo json_encode(resposta(false, "Ação inválida ou não informada."));
     }
 } catch (Throwable $e) {
     error_log("Erro global: " . $e->getMessage() . " em " . $e->getFile() . ":" . $e->getLine());
