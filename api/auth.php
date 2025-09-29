@@ -11,17 +11,20 @@ if (!isset($_SESSION["usuario"])) {
     // Log de tentativa inválida
     debug_log("Acesso negado -> usuário não autenticado.", "auth.php");
 
-    // Retorna resposta padronizada e encerra
-    json_response(false, "Usuário não autenticado", null, 401);
+    // Retorna resposta padronizada
+    echo json_encode(resposta(false, "Usuário não autenticado"));
+    exit;
 }
 
 // 🔑 Usuário autenticado → exporta variável
 $usuario = $_SESSION["usuario"];
 
-// Loga dados básicos do usuário
-debug_log([
-    "msg"   => "Usuário autenticado",
-    "id"    => $usuario["id"]    ?? null,
-    "email" => $usuario["email"] ?? null,
-    "nivel" => $usuario["nivel"] ?? null
-], "auth.php");
+// Log estruturado (convertendo array para string JSON)
+debug_log(
+    "Usuário autenticado: " . json_encode([
+        "id"    => $usuario["id"]    ?? null,
+        "email" => $usuario["email"] ?? null,
+        "nivel" => $usuario["nivel"] ?? null
+    ], JSON_UNESCAPED_UNICODE),
+    "auth.php"
+);
