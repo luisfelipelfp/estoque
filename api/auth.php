@@ -19,12 +19,15 @@ if (!isset($_SESSION["usuario"])) {
 // 🔑 Usuário autenticado → exporta variável
 $usuario = $_SESSION["usuario"];
 
-// Log estruturado (convertendo array para string JSON)
+// Log estruturado (sem precisar de json_encode manual)
 debug_log(
-    "Usuário autenticado: " . json_encode([
-        "id"    => $usuario["id"]    ?? null,
-        "email" => $usuario["email"] ?? null,
-        "nivel" => $usuario["nivel"] ?? null
-    ], JSON_UNESCAPED_UNICODE),
+    [
+        "mensagem" => "Usuário autenticado",
+        "dados" => [
+            "id"    => $usuario["id"]    ?? null,
+            "email" => $usuario["email"] ?? null,
+            "nivel" => $usuario["nivel"] ?? null
+        ]
+    ],
     "auth.php"
 );
