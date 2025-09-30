@@ -70,14 +70,29 @@ require_once __DIR__ . "/produtos.php";
 // Conexão
 $conn = db();
 
-// Middleware de autenticação
-require_once __DIR__ . "/auth.php"; 
-$usuario_id    = $usuario["id"]    ?? null;
-$usuario_nivel = $usuario["nivel"] ?? null;
-
 // Identificação da ação
 $acao = $_REQUEST["acao"] ?? "";
 $body = read_body();
+
+// ============================
+// Login e Logout não exigem auth
+// ============================
+if ($acao === "login") {
+    require __DIR__ . "/login.php";
+    exit;
+}
+if ($acao === "logout") {
+    require __DIR__ . "/logout.php";
+    exit;
+}
+
+// ============================
+// Middleware de autenticação
+// ============================
+require_once __DIR__ . "/auth.php"; 
+$usuario = $_SESSION["usuario"] ?? null;
+$usuario_id    = $usuario["id"]    ?? null;
+$usuario_nivel = $usuario["nivel"] ?? null;
 
 // Log de auditoria
 auditoria_log($usuario, $acao, $body ?: $_GET);
@@ -115,15 +130,6 @@ try {
         // Relatórios
         case "relatorio_movimentacoes":
             echo json_encode(relatorio($conn, $_GET));
-            break;
-
-        // Autenticação
-        case "login":
-            require_once __DIR__ . "/login.php";
-            break;
-
-        case "logout":
-            require_once __DIR__ . "/logout.php";
             break;
 
         default:
