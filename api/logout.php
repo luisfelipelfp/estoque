@@ -44,5 +44,5 @@ if (ini_get("session.use_cookies")) {
 
 session_destroy();
 
-debug_log("Sessão destruída com sucesso", "logout.php");
+debug_log(["status" => "logout_ok"], "logout.php");
 json_response(true, "Logout realizado com sucesso.", null, 200);
