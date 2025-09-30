@@ -6,12 +6,17 @@
 
 require_once __DIR__ . "/utils.php";
 
-// ⚠️ Atenção: a sessão já deve estar iniciada em actions.php
+// Garantir que a sessão esteja ativa
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 if (!isset($_SESSION["usuario"])) {
     // Log de tentativa inválida
     debug_log("Acesso negado -> usuário não autenticado.", "auth.php");
 
-    // Retorna resposta padronizada
+    // Retorna resposta padronizada + HTTP 401
+    http_response_code(401);
     echo json_encode(resposta(false, "Usuário não autenticado"));
     exit;
 }
@@ -19,7 +24,7 @@ if (!isset($_SESSION["usuario"])) {
 // 🔑 Usuário autenticado → exporta variável
 $usuario = $_SESSION["usuario"];
 
-// Log estruturado (sem precisar de json_encode manual)
+// Log estruturado
 debug_log(
     [
         "mensagem" => "Usuário autenticado",
