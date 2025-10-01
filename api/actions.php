@@ -111,8 +111,15 @@ try {
             break;
 
         case "remover_produto":
-            $id = (int)($body["id"] ?? 0);
-            echo json_encode(mov_remover($conn, $id, $usuario_id));
+            // Aceita tanto "id" quanto "produto_id"
+            $produto_id = (int)($body["produto_id"] ?? $body["id"] ?? 0);
+
+            if ($produto_id <= 0) {
+                echo json_encode(resposta(false, "ID inválido."));
+                exit;
+            }
+
+            echo json_encode(mov_remover($conn, $produto_id, $usuario_id));
             break;
 
         // Movimentações
