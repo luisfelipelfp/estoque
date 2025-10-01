@@ -25,15 +25,11 @@ if (!window.__MOVIMENTACOES_JS_BOUND__) {
       filtros.pagina = pagina;
       filtros.limite = limitePorPagina;
 
-      const resp = await apiRequest("listar_relatorios", filtros, "GET");
+      // 🔥 CORREÇÃO: rota correta
+      const resp = await apiRequest("listar_movimentacoes", filtros, "GET");
 
-      const dados = resp?.dados || {};
-      const movs = Array.isArray(dados?.dados)
-        ? dados.dados
-        : Array.isArray(resp?.dados)
-        ? resp.dados
-        : [];
-      const total = Number(dados?.total || resp?.total || movs.length);
+      const movs = Array.isArray(resp?.dados) ? resp.dados : [];
+      const total = Number(resp?.total || movs.length);
 
       tbody.innerHTML = "";
 

@@ -99,7 +99,9 @@ auditoria_log($usuario, $acao, $body ?: $_GET);
 
 try {
     switch ($acao) {
+        // ============================
         // Produtos
+        // ============================
         case "listar_produtos":
             echo json_encode(resposta(true, "", produtos_listar($conn)));
             break;
@@ -122,7 +124,9 @@ try {
             echo json_encode(mov_remover($conn, $produto_id, $usuario_id));
             break;
 
+        // ============================
         // Movimentações
+        // ============================
         case "listar_movimentacoes":
             echo json_encode(mov_listar($conn, $_GET));
             break;
@@ -134,11 +138,16 @@ try {
             echo json_encode(mov_registrar($conn, $produto_id, $tipo, $quantidade, $usuario_id));
             break;
 
+        // ============================
         // Relatórios
+        // ============================
         case "relatorio_movimentacoes":
             echo json_encode(relatorio($conn, $_GET));
             break;
 
+        // ============================
+        // Default
+        // ============================
         default:
             echo json_encode(resposta(false, "Ação inválida ou não informada."));
     }
