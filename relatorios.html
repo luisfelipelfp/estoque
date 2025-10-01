@@ -39,7 +39,7 @@
   </nav>
 
   <!-- Conteúdo -->
-  <h1 class="mb-4">📊 Relatórios de Estoque</h1>
+  <h1 class="mb-4">📊 Relatórios e Movimentações</h1>
 
   <!-- Filtros -->
   <form id="form-filtros" class="row g-3 mb-4">
@@ -83,6 +83,7 @@
     <table class="table table-bordered table-striped shadow-sm" id="tabelaRelatorios">
       <thead class="table-dark">
         <tr>
+          <th>ID</th>
           <th>Data</th>
           <th>Produto</th>
           <th>Tipo</th>
@@ -92,7 +93,7 @@
       </thead>
       <tbody>
         <tr>
-          <td colspan="5" class="text-center text-muted">Use os filtros para buscar movimentações</td>
+          <td colspan="6" class="text-center text-muted">Use os filtros para buscar movimentações</td>
         </tr>
       </tbody>
     </table>
@@ -180,7 +181,7 @@
       const dados = (res.sucesso && Array.isArray(res.dados)) ? res.dados : [];
 
       if (dados.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">Nenhum registro encontrado</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Nenhum registro encontrado</td></tr>`;
         atualizarGraficos([]);
         return;
       }
@@ -188,6 +189,7 @@
       dados.forEach(item => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
+          <td>${item.id}</td>
           <td>${item.data}</td>
           <td>${item.produto}</td>
           <td>${item.tipo}</td>
@@ -202,7 +204,7 @@
 
     document.getElementById("btn-limpar").addEventListener("click", () => {
       document.querySelector("#tabelaRelatorios tbody").innerHTML =
-        `<tr><td colspan="5" class="text-center text-muted">Use os filtros para buscar movimentações</td></tr>`;
+        `<tr><td colspan="6" class="text-center text-muted">Use os filtros para buscar movimentações</td></tr>`;
       atualizarGraficos([]);
     });
 

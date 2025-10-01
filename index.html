@@ -11,7 +11,6 @@
   <!-- CSS customizados -->
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/produtos.css">
-  <link rel="stylesheet" href="css/movimentacoes.css">
 </head>
 <body class="container py-4">
 
@@ -67,45 +66,6 @@
     <tbody></tbody>
   </table>
 
-  <!-- Filtro movimentações -->
-  <h3 class="mt-5 mb-3">📈 Movimentações</h3>
-  <form id="formFiltrosMovimentacoes" class="mb-3 d-flex flex-wrap gap-2">
-    <input type="date" id="filtroDataInicio" name="data_inicio" class="form-control">
-    <input type="date" id="filtroDataFim" name="data_fim" class="form-control">
-    <select id="filtroTipo" name="tipo" class="form-select">
-      <option value="">Todos</option>
-      <option value="entrada">Entrada</option>
-      <option value="saida">Saída</option>
-      <option value="remocao">Remoção</option>
-    </select>
-    <select id="filtroProduto" name="produto_id" class="form-select">
-      <option value="">Todos os Produtos</option>
-    </select>
-    <button type="submit" class="btn btn-secondary" aria-label="Filtrar movimentações">🔍 Filtrar</button>
-  </form>
-
-  <!-- Tabela movimentações -->
-  <table id="tabelaMovimentacoes" class="table table-bordered table-striped shadow-sm">
-    <thead>
-      <tr>
-        <th scope="col">ID</th>
-        <th scope="col">Produto</th>
-        <th scope="col">Tipo</th>
-        <th scope="col">Quantidade</th>
-        <th scope="col">Data</th>
-        <th scope="col">Usuário</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td colspan="6" class="text-center text-muted">Use os filtros para buscar movimentações</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <!-- Paginação -->
-  <div id="paginacaoMovs" class="mt-2"></div>
-
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
@@ -118,6 +78,5 @@
   <script src="js/logout.js"></script>
   <script src="js/main.js"></script>
   <script src="js/produtos.js"></script>
-  <script src="js/movimentacoes.js"></script>
 </body>
 </html>
