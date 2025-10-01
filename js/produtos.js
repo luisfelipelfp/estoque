@@ -58,7 +58,8 @@ if (!window.__PRODUTOS_JS_BOUND__) {
           quantidade
         }, "POST");
       } else if (acao === "remover") {
-        return await apiRequest("remover_produto", { id }, "POST");
+        // 🔥 Corrigido: agora envia produto_id
+        return await apiRequest("remover_produto", { produto_id: id }, "POST");
       }
     } catch (err) {
       console.error(`Erro em ${acao}:`, err);
@@ -162,4 +163,3 @@ if (!window.__PRODUTOS_JS_BOUND__) {
     listarProdutos();
   });
 }
-        
