@@ -8,7 +8,7 @@ require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/utils.php";
 
 /**
- * Listar movimentações com filtros
+ * Listar movimentações com filtros (paginado e padronizado)
  */
 function mov_listar(mysqli $conn, array $f): array {
     $pagina = max(1, (int)($f["pagina"] ?? 1));
@@ -51,6 +51,24 @@ function mov_listar(mysqli $conn, array $f): array {
         $types .= "s";
     }
 
+    $whereSql = $where ? " WHERE " . implode(" AND ", $where) : "";
+
+    // 🔹 Total de registros
+    $sqlTotal = "
+        SELECT COUNT(*) AS total
+        FROM movimentacoes m
+        LEFT JOIN usuarios u ON u.id = m.usuario_id
+        $whereSql
+    ";
+    $stmtT = $conn->prepare($sqlTotal);
+    if ($types) {
+        $stmtT->bind_param($types, ...$params);
+    }
+    $stmtT->execute();
+    $total = (int)($stmtT->get_result()->fetch_assoc()["total"] ?? 0);
+    $stmtT->close();
+
+    // 🔹 Dados paginados
     $sql = "
         SELECT 
             m.id,
@@ -63,21 +81,18 @@ function mov_listar(mysqli $conn, array $f): array {
         FROM movimentacoes m
         LEFT JOIN produtos p ON p.id = m.produto_id
         LEFT JOIN usuarios u ON u.id = m.usuario_id
+        $whereSql
+        ORDER BY m.data DESC, m.id DESC
+        LIMIT ? OFFSET ?
     ";
-    if ($where) {
-        $sql .= " WHERE " . implode(" AND ", $where);
-    }
-    $sql .= " ORDER BY m.data DESC, m.id DESC LIMIT ? OFFSET ?";
 
-    $params[] = $limite;
-    $types .= "i";
-    $params[] = $offset;
-    $types .= "i";
+    $paramsPage = $params;
+    $typesPage  = $types . "ii";
+    $paramsPage[] = $limite;
+    $paramsPage[] = $offset;
 
     $stmt = $conn->prepare($sql);
-    if ($types) {
-        $stmt->bind_param($types, ...$params);
-    }
+    $stmt->bind_param($typesPage, ...$paramsPage);
     $stmt->execute();
     $res = $stmt->get_result();
 
@@ -97,79 +112,11 @@ function mov_listar(mysqli $conn, array $f): array {
     $res->free();
     $stmt->close();
 
-    return resposta(true, "", $dados);
-}
-
-/**
- * Registrar movimentação (entrada / saída)
- */
-function mov_registrar(mysqli $conn, int $produto_id, string $tipo, int $quantidade, int $usuario_id): array {
-    if ($produto_id <= 0 || $quantidade <= 0 || !in_array($tipo, ["entrada","saida"])) {
-        return resposta(false, "Dados inválidos.");
-    }
-
-    if ($tipo === "saida") {
-        $sql = "UPDATE produtos SET quantidade = quantidade - ? WHERE id = ? AND quantidade >= ?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("iii", $quantidade, $produto_id, $quantidade);
-    } else {
-        $sql = "UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("ii", $quantidade, $produto_id);
-    }
-
-    if (!$stmt->execute() || $stmt->affected_rows <= 0) {
-        debug_log("Falha ao atualizar estoque produto_id=$produto_id tipo=$tipo qtd=$quantidade");
-        return resposta(false, "Falha ao atualizar estoque.");
-    }
-    $stmt->close();
-
-    $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, tipo, quantidade, usuario_id) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("isii", $produto_id, $tipo, $quantidade, $usuario_id);
-    $ok = $stmt->execute();
-    $stmt->close();
-
-    debug_log("Movimentação registrada produto_id=$produto_id tipo=$tipo qtd=$quantidade user=$usuario_id");
-
-    return $ok
-        ? resposta(true, "Movimentação registrada.")
-        : resposta(false, "Erro ao registrar movimentação.");
-}
-
-/**
- * Remover produto (mantém registro histórico)
- */
-function mov_remover(mysqli $conn, int $produto_id, int $usuario_id): array {
-    if ($produto_id <= 0) {
-        return resposta(false, "ID inválido.");
-    }
-
-    $stmt = $conn->prepare("SELECT nome FROM produtos WHERE id = ?");
-    $stmt->bind_param("i", $produto_id);
-    $stmt->execute();
-    $res = $stmt->get_result();
-    $nomeProduto = $res->fetch_assoc()["nome"] ?? null;
-    $stmt->close();
-
-    if (!$nomeProduto) {
-        return resposta(false, "Produto não encontrado.");
-    }
-
-    // Marca como inativo em vez de excluir
-    $stmt = $conn->prepare("UPDATE produtos SET ativo = 0 WHERE id = ?");
-    $stmt->bind_param("i", $produto_id);
-    $ok = $stmt->execute();
-    $stmt->close();
-
-    if ($ok) {
-        $stmt = $conn->prepare("INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, usuario_id) VALUES (?, ?, 'remocao', 0, ?)");
-        $stmt->bind_param("isi", $produto_id, $nomeProduto, $usuario_id);
-        $stmt->execute();
-        $stmt->close();
-
-        debug_log("Produto marcado como inativo id=$produto_id nome=$nomeProduto user=$usuario_id");
-        return resposta(true, "Produto removido (inativado) com sucesso.");
-    }
-
-    return resposta(false, "Erro ao remover produto.");
+    return resposta(true, "", [
+        "total"   => $total,
+        "pagina"  => $pagina,
+        "limite"  => $limite,
+        "paginas" => (int)ceil($total / $limite),
+        "dados"   => $dados
+    ]);
 }
