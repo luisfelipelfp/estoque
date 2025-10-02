@@ -118,10 +118,9 @@ try {
 
             if ($produto_id <= 0) {
                 echo json_encode(resposta(false, "ID inválido."));
-                exit;
+            } else {
+                echo json_encode(mov_remover($conn, $produto_id, $usuario_id));
             }
-
-            echo json_encode(mov_remover($conn, $produto_id, $usuario_id));
             break;
 
         // ============================
@@ -142,7 +141,9 @@ try {
         // Relatórios
         // ============================
         case "relatorio_movimentacoes":
-            echo json_encode(relatorio($conn, $_GET));
+            // Mescla filtros GET + POST/JSON
+            $filtros = array_merge($_GET, $body);
+            echo json_encode(relatorio($conn, $filtros));
             break;
 
         // ============================
@@ -155,4 +156,3 @@ try {
     error_log("Erro global: " . $e->getMessage() . " em " . $e->getFile() . ":" . $e->getLine());
     echo json_encode(resposta(false, "Erro interno no servidor."));
 }
-         

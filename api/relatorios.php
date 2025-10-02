@@ -1,7 +1,7 @@
 <?php
 /**
  * relatorios.php
- * Funções para geração de relatórios de movimentações e produtos
+ * Funções para geração de relatórios de movimentações
  */
 
 require_once __DIR__ . "/db.php";
@@ -21,33 +21,42 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $bind  = [];
     $types = "";
 
+    // Filtro por tipo
     if (!empty($filtros["tipo"])) {
         $cond[] = "m.tipo = ?";
         $bind[] = $filtros["tipo"];
         $types .= "s";
     }
+
+    // Filtro por produto
     if (!empty($filtros["produto_id"])) {
         $cond[] = "m.produto_id = ?";
         $bind[] = (int)$filtros["produto_id"];
         $types .= "i";
     }
+
+    // Filtro por usuário (id)
     if (!empty($filtros["usuario_id"])) {
         $cond[] = "m.usuario_id = ?";
         $bind[] = (int)$filtros["usuario_id"];
         $types .= "i";
     }
+
+    // Filtro por nome de usuário (opcional)
     if (!empty($filtros["usuario"])) {
         $cond[] = "u.nome LIKE ?";
         $bind[] = "%" . $filtros["usuario"] . "%";
         $types .= "s";
     }
 
+    // Filtro por datas
     $dataInicio = $filtros["data_inicio"] ?? ($filtros["data_ini"] ?? null);
     if (!empty($dataInicio)) {
         $cond[] = "m.data >= ?";
         $bind[] = $dataInicio . " 00:00:00";
         $types .= "s";
     }
+
     if (!empty($filtros["data_fim"])) {
         $cond[] = "m.data <= ?";
         $bind[] = $filtros["data_fim"] . " 23:59:59";
@@ -61,6 +70,7 @@ function relatorio(mysqli $conn, array $filtros = []): array {
                    FROM movimentacoes m
               LEFT JOIN usuarios u ON u.id = m.usuario_id
                   $where";
+
     $stmtT = $conn->prepare($sqlTotal);
     if ($bind) {
         $stmtT->bind_param($types, ...$bind);
@@ -115,12 +125,12 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     debug_log("Relatório gerado total=$total filtros=" . json_encode($filtros));
 
     return resposta(true, "", [
-        "total"    => $total,
-        "pagina"   => $pagina,
-        "limite"   => $limite,
-        "paginas"  => (int)ceil($total / $limite),
-        "dados"    => $movs,
-        "produtos" => produtos_listar($conn, true),
-        "aviso"    => $total === 0 ? "Nenhum registro encontrado para os filtros aplicados." : null
+        "total"            => $total,
+        "pagina"           => $pagina,
+        "limite"           => $limite,
+        "paginas"          => (int)ceil($total / $limite),
+        "dados"            => $movs,
+        "filtros_aplicados"=> $filtros,
+        "aviso"            => $total === 0 ? "Nenhum registro encontrado para os filtros aplicados." : null
     ]);
 }
