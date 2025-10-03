@@ -8,7 +8,8 @@ require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/utils.php";
 
 /**
- * Listar movimentações com filtros (paginado e padronizado)
+ * Listar movimentações (uso operacional do dia a dia)
+ * Filtros básicos: produto, tipo, intervalo de datas
  */
 function mov_listar(mysqli $conn, array $f): array {
     $pagina = max(1, (int)($f["pagina"] ?? 1));
@@ -29,20 +30,9 @@ function mov_listar(mysqli $conn, array $f): array {
         $params[] = $f["tipo"];
         $types .= "s";
     }
-    if (!empty($f["usuario_id"])) {
-        $where[] = "m.usuario_id = ?";
-        $params[] = (int)$f["usuario_id"];
-        $types .= "i";
-    }
-    if (!empty($f["usuario"])) {
-        $where[] = "u.nome LIKE ?";
-        $params[] = "%" . $f["usuario"] . "%";
-        $types .= "s";
-    }
-    if (!empty($f["data_inicio"] ?? $f["data_ini"])) {
-        $dataInicio = $f["data_inicio"] ?? $f["data_ini"];
+    if (!empty($f["data_inicio"])) {
         $where[] = "m.data >= ?";
-        $params[] = $dataInicio . " 00:00:00";
+        $params[] = $f["data_inicio"] . " 00:00:00";
         $types .= "s";
     }
     if (!empty($f["data_fim"])) {
@@ -112,7 +102,7 @@ function mov_listar(mysqli $conn, array $f): array {
     $res->free();
     $stmt->close();
 
-    return resposta(true, "", [
+    return resposta(true, $total === 0 ? "Nenhuma movimentação encontrada." : "", [
         "total"   => $total,
         "pagina"  => $pagina,
         "limite"  => $limite,

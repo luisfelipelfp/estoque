@@ -10,7 +10,7 @@ require_once __DIR__ . "/produtos.php";
 require_once __DIR__ . "/utils.php";
 
 /**
- * Gera relatório de movimentações com filtros (paginado)
+ * Gera relatório de movimentações (completo, para análises)
  */
 function relatorio(mysqli $conn, array $filtros = []): array {
     $pagina = max(1, (int)($filtros["pagina"] ?? 1));
@@ -42,14 +42,14 @@ function relatorio(mysqli $conn, array $filtros = []): array {
         $types .= "i";
     }
 
-    // Filtro por nome de usuário (opcional)
+    // Filtro por nome de usuário
     if (!empty($filtros["usuario"])) {
         $cond[] = "u.nome LIKE ?";
         $bind[] = "%" . $filtros["usuario"] . "%";
         $types .= "s";
     }
 
-    // Filtro por datas
+    // Filtros de data
     $dataInicio = $filtros["data_inicio"] ?? ($filtros["data_ini"] ?? null);
     if (!empty($dataInicio)) {
         $cond[] = "m.data >= ?";
@@ -124,13 +124,12 @@ function relatorio(mysqli $conn, array $filtros = []): array {
 
     debug_log("Relatório gerado total=$total filtros=" . json_encode($filtros));
 
-    return resposta(true, "", [
+    return resposta(true, $total === 0 ? "Nenhum registro encontrado para os filtros aplicados." : "", [
         "total"            => $total,
         "pagina"           => $pagina,
         "limite"           => $limite,
         "paginas"          => (int)ceil($total / $limite),
         "dados"            => $movs,
-        "filtros_aplicados"=> $filtros,
-        "aviso"            => $total === 0 ? "Nenhum registro encontrado para os filtros aplicados." : null
+        "filtros_aplicados"=> $filtros
     ]);
 }

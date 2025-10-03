@@ -92,3 +92,57 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
         return resposta(false, "Erro interno ao adicionar produto.");
     }
 }
+
+/**
+ * Remove (desativa) um produto
+ */
+function produtos_remover(mysqli $conn, int $produto_id, ?int $usuario_id = null): array {
+    if ($produto_id <= 0) {
+        return resposta(false, "ID inválido para remoção.");
+    }
+
+    $conn->begin_transaction();
+    try {
+        // Verifica se produto existe e está ativo
+        $stmt = $conn->prepare("SELECT id, nome, quantidade, ativo FROM produtos WHERE id = ?");
+        $stmt->bind_param("i", $produto_id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $produto = $res->fetch_assoc();
+        $stmt->close();
+
+        if (!$produto) {
+            $conn->rollback();
+            return resposta(false, "Produto não encontrado.");
+        }
+        if ((int)$produto["ativo"] === 0) {
+            $conn->rollback();
+            return resposta(false, "Produto já está inativo.");
+        }
+
+        // Marca produto como inativo
+        $stmt = $conn->prepare("UPDATE produtos SET ativo = 0 WHERE id = ?");
+        $stmt->bind_param("i", $produto_id);
+        if (!$stmt->execute()) {
+            $erro = $stmt->error;
+            $stmt->close();
+            $conn->rollback();
+            return resposta(false, "Erro ao remover produto: " . $erro);
+        }
+        $stmt->close();
+
+        // Registra movimentação de remoção
+        $resMov = mov_registrar($conn, $produto_id, "remocao", (int)$produto["quantidade"], $usuario_id ?? 0);
+        if (!$resMov["sucesso"]) {
+            $conn->rollback();
+            return $resMov;
+        }
+
+        $conn->commit();
+        return resposta(true, "Produto removido com sucesso.", ["id" => $produto_id]);
+    } catch (Throwable $e) {
+        $conn->rollback();
+        error_log("produtos_remover erro: " . $e->getMessage());
+        return resposta(false, "Erro interno ao remover produto.");
+    }
+}

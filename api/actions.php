@@ -113,13 +113,13 @@ try {
             break;
 
         case "remover_produto":
-            // Aceita tanto "id" quanto "produto_id"
             $produto_id = (int)($body["produto_id"] ?? $body["id"] ?? 0);
 
             if ($produto_id <= 0) {
                 echo json_encode(resposta(false, "ID inválido."));
             } else {
-                echo json_encode(mov_remover($conn, $produto_id, $usuario_id));
+                // Chamando função específica de produtos
+                echo json_encode(produtos_remover($conn, $produto_id, $usuario_id));
             }
             break;
 
@@ -141,7 +141,6 @@ try {
         // Relatórios
         // ============================
         case "relatorio_movimentacoes":
-            // Mescla filtros GET + POST/JSON
             $filtros = array_merge($_GET, $body);
             echo json_encode(relatorio($conn, $filtros));
             break;
