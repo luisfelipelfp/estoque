@@ -40,6 +40,9 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
     if ($nome === "") {
         return resposta(false, "Nome do produto é obrigatório.");
     }
+    if ($quantidade_inicial < 0) {
+        return resposta(false, "Quantidade inicial inválida.");
+    }
 
     $conn->begin_transaction();
     try {
@@ -131,11 +134,13 @@ function produtos_remover(mysqli $conn, int $produto_id, ?int $usuario_id = null
         }
         $stmt->close();
 
-        // Registra movimentação de remoção
-        $resMov = mov_registrar($conn, $produto_id, "remocao", (int)$produto["quantidade"], $usuario_id ?? 0);
-        if (!$resMov["sucesso"]) {
-            $conn->rollback();
-            return $resMov;
+        // Registra movimentação de remoção (apenas se tinha estoque)
+        if ((int)$produto["quantidade"] > 0) {
+            $resMov = mov_registrar($conn, $produto_id, "remocao", (int)$produto["quantidade"], $usuario_id ?? 0);
+            if (!$resMov["sucesso"]) {
+                $conn->rollback();
+                return $resMov;
+            }
         }
 
         $conn->commit();

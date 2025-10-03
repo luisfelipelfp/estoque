@@ -22,7 +22,7 @@ require_once __DIR__ . "/utils.php";
 
 // Headers padrão + CORS
 header("Content-Type: application/json; charset=utf-8");
-header("Access-Control-Allow-Origin: http://192.168.15.100");
+header("Access-Control-Allow-Origin: http://192.168.15.100"); // ajuste em prod
 header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
@@ -118,7 +118,6 @@ try {
             if ($produto_id <= 0) {
                 echo json_encode(resposta(false, "ID inválido."));
             } else {
-                // Chamando função específica de produtos
                 echo json_encode(produtos_remover($conn, $produto_id, $usuario_id));
             }
             break;
@@ -134,7 +133,12 @@ try {
             $produto_id = (int)($body["produto_id"] ?? 0);
             $tipo       = $body["tipo"] ?? "";
             $quantidade = (int)($body["quantidade"] ?? 0);
-            echo json_encode(mov_registrar($conn, $produto_id, $tipo, $quantidade, $usuario_id));
+
+            if ($produto_id <= 0 || $quantidade <= 0 || !in_array($tipo, ["entrada", "saida", "remocao"])) {
+                echo json_encode(resposta(false, "Dados inválidos para movimentação."));
+            } else {
+                echo json_encode(mov_registrar($conn, $produto_id, $tipo, $quantidade, $usuario_id));
+            }
             break;
 
         // ============================

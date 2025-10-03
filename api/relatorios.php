@@ -50,7 +50,7 @@ function relatorio(mysqli $conn, array $filtros = []): array {
         $types .= "s";
     }
 
-    // 🔎 Filtros de data
+    // 🔎 Filtros de data (aceita data_inicio ou data_ini)
     $dataInicio = $filtros["data_inicio"] ?? ($filtros["data_ini"] ?? null);
     if (!empty($dataInicio)) {
         $cond[] = "m.data >= ?";
@@ -84,7 +84,8 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $sql = "SELECT 
                 m.id,
                 m.produto_id,
-                COALESCE(p.nome, m.produto_nome) AS produto_nome,
+                -- Sempre prioriza o nome salvo na movimentação, pois garante histórico mesmo após remoção
+                COALESCE(m.produto_nome, p.nome, '[Produto removido]') AS produto_nome,
                 m.tipo,
                 m.quantidade,
                 m.data,
@@ -113,7 +114,7 @@ function relatorio(mysqli $conn, array $filtros = []): array {
         $movs[] = [
             "id"           => (int)$row["id"],
             "produto_id"   => (int)$row["produto_id"],
-            "produto_nome" => (string)($row["produto_nome"] ?? ""),
+            "produto_nome" => (string)($row["produto_nome"] ?? "[Produto removido]"),
             "tipo"         => (string)$row["tipo"],   // entrada, saida, remocao
             "quantidade"   => (int)$row["quantidade"],
             "data"         => (string)$row["data"],
@@ -123,7 +124,7 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     }
     $stmt->close();
 
-    debug_log("Relatório gerado: total=$total, retornados=" . count($movs) . ", filtros=" . json_encode($filtros));
+    debug_log("Relatório gerado: total=$total, retornados=" . count($movs) . ", filtros=" . json_encode($filtros, JSON_UNESCAPED_UNICODE));
 
     return resposta(true, $total === 0 ? "Nenhum registro encontrado para os filtros aplicados." : "", [
         "total"             => $total,

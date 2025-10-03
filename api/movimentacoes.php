@@ -25,7 +25,7 @@ function mov_listar(mysqli $conn, array $f): array {
         $params[] = (int)$f["produto_id"];
         $types .= "i";
     }
-    if (!empty($f["tipo"])) {
+    if (!empty($f["tipo"]) && in_array($f["tipo"], ["entrada", "saida", "remocao"])) {
         $where[] = "m.tipo = ?";
         $params[] = $f["tipo"];
         $types .= "s";
@@ -82,7 +82,9 @@ function mov_listar(mysqli $conn, array $f): array {
     $paramsPage[] = $offset;
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param($typesPage, ...$paramsPage);
+    if ($typesPage) {
+        $stmt->bind_param($typesPage, ...$paramsPage);
+    }
     $stmt->execute();
     $res = $stmt->get_result();
 
