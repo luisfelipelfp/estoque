@@ -11,6 +11,7 @@ require_once __DIR__ . "/utils.php";
 
 /**
  * Gera relatório de movimentações (completo, para análises)
+ * Tipos aceitos: 'entrada', 'saida', 'remocao'
  */
 function relatorio(mysqli $conn, array $filtros = []): array {
     $pagina = max(1, (int)($filtros["pagina"] ?? 1));
@@ -21,35 +22,35 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $bind  = [];
     $types = "";
 
-    // Filtro por tipo
+    // 🔎 Filtro por tipo (entrada, saida, remocao)
     if (!empty($filtros["tipo"])) {
         $cond[] = "m.tipo = ?";
         $bind[] = $filtros["tipo"];
         $types .= "s";
     }
 
-    // Filtro por produto
+    // 🔎 Filtro por produto
     if (!empty($filtros["produto_id"])) {
         $cond[] = "m.produto_id = ?";
         $bind[] = (int)$filtros["produto_id"];
         $types .= "i";
     }
 
-    // Filtro por usuário (id)
+    // 🔎 Filtro por usuário (id)
     if (!empty($filtros["usuario_id"])) {
         $cond[] = "m.usuario_id = ?";
         $bind[] = (int)$filtros["usuario_id"];
         $types .= "i";
     }
 
-    // Filtro por nome de usuário
+    // 🔎 Filtro por nome de usuário
     if (!empty($filtros["usuario"])) {
         $cond[] = "u.nome LIKE ?";
         $bind[] = "%" . $filtros["usuario"] . "%";
         $types .= "s";
     }
 
-    // Filtros de data
+    // 🔎 Filtros de data
     $dataInicio = $filtros["data_inicio"] ?? ($filtros["data_ini"] ?? null);
     if (!empty($dataInicio)) {
         $cond[] = "m.data >= ?";
@@ -113,7 +114,7 @@ function relatorio(mysqli $conn, array $filtros = []): array {
             "id"           => (int)$row["id"],
             "produto_id"   => (int)$row["produto_id"],
             "produto_nome" => (string)($row["produto_nome"] ?? ""),
-            "tipo"         => (string)$row["tipo"],
+            "tipo"         => (string)$row["tipo"],   // entrada, saida, remocao
             "quantidade"   => (int)$row["quantidade"],
             "data"         => (string)$row["data"],
             "usuario_id"   => (int)$row["usuario_id"],
@@ -122,14 +123,14 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     }
     $stmt->close();
 
-    debug_log("Relatório gerado total=$total filtros=" . json_encode($filtros));
+    debug_log("Relatório gerado: total=$total, retornados=" . count($movs) . ", filtros=" . json_encode($filtros));
 
     return resposta(true, $total === 0 ? "Nenhum registro encontrado para os filtros aplicados." : "", [
-        "total"            => $total,
-        "pagina"           => $pagina,
-        "limite"           => $limite,
-        "paginas"          => (int)ceil($total / $limite),
-        "dados"            => $movs,
-        "filtros_aplicados"=> $filtros
+        "total"             => $total,
+        "pagina"            => $pagina,
+        "limite"            => $limite,
+        "paginas"           => (int)ceil($total / $limite),
+        "dados"             => $movs,
+        "filtros_aplicados" => $filtros
     ]);
 }
