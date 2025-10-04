@@ -66,8 +66,7 @@ async function carregarRelatorio(pagina = 1) {
   const tbody = document.querySelector("#tabelaRelatorios tbody");
   tbody.innerHTML = "";
 
-  // Agora o backend retorna dados + metadados
-  const dados = (res.sucesso && res.dados && Array.isArray(res.dados)) ? res.dados : [];
+  const dados = (res.sucesso && Array.isArray(res.dados)) ? res.dados : [];
 
   if (dados.length === 0) {
     tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Nenhum registro encontrado</td></tr>`;
@@ -89,13 +88,11 @@ async function carregarRelatorio(pagina = 1) {
   });
 
   atualizarGraficos(dados);
-
-  // Se quiser implementar paginação:
-  atualizarPaginacao(res.pagina, res.paginas);
+  atualizarPaginacao(res.pagina ?? 1, res.paginas ?? 1);
 }
 
 // -------------------------
-// Paginação (opcional)
+// Paginação
 // -------------------------
 function atualizarPaginacao(pagina, paginas) {
   const div = document.getElementById("paginacao");
@@ -171,7 +168,6 @@ function atualizarGraficos(dados) {
 // Eventos
 // -------------------------
 document.getElementById("btn-filtrar").addEventListener("click", () => carregarRelatorio(1));
-
 document.getElementById("btn-limpar").addEventListener("click", () => {
   document.querySelector("#tabelaRelatorios tbody").innerHTML =
     `<tr><td colspan="6" class="text-center text-muted">Use os filtros para buscar movimentações</td></tr>`;

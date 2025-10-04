@@ -17,12 +17,12 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Utils (resposta, etc.)
+// Utils
 require_once __DIR__ . "/utils.php";
 
 // Headers padrão + CORS
 header("Content-Type: application/json; charset=utf-8");
-header("Access-Control-Allow-Origin: http://192.168.15.100"); // ajuste em prod
+header("Access-Control-Allow-Origin: http://192.168.15.100");
 header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
@@ -33,14 +33,14 @@ if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
     exit;
 }
 
-// 🔧 DEBUG / LOG
+// Logs e erros
 ini_set("display_errors", 0);
 ini_set("display_startup_errors", 0);
 error_reporting(E_ALL);
 ini_set("log_errors", 1);
 ini_set("error_log", __DIR__ . "/debug.log");
 
-// Leitura do corpo JSON ou POST
+// Leitura de body JSON
 function read_body() {
     $body = file_get_contents("php://input");
     $data = json_decode($body, true);
@@ -50,7 +50,7 @@ function read_body() {
     return $_POST ?? [];
 }
 
-// Função de log de auditoria
+// Log de auditoria
 function auditoria_log($usuario, $acao, $dados = []) {
     $logFile = __DIR__ . "/debug.log";
     $data = date("Y-m-d H:i:s");
@@ -74,9 +74,7 @@ $conn = db();
 $acao = $_REQUEST["acao"] ?? "";
 $body = read_body();
 
-// ============================
-// Login e Logout não exigem auth
-// ============================
+// Login / Logout (sem autenticação)
 if ($acao === "login") {
     require __DIR__ . "/login.php";
     exit;
@@ -86,15 +84,12 @@ if ($acao === "logout") {
     exit;
 }
 
-// ============================
-// Middleware de autenticação
-// ============================
-require_once __DIR__ . "/auth.php"; 
+// Autenticação obrigatória
+require_once __DIR__ . "/auth.php";
 $usuario = $_SESSION["usuario"] ?? null;
 $usuario_id    = $usuario["id"]    ?? null;
 $usuario_nivel = $usuario["nivel"] ?? null;
 
-// Log de auditoria
 auditoria_log($usuario, $acao, $body ?: $_GET);
 
 try {
@@ -114,7 +109,6 @@ try {
 
         case "remover_produto":
             $produto_id = (int)($body["produto_id"] ?? $body["id"] ?? 0);
-
             if ($produto_id <= 0) {
                 echo json_encode(resposta(false, "ID inválido."));
             } else {
@@ -142,6 +136,17 @@ try {
             break;
 
         // ============================
+        // Usuários (novo endpoint p/ relatórios)
+        // ============================
+        case "listar_usuarios":
+            $sql = "SELECT id, nome FROM usuarios ORDER BY nome";
+            $res = $conn->query($sql);
+            $dados = [];
+            while ($row = $res->fetch_assoc()) $dados[] = $row;
+            echo json_encode(resposta(true, "", $dados));
+            break;
+
+        // ============================
         // Relatórios
         // ============================
         case "relatorio_movimentacoes":
@@ -159,4 +164,3 @@ try {
     error_log("Erro global: " . $e->getMessage() . " em " . $e->getFile() . ":" . $e->getLine());
     echo json_encode(resposta(false, "Erro interno no servidor."));
 }
-                                      

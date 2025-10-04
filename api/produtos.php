@@ -1,7 +1,7 @@
 <?php
 /**
  * produtos.php
- * Funções para manipulação de produtos
+ * Funções para manipulação de produtos (CRUD + integração com movimentações)
  */
 
 require_once __DIR__ . "/movimentacoes.php";
@@ -12,8 +12,8 @@ require_once __DIR__ . "/utils.php";
  */
 function produtos_listar(mysqli $conn, bool $incluir_inativos = false): array {
     $sql = $incluir_inativos
-        ? "SELECT id, nome, quantidade, ativo FROM produtos ORDER BY id DESC"
-        : "SELECT id, nome, quantidade, ativo FROM produtos WHERE ativo = 1 ORDER BY id DESC";
+        ? "SELECT id, nome, quantidade, ativo FROM produtos ORDER BY nome ASC"
+        : "SELECT id, nome, quantidade, ativo FROM produtos WHERE ativo = 1 ORDER BY nome ASC";
 
     $out = [];
     if ($res = $conn->query($sql)) {
@@ -29,6 +29,7 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = false): array {
     } else {
         error_log("produtos_listar falhou: " . $conn->error);
     }
+
     return $out;
 }
 
@@ -46,7 +47,7 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
 
     $conn->begin_transaction();
     try {
-        // Verifica duplicidade
+        // 🔎 Verifica duplicidade
         $stmtCheck = $conn->prepare("SELECT id FROM produtos WHERE nome = ?");
         if (!$stmtCheck) {
             $conn->rollback();
@@ -55,6 +56,7 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
         $stmtCheck->bind_param("s", $nome);
         $stmtCheck->execute();
         $resCheck = $stmtCheck->get_result();
+
         if ($resCheck && $resCheck->num_rows > 0) {
             $stmtCheck->close();
             $conn->rollback();
@@ -62,25 +64,27 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
         }
         $stmtCheck->close();
 
-        // Insere produto
-        $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade, ativo) VALUES (?, 0, 1)");
+        // 🟢 Insere o novo produto
+        $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade, ativo) VALUES (?, ?, 1)");
         if (!$stmt) {
             $conn->rollback();
             return resposta(false, "Erro ao preparar inserção: " . $conn->error);
         }
-        $stmt->bind_param("s", $nome);
+
+        $stmt->bind_param("si", $nome, $quantidade_inicial);
         if (!$stmt->execute()) {
             $erro = $stmt->error;
             $stmt->close();
             $conn->rollback();
             return resposta(false, "Erro ao adicionar produto: " . $erro);
         }
-        $id = $conn->insert_id;
+
+        $produto_id = $conn->insert_id;
         $stmt->close();
 
-        // Se quantidade inicial > 0 → registra movimentação
+        // 🔹 Registra movimentação inicial (se aplicável)
         if ($quantidade_inicial > 0) {
-            $resMov = mov_registrar($conn, $id, "entrada", $quantidade_inicial, $usuario_id ?? 0);
+            $resMov = mov_registrar($conn, $produto_id, "entrada", $quantidade_inicial, $usuario_id ?? 0);
             if (!$resMov["sucesso"]) {
                 $conn->rollback();
                 return $resMov;
@@ -88,7 +92,11 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
         }
 
         $conn->commit();
-        return resposta(true, "Produto adicionado com sucesso.", ["id" => $id]);
+        return resposta(true, "Produto adicionado com sucesso.", [
+            "id"         => $produto_id,
+            "quantidade" => $quantidade_inicial
+        ]);
+
     } catch (Throwable $e) {
         $conn->rollback();
         error_log("produtos_adicionar erro: " . $e->getMessage());
@@ -106,7 +114,7 @@ function produtos_remover(mysqli $conn, int $produto_id, ?int $usuario_id = null
 
     $conn->begin_transaction();
     try {
-        // Verifica se produto existe e está ativo
+        // 🔍 Verifica se o produto existe e está ativo
         $stmt = $conn->prepare("SELECT id, nome, quantidade, ativo FROM produtos WHERE id = ?");
         $stmt->bind_param("i", $produto_id);
         $stmt->execute();
@@ -123,8 +131,22 @@ function produtos_remover(mysqli $conn, int $produto_id, ?int $usuario_id = null
             return resposta(false, "Produto já está inativo.");
         }
 
-        // Marca produto como inativo
-        $stmt = $conn->prepare("UPDATE produtos SET ativo = 0 WHERE id = ?");
+        // ⚠️ Registra movimentação de remoção *antes* da atualização, para garantir histórico
+        if ((int)$produto["quantidade"] > 0) {
+            $resMov = mov_registrar($conn, $produto_id, "remocao", (int)$produto["quantidade"], $usuario_id ?? 0);
+            if (!$resMov["sucesso"]) {
+                $conn->rollback();
+                return $resMov;
+            }
+        }
+
+        // 🚫 Marca produto como inativo e zera quantidade
+        $stmt = $conn->prepare("UPDATE produtos SET ativo = 0, quantidade = 0 WHERE id = ?");
+        if (!$stmt) {
+            $conn->rollback();
+            return resposta(false, "Erro ao preparar atualização: " . $conn->error);
+        }
+
         $stmt->bind_param("i", $produto_id);
         if (!$stmt->execute()) {
             $erro = $stmt->error;
@@ -134,17 +156,12 @@ function produtos_remover(mysqli $conn, int $produto_id, ?int $usuario_id = null
         }
         $stmt->close();
 
-        // Registra movimentação de remoção (apenas se tinha estoque)
-        if ((int)$produto["quantidade"] > 0) {
-            $resMov = mov_registrar($conn, $produto_id, "remocao", (int)$produto["quantidade"], $usuario_id ?? 0);
-            if (!$resMov["sucesso"]) {
-                $conn->rollback();
-                return $resMov;
-            }
-        }
-
         $conn->commit();
-        return resposta(true, "Produto removido com sucesso.", ["id" => $produto_id]);
+        return resposta(true, "Produto removido com sucesso.", [
+            "id" => $produto_id,
+            "nome" => $produto["nome"]
+        ]);
+
     } catch (Throwable $e) {
         $conn->rollback();
         error_log("produtos_remover erro: " . $e->getMessage());
