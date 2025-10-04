@@ -136,7 +136,7 @@ try {
             break;
 
         // ============================
-        // Usuários (novo endpoint p/ relatórios)
+        // Usuários
         // ============================
         case "listar_usuarios":
             $sql = "SELECT id, nome FROM usuarios ORDER BY nome";
@@ -152,6 +152,14 @@ try {
         case "relatorio_movimentacoes":
             $filtros = array_merge($_GET, $body);
             echo json_encode(relatorio($conn, $filtros));
+            break;
+
+        // ============================
+        // Exportação (PDF / Excel)
+        // ============================
+        case "exportar_relatorio":
+            require_once __DIR__ . "/exportar.php";
+            echo json_encode(exportar_relatorio($conn, $_GET));
             break;
 
         // ============================
