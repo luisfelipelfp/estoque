@@ -1,17 +1,11 @@
 <?php
 /**
- * api/relatorios.php
- * Geração de relatórios e estatísticas de movimentações
+ * api/relatorios.php — Relatórios e estatísticas de movimentações
  */
 
 require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/utils.php";
-require_once __DIR__ . "/produtos.php";
-require_once __DIR__ . "/movimentacoes.php";
 
-/**
- * Retorna lista de movimentações filtradas + dados para gráficos
- */
 function relatorio(mysqli $conn, array $filtros = []): array {
     $pagina = max(1, (int)($filtros["pagina"] ?? 1));
     $limite = max(1, (int)($filtros["limite"] ?? 50));
@@ -21,7 +15,6 @@ function relatorio(mysqli $conn, array $filtros = []): array {
     $bind  = [];
     $types = "";
 
-    // --- Filtros dinâmicos ---
     if (!empty($filtros["tipo"])) {
         $cond[] = "m.tipo = ?";
         $bind[] = $filtros["tipo"];
@@ -50,21 +43,18 @@ function relatorio(mysqli $conn, array $filtros = []): array {
 
     $where = $cond ? "WHERE " . implode(" AND ", $cond) : "";
 
-    // --- Total de registros ---
-    $sqlTotal = "SELECT COUNT(*) AS total
-                   FROM movimentacoes m
-              LEFT JOIN usuarios u ON u.id = m.usuario_id
-                  $where";
+    // Total
+    $sqlTotal = "SELECT COUNT(*) AS total FROM movimentacoes m $where";
     $stmtT = $conn->prepare($sqlTotal);
     if ($bind) $stmtT->bind_param($types, ...$bind);
     $stmtT->execute();
     $total = (int)($stmtT->get_result()->fetch_assoc()["total"] ?? 0);
     $stmtT->close();
 
-    // --- Lista paginada ---
+    // Lista
     $sql = "SELECT 
                 m.id,
-                COALESCE(m.produto_nome, p.nome, '[Produto removido]') AS produto_nome,
+                COALESCE(p.nome, m.produto_nome, '[Produto removido]') AS produto_nome,
                 m.tipo,
                 m.quantidade,
                 m.data,
@@ -80,7 +70,6 @@ function relatorio(mysqli $conn, array $filtros = []): array {
         $stmt->bind_param($types . "ii", ...array_merge($bind, [$limite, $offset]));
     else
         $stmt->bind_param("ii", $limite, $offset);
-
     $stmt->execute();
     $res = $stmt->get_result();
 
@@ -91,19 +80,18 @@ function relatorio(mysqli $conn, array $filtros = []): array {
             "produto_nome" => $r["produto_nome"],
             "tipo" => $r["tipo"],
             "quantidade" => (int)$r["quantidade"],
-            "data" => $r["data"],
+            "data" => date("d/m/Y H:i", strtotime($r["data"])),
             "usuario" => $r["usuario"]
         ];
     }
     $stmt->close();
 
-    // --- Gráficos (quantidade por tipo) ---
+    // Gráfico
     $sqlGraf = "SELECT tipo, COUNT(*) AS total FROM movimentacoes m $where GROUP BY tipo";
     $stmtG = $conn->prepare($sqlGraf);
     if ($bind) $stmtG->bind_param($types, ...$bind);
     $stmtG->execute();
     $resG = $stmtG->get_result();
-
     $graf = ["entrada" => 0, "saida" => 0, "remocao" => 0];
     while ($g = $resG->fetch_assoc()) $graf[$g["tipo"]] = (int)$g["total"];
     $stmtG->close();
