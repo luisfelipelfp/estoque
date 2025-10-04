@@ -13,7 +13,8 @@ async function carregarUsuarios() {
     const res = await resp.json();
     const select = document.getElementById("usuario");
 
-    if (res.sucesso && Array.isArray(res.dados)) {
+    if (res.sucesso) {
+      select.innerHTML = '<option value="">Todos</option>';
       res.dados.forEach(u => {
         const opt = document.createElement("option");
         opt.value = u.id;
@@ -32,7 +33,8 @@ async function carregarProdutos() {
     const res = await resp.json();
     const select = document.getElementById("produto");
 
-    if (res.sucesso && Array.isArray(res.dados)) {
+    if (res.sucesso) {
+      select.innerHTML = '<option value="">Todos</option>';
       res.dados.forEach(p => {
         const opt = document.createElement("option");
         opt.value = p.id;
@@ -66,15 +68,14 @@ async function carregarRelatorio(pagina = 1) {
   const tbody = document.querySelector("#tabelaRelatorios tbody");
   tbody.innerHTML = "";
 
-  const dados = (res.sucesso && Array.isArray(res.dados)) ? res.dados : [];
-
-  if (dados.length === 0) {
+  if (!res.sucesso || !Array.isArray(res.dados) || res.dados.length === 0) {
     tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Nenhum registro encontrado</td></tr>`;
-    atualizarGraficos([]);
+    atualizarGraficos({});
+    atualizarPaginacao(1, 1);
     return;
   }
 
-  dados.forEach(item => {
+  res.dados.forEach(item => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${item.id}</td>
@@ -87,8 +88,8 @@ async function carregarRelatorio(pagina = 1) {
     tbody.appendChild(tr);
   });
 
-  atualizarGraficos(dados);
-  atualizarPaginacao(res.pagina ?? 1, res.paginas ?? 1);
+  atualizarGraficos(res.grafico);
+  atualizarPaginacao(res.pagina, res.paginas);
 }
 
 // -------------------------
@@ -96,8 +97,6 @@ async function carregarRelatorio(pagina = 1) {
 // -------------------------
 function atualizarPaginacao(pagina, paginas) {
   const div = document.getElementById("paginacao");
-  if (!div) return;
-
   div.innerHTML = "";
 
   if (paginas <= 1) return;
@@ -128,15 +127,12 @@ function atualizarPaginacao(pagina, paginas) {
 // -------------------------
 let graficoBarras, graficoPizza;
 
-function atualizarGraficos(dados) {
+function atualizarGraficos(graficoData) {
   const ctxBarras = document.getElementById("graficoBarras").getContext("2d");
   const ctxPizza = document.getElementById("graficoPizza").getContext("2d");
 
   const tipos = ["entrada", "saida", "remocao"];
-  const contagem = { entrada: 0, saida: 0, remocao: 0 };
-  dados.forEach(d => {
-    if (contagem[d.tipo] !== undefined) contagem[d.tipo]++;
-  });
+  const contagem = tipos.map(t => graficoData[t] ?? 0);
 
   if (graficoBarras) graficoBarras.destroy();
   graficoBarras = new Chart(ctxBarras, {
@@ -145,10 +141,11 @@ function atualizarGraficos(dados) {
       labels: tipos,
       datasets: [{
         label: "Movimentações",
-        data: tipos.map(t => contagem[t]),
+        data: contagem,
         backgroundColor: ["#0d6efd", "#dc3545", "#6c757d"]
       }]
-    }
+    },
+    options: { plugins: { legend: { display: false } } }
   });
 
   if (graficoPizza) graficoPizza.destroy();
@@ -157,7 +154,7 @@ function atualizarGraficos(dados) {
     data: {
       labels: tipos,
       datasets: [{
-        data: tipos.map(t => contagem[t]),
+        data: contagem,
         backgroundColor: ["#0d6efd", "#dc3545", "#6c757d"]
       }]
     }
@@ -171,8 +168,11 @@ document.getElementById("btn-filtrar").addEventListener("click", () => carregarR
 document.getElementById("btn-limpar").addEventListener("click", () => {
   document.querySelector("#tabelaRelatorios tbody").innerHTML =
     `<tr><td colspan="6" class="text-center text-muted">Use os filtros para buscar movimentações</td></tr>`;
-  atualizarGraficos([]);
+  atualizarGraficos({});
 });
+
+document.getElementById("btn-pdf").addEventListener("click", () => window.open("api/exportar.php?tipo=pdf"));
+document.getElementById("btn-excel").addEventListener("click", () => window.open("api/exportar.php?tipo=excel"));
 
 // -------------------------
 // Inicialização
