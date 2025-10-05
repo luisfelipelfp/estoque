@@ -70,7 +70,7 @@ $usuario = $_SESSION["usuario"] ?? [];
 auditoria_log($usuario, $acao, $body ?: $_GET);
 
 try {
-    ob_clean(); // limpa qualquer buffer residual
+    ob_clean();
 
     switch ($acao) {
 
@@ -78,8 +78,23 @@ try {
         // Produtos
         // ------------------------
         case "listar_produtos":
-            $dados = produtos_listar($conn);
-            json_response(true, "Produtos listados com sucesso.", $dados);
+            // 🔧 Garantia de compatibilidade de dados
+            try {
+                $stmt = $conn->query("SELECT id, nome, quantidade FROM produtos ORDER BY nome ASC");
+                $produtos = [];
+                while ($r = $stmt->fetch_assoc()) {
+                    // Garante que o front nunca receba undefined
+                    $produtos[] = [
+                        "id" => (int)$r["id"],
+                        "nome" => $r["nome"] ?? "(sem nome)",
+                        "quantidade" => (int)$r["quantidade"]
+                    ];
+                }
+                json_response(true, "Produtos listados com sucesso.", $produtos);
+            } catch (Throwable $e) {
+                error_log("Erro em listar_produtos: " . $e->getMessage());
+                json_response(false, "Falha ao listar produtos.");
+            }
             break;
 
         case "adicionar_produto":
@@ -151,6 +166,6 @@ try {
     }
 
 } catch (Throwable $e) {
-    error_log("Erro global: " . $e->getMessage());
+    error_log("Erro global em actions.php: " . $e->getMessage() . " Linha: " . $e->getLine());
     json_response(false, "Erro interno no servidor.");
 }

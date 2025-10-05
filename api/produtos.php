@@ -11,19 +11,19 @@ require_once __DIR__ . "/utils.php";
  * Lista produtos
  */
 function produtos_listar(mysqli $conn, bool $incluir_inativos = true): array {
-    // 🔹 Agora retorna todos os produtos, inclusive inativos (para relatórios/filtros)
+    // 🔹 Inclui todos ou apenas ativos conforme o parâmetro
     $sql = $incluir_inativos
         ? "SELECT id, nome, quantidade, ativo FROM produtos ORDER BY nome ASC"
         : "SELECT id, nome, quantidade, ativo FROM produtos WHERE ativo = 1 ORDER BY nome ASC";
 
-    $out = [];
+    $dados = [];
     if ($res = $conn->query($sql)) {
         while ($row = $res->fetch_assoc()) {
-            $out[] = [
+            $dados[] = [
                 "id"         => (int)$row["id"],
                 "nome"       => (string)$row["nome"],
                 "quantidade" => (int)$row["quantidade"],
-                "ativo"      => (int)$row["ativo"],
+                "ativo"      => (int)$row["ativo"]
             ];
         }
         $res->free();
@@ -31,7 +31,12 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = true): array {
         error_log("produtos_listar falhou: " . $conn->error);
     }
 
-    return $out;
+    // 🔹 Retorna formato padronizado esperado pelo frontend
+    return [
+        "sucesso" => true,
+        "mensagem" => "Lista de produtos carregada com sucesso.",
+        "dados" => $dados
+    ];
 }
 
 /**
@@ -91,7 +96,9 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
         $conn->commit();
         return resposta(true, "Produto adicionado com sucesso.", [
             "id"         => $produto_id,
-            "quantidade" => $quantidade_inicial
+            "nome"       => $nome,
+            "quantidade" => $quantidade_inicial,
+            "ativo"      => 1
         ]);
 
     } catch (Throwable $e) {
