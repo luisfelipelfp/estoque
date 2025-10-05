@@ -71,11 +71,17 @@ auditoria_log($usuario, $acao, $body ?: $_GET);
 
 try {
     switch ($acao) {
+
         // ------------------------
         // Produtos
         // ------------------------
         case "listar_produtos":
-            echo json_encode(resposta(true, "", produtos_listar($conn)));
+            // 🔧 Ajuste: formato compatível com relatorios.js
+            $dados = produtos_listar($conn);
+            echo json_encode([
+                "sucesso" => true,
+                "dados" => $dados
+            ], JSON_UNESCAPED_UNICODE);
             break;
 
         case "adicionar_produto":
@@ -100,10 +106,11 @@ try {
             $produto_id = (int)($body["produto_id"] ?? 0);
             $tipo = $body["tipo"] ?? "";
             $quantidade = (int)($body["quantidade"] ?? 0);
-            if ($produto_id <= 0 || $quantidade <= 0 || !in_array($tipo, ["entrada", "saida", "remocao"]))
+            if ($produto_id <= 0 || $quantidade <= 0 || !in_array($tipo, ["entrada", "saida", "remocao"])) {
                 echo json_encode(resposta(false, "Dados inválidos para movimentação."));
-            else
+            } else {
                 echo json_encode(mov_registrar($conn, $produto_id, $tipo, $quantidade, $usuario["id"] ?? null));
+            }
             break;
 
         // ------------------------
@@ -114,7 +121,10 @@ try {
             $res = $conn->query($sql);
             $dados = [];
             while ($r = $res->fetch_assoc()) $dados[] = $r;
-            echo json_encode(resposta(true, "", $dados));
+            echo json_encode([
+                "sucesso" => true,
+                "dados" => $dados
+            ], JSON_UNESCAPED_UNICODE);
             break;
 
         // ------------------------
@@ -136,6 +146,7 @@ try {
         default:
             echo json_encode(resposta(false, "Ação inválida ou não informada."));
     }
+
 } catch (Throwable $e) {
     error_log("Erro global: " . $e->getMessage());
     echo json_encode(resposta(false, "Erro interno no servidor."));
