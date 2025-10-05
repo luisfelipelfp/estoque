@@ -3,7 +3,6 @@
 // api/actions.php — Roteador central
 // =======================================
 
-// Sessão
 session_set_cookie_params([
     "lifetime" => 0,
     "path"     => "/",
@@ -14,10 +13,8 @@ session_set_cookie_params([
 ]);
 if (session_status() === PHP_SESSION_NONE) session_start();
 
-// Utils
 require_once __DIR__ . "/utils.php";
 
-// Headers + CORS
 header("Content-Type: application/json; charset=utf-8");
 header("Access-Control-Allow-Origin: http://192.168.15.100");
 header("Access-Control-Allow-Credentials: true");
@@ -29,12 +26,10 @@ if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
     exit;
 }
 
-// Logs
 ini_set("display_errors", 0);
 ini_set("log_errors", 1);
 ini_set("error_log", __DIR__ . "/debug.log");
 
-// Funções auxiliares
 function read_body() {
     $body = file_get_contents("php://input");
     $json = json_decode($body, true);
@@ -50,7 +45,6 @@ function auditoria_log($usuario, $acao, $dados = []) {
     file_put_contents($file, $linha, FILE_APPEND);
 }
 
-// Dependências
 require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/movimentacoes.php";
 require_once __DIR__ . "/relatorios.php";
@@ -60,11 +54,9 @@ $conn = db();
 $acao = $_REQUEST["acao"] ?? "";
 $body = read_body();
 
-// Login / Logout
 if ($acao === "login")  { require __DIR__ . "/login.php"; exit; }
 if ($acao === "logout") { require __DIR__ . "/logout.php"; exit; }
 
-// Autenticação obrigatória
 require_once __DIR__ . "/auth.php";
 $usuario = $_SESSION["usuario"] ?? [];
 auditoria_log($usuario, $acao, $body ?: $_GET);
@@ -74,19 +66,16 @@ try {
 
     switch ($acao) {
 
-        // ------------------------
-        // Produtos
-        // ------------------------
         case "listar_produtos":
-            // 🔧 Garantia de compatibilidade de dados
             try {
                 $stmt = $conn->query("SELECT id, nome, quantidade FROM produtos ORDER BY nome ASC");
                 $produtos = [];
                 while ($r = $stmt->fetch_assoc()) {
-                    // Garante que o front nunca receba undefined
+                    $nome = trim($r["nome"] ?? "");
+                    if ($nome === "") $nome = "(sem nome)";
                     $produtos[] = [
                         "id" => (int)$r["id"],
-                        "nome" => $r["nome"] ?? "(sem nome)",
+                        "nome" => $nome,
                         "quantidade" => (int)$r["quantidade"]
                     ];
                 }
@@ -100,6 +89,9 @@ try {
         case "adicionar_produto":
             $nome = trim($body["nome"] ?? "");
             $qtd  = (int)($body["quantidade"] ?? 0);
+            if ($nome === "") {
+                json_response(false, "O nome do produto não pode estar vazio.");
+            }
             $res  = produtos_adicionar($conn, $nome, $qtd, $usuario["id"] ?? null);
             json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
             break;
@@ -110,9 +102,6 @@ try {
             json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
             break;
 
-        // ------------------------
-        // Movimentações
-        // ------------------------
         case "listar_movimentacoes":
             $res = mov_listar($conn, $_GET);
             json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $res["dados"] ?? $res);
@@ -130,9 +119,6 @@ try {
             }
             break;
 
-        // ------------------------
-        // Usuários
-        // ------------------------
         case "listar_usuarios":
             $sql = "SELECT id, nome FROM usuarios ORDER BY nome";
             $res = $conn->query($sql);
@@ -143,18 +129,12 @@ try {
             json_response(true, "Usuários listados com sucesso.", $dados);
             break;
 
-        // ------------------------
-        // Relatórios
-        // ------------------------
         case "relatorio_movimentacoes":
             $filtros = array_merge($_GET, $body);
             $res = relatorio($conn, $filtros);
             json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $res["dados"] ?? $res);
             break;
 
-        // ------------------------
-        // Exportação
-        // ------------------------
         case "exportar_relatorio":
             require_once __DIR__ . "/exportar.php";
             $res = exportar_relatorio($conn, $_GET);
