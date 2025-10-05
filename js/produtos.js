@@ -8,7 +8,15 @@ if (!window.__PRODUTOS_JS_BOUND__) {
   async function listarProdutos() {
     try {
       const resp = await apiRequest("listar_produtos", null, "GET");
-      const produtos = Array.isArray(resp?.dados) ? resp.dados : [];
+
+      // ✅ Corrige estrutura do retorno
+      const produtosRaw = resp?.dados;
+      const produtos = Array.isArray(produtosRaw)
+        ? produtosRaw
+        : Array.isArray(produtosRaw?.produtos)
+        ? produtosRaw.produtos
+        : [];
+
       const tbody = document.querySelector("#tabelaProdutos tbody");
       if (!tbody) return;
 
@@ -20,11 +28,12 @@ if (!window.__PRODUTOS_JS_BOUND__) {
       }
 
       produtos.forEach(p => {
+        const nome = p.nome ?? "(sem nome)";
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td>${p.id}</td>
-          <td>${p.nome}</td>
-          <td>${p.quantidade}</td>
+          <td>${p.id ?? "-"}</td>
+          <td>${nome}</td>
+          <td>${p.quantidade ?? 0}</td>
           <td class="d-flex gap-2">
             <button class="btn btn-success btn-sm btn-entrada" data-id="${p.id}">Entrada</button>
             <button class="btn btn-warning btn-sm btn-saida" data-id="${p.id}">Saída</button>
@@ -58,7 +67,6 @@ if (!window.__PRODUTOS_JS_BOUND__) {
           quantidade
         }, "POST");
       } else if (acao === "remover") {
-        // 🔥 Corrigido: agora envia produto_id
         return await apiRequest("remover_produto", { produto_id: id }, "POST");
       }
     } catch (err) {
