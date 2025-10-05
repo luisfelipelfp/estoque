@@ -1,6 +1,7 @@
 <?php
 /**
  * api/relatorios.php — Relatórios e estatísticas de movimentações
+ * Inclui suporte a produtos inativos/removidos e filtros refinados
  */
 
 require_once __DIR__ . "/db.php";
@@ -13,13 +14,13 @@ try {
 
     // 🔹 Captura filtros via GET
     $filtros = [
-        "pagina"      => $_GET["pagina"] ?? 1,
-        "limite"      => $_GET["limite"] ?? 50,
-        "tipo"        => $_GET["tipo"] ?? "",
-        "produto_id"  => $_GET["produto_id"] ?? "",
-        "usuario_id"  => $_GET["usuario_id"] ?? "",
+        "pagina"      => $_GET["pagina"]      ?? 1,
+        "limite"      => $_GET["limite"]      ?? 50,
+        "tipo"        => $_GET["tipo"]        ?? "",
+        "produto_id"  => $_GET["produto_id"]  ?? "",
+        "usuario_id"  => $_GET["usuario_id"]  ?? "",
         "data_inicio" => $_GET["data_inicio"] ?? "",
-        "data_fim"    => $_GET["data_fim"] ?? ""
+        "data_fim"    => $_GET["data_fim"]    ?? ""
     ];
 
     $pagina = max(1, (int)$filtros["pagina"]);
@@ -71,20 +72,22 @@ try {
     $total = (int)($resT->fetch_assoc()["total"] ?? 0);
     $stmtT->close();
 
-    // 🔹 Lista paginada
-    $sql = "SELECT 
-                m.id,
-                COALESCE(p.nome, m.produto_nome, '[Produto removido]') AS produto_nome,
-                m.tipo,
-                m.quantidade,
-                m.data,
-                COALESCE(u.nome, 'Sistema') AS usuario
-            FROM movimentacoes m
-            LEFT JOIN produtos p ON p.id = m.produto_id
-            LEFT JOIN usuarios u ON u.id = m.usuario_id
-            $where
-            ORDER BY m.data DESC, m.id DESC
-            LIMIT ? OFFSET ?";
+    // 🔹 Lista paginada (inclui produtos inativos/removidos)
+    $sql = "
+        SELECT 
+            m.id,
+            COALESCE(p.nome, m.produto_nome, '[Produto removido]') AS produto_nome,
+            m.tipo,
+            m.quantidade,
+            m.data,
+            COALESCE(u.nome, 'Sistema') AS usuario
+        FROM movimentacoes m
+        LEFT JOIN produtos p ON p.id = m.produto_id
+        LEFT JOIN usuarios u ON u.id = m.usuario_id
+        $where
+        ORDER BY m.data DESC, m.id DESC
+        LIMIT ? OFFSET ?
+    ";
 
     $stmt = $conn->prepare($sql);
     if ($stmt === false) {
@@ -103,17 +106,17 @@ try {
     $dados = [];
     while ($r = $res->fetch_assoc()) {
         $dados[] = [
-            "id"            => (int)$r["id"],
-            "produto_nome"  => $r["produto_nome"],
-            "tipo"          => $r["tipo"],
-            "quantidade"    => (int)$r["quantidade"],
-            "data"          => date("d/m/Y H:i", strtotime($r["data"])),
-            "usuario"       => $r["usuario"]
+            "id"           => (int)$r["id"],
+            "produto_nome" => $r["produto_nome"],
+            "tipo"         => $r["tipo"],
+            "quantidade"   => (int)$r["quantidade"],
+            "data"         => date("d/m/Y H:i", strtotime($r["data"])),
+            "usuario"      => $r["usuario"]
         ];
     }
     $stmt->close();
 
-    // 🔹 Dados para gráfico
+    // 🔹 Dados para gráfico — garantido mesmo sem movimentações
     $sqlGraf = "SELECT tipo, COUNT(*) AS total FROM movimentacoes m $where GROUP BY tipo";
     $stmtG = $conn->prepare($sqlGraf);
     if ($stmtG === false) {
@@ -129,7 +132,7 @@ try {
     }
     $stmtG->close();
 
-    // 🔹 Retorno JSON direto
+    // 🔹 Resposta JSON final
     header("Content-Type: application/json; charset=utf-8");
     ob_clean();
     echo json_encode([
@@ -147,6 +150,9 @@ try {
     error_log("[relatorios.php] " . $e->getMessage());
     header("Content-Type: application/json; charset=utf-8");
     ob_clean();
-    echo json_encode(["sucesso" => false, "erro" => $e->getMessage()]);
+    echo json_encode([
+        "sucesso" => false,
+        "erro"    => $e->getMessage()
+    ], JSON_UNESCAPED_UNICODE);
     exit;
 }
