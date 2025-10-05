@@ -1,5 +1,4 @@
-// js/relatorios.js
-// Relatórios de movimentações com filtros, paginação e gráficos
+// js/relatorios.js — Relatórios com filtros, gráficos e paginação
 
 async function apiFetch(url, options = {}) {
   try {
@@ -12,14 +11,18 @@ async function apiFetch(url, options = {}) {
   }
 }
 
+// 🔹 Carregar selects de usuários e produtos
 async function carregarUsuarios() {
   try {
     const resp = await apiFetch("api/actions.php?acao=listar_usuarios");
     const res = await resp.json();
     const select = document.getElementById("usuario");
     select.innerHTML = '<option value="">Todos</option>';
-    if (res.sucesso && Array.isArray(res.dados))
-      res.dados.forEach(u => select.insertAdjacentHTML("beforeend", `<option value="${u.id}">${u.nome}</option>`));
+    if (res.sucesso && Array.isArray(res.dados)) {
+      res.dados.forEach(u =>
+        select.insertAdjacentHTML("beforeend", `<option value="${u.id}">${u.nome}</option>`)
+      );
+    }
   } catch (err) {
     console.error("Erro ao carregar usuários:", err);
   }
@@ -31,8 +34,11 @@ async function carregarProdutos() {
     const res = await resp.json();
     const select = document.getElementById("produto");
     select.innerHTML = '<option value="">Todos</option>';
-    if (res.sucesso && Array.isArray(res.dados))
-      res.dados.forEach(p => select.insertAdjacentHTML("beforeend", `<option value="${p.id}">${p.nome}</option>`));
+    if (res.sucesso && Array.isArray(res.dados)) {
+      res.dados.forEach(p =>
+        select.insertAdjacentHTML("beforeend", `<option value="${p.id}">${p.nome}</option>`)
+      );
+    }
   } catch (err) {
     console.error("Erro ao carregar produtos:", err);
   }
@@ -56,7 +62,7 @@ async function carregarRelatorio(pagina = 1) {
 
   try {
     const query = new URLSearchParams(filtrosAtuais).toString();
-    const resp = await apiFetch("api/actions.php?acao=relatorio_movimentacoes&" + query);
+    const resp = await apiFetch("api/relatorios.php?" + query); // ✅ Agora aponta para relatorios.php
     const res = await resp.json();
 
     tbody.innerHTML = "";
@@ -89,6 +95,7 @@ async function carregarRelatorio(pagina = 1) {
   }
 }
 
+// 🔹 Paginação
 function atualizarPaginacao(pagina, paginas) {
   const div = document.getElementById("paginacao");
   div.innerHTML = "";
@@ -103,6 +110,7 @@ function atualizarPaginacao(pagina, paginas) {
     div.insertAdjacentHTML("beforeend", `<button class="btn btn-secondary ms-2" onclick="carregarRelatorio(${pagina + 1})">Próxima</button>`);
 }
 
+// 🔹 Gráficos
 let graficoBarras, graficoPizza;
 function atualizarGraficos(data) {
   const ctxB = document.getElementById("graficoBarras")?.getContext("2d");
@@ -130,6 +138,7 @@ function atualizarGraficos(data) {
   });
 }
 
+// 🔹 Botões
 document.getElementById("btn-filtrar")?.addEventListener("click", () => carregarRelatorio(1));
 
 document.getElementById("btn-limpar")?.addEventListener("click", () => {
@@ -153,6 +162,7 @@ document.getElementById("btn-excel")?.addEventListener("click", () => {
   window.open("api/exportar.php?tipo=excel&" + q, "_blank");
 });
 
+// 🔹 Inicialização
 carregarUsuarios();
 carregarProdutos();
 carregarRelatorio(1);
