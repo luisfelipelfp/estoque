@@ -27,19 +27,11 @@ if (!function_exists("debug_log")) {
         $logFile = __DIR__ . "/debug.log";
         $data    = date("Y-m-d H:i:s");
 
-        // Se msg for array/obj → transforma em JSON
         if (is_array($msg) || is_object($msg)) {
             $msg = json_encode($msg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
 
-        // Garante que sempre seja string
-        $msg = (string)$msg;
-
-        file_put_contents(
-            $logFile,
-            "[$data][$origem] $msg\n",
-            FILE_APPEND
-        );
+        file_put_contents($logFile, "[$data][$origem] $msg\n", FILE_APPEND);
     }
 }
 
@@ -53,6 +45,7 @@ if (!function_exists("json_response")) {
     ): void {
         http_response_code($httpCode);
         header("Content-Type: application/json; charset=utf-8");
+        ob_clean(); // 🔹 remove qualquer saída anterior
         echo json_encode(
             resposta($sucesso, $mensagem, $dados),
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES

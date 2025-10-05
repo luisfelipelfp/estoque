@@ -10,7 +10,8 @@ require_once __DIR__ . "/utils.php";
 /**
  * Lista produtos
  */
-function produtos_listar(mysqli $conn, bool $incluir_inativos = false): array {
+function produtos_listar(mysqli $conn, bool $incluir_inativos = true): array {
+    // 🔹 Agora retorna todos os produtos, inclusive inativos (para relatórios/filtros)
     $sql = $incluir_inativos
         ? "SELECT id, nome, quantidade, ativo FROM produtos ORDER BY nome ASC"
         : "SELECT id, nome, quantidade, ativo FROM produtos WHERE ativo = 1 ORDER BY nome ASC";
@@ -38,12 +39,8 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = false): array {
  */
 function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial = 0, ?int $usuario_id = null): array {
     $nome = trim($nome);
-    if ($nome === "") {
-        return resposta(false, "Nome do produto é obrigatório.");
-    }
-    if ($quantidade_inicial < 0) {
-        return resposta(false, "Quantidade inicial inválida.");
-    }
+    if ($nome === "") return resposta(false, "Nome do produto é obrigatório.");
+    if ($quantidade_inicial < 0) return resposta(false, "Quantidade inicial inválida.");
 
     $conn->begin_transaction();
     try {
@@ -108,9 +105,7 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
  * Remove (desativa) um produto
  */
 function produtos_remover(mysqli $conn, int $produto_id, ?int $usuario_id = null): array {
-    if ($produto_id <= 0) {
-        return resposta(false, "ID inválido para remoção.");
-    }
+    if ($produto_id <= 0) return resposta(false, "ID inválido para remoção.");
 
     $conn->begin_transaction();
     try {
@@ -131,7 +126,7 @@ function produtos_remover(mysqli $conn, int $produto_id, ?int $usuario_id = null
             return resposta(false, "Produto já está inativo.");
         }
 
-        // ⚠️ Registra movimentação de remoção *antes* da atualização, para garantir histórico
+        // ⚠️ Registra movimentação de remoção *antes* da atualização
         if ((int)$produto["quantidade"] > 0) {
             $resMov = mov_registrar($conn, $produto_id, "remocao", (int)$produto["quantidade"], $usuario_id ?? 0);
             if (!$resMov["sucesso"]) {
