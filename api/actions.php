@@ -70,36 +70,37 @@ $usuario = $_SESSION["usuario"] ?? [];
 auditoria_log($usuario, $acao, $body ?: $_GET);
 
 try {
+    ob_clean(); // limpa qualquer buffer residual
+
     switch ($acao) {
 
         // ------------------------
         // Produtos
         // ------------------------
         case "listar_produtos":
-            // 🔧 Ajuste: formato compatível com relatorios.js
             $dados = produtos_listar($conn);
-            echo json_encode([
-                "sucesso" => true,
-                "dados" => $dados
-            ], JSON_UNESCAPED_UNICODE);
+            json_response(true, "Produtos listados com sucesso.", $dados);
             break;
 
         case "adicionar_produto":
             $nome = trim($body["nome"] ?? "");
             $qtd  = (int)($body["quantidade"] ?? 0);
-            echo json_encode(produtos_adicionar($conn, $nome, $qtd, $usuario["id"] ?? null));
+            $res  = produtos_adicionar($conn, $nome, $qtd, $usuario["id"] ?? null);
+            json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
             break;
 
         case "remover_produto":
             $produto_id = (int)($body["produto_id"] ?? $body["id"] ?? 0);
-            echo json_encode(produtos_remover($conn, $produto_id, $usuario["id"] ?? null));
+            $res = produtos_remover($conn, $produto_id, $usuario["id"] ?? null);
+            json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
             break;
 
         // ------------------------
         // Movimentações
         // ------------------------
         case "listar_movimentacoes":
-            echo json_encode(mov_listar($conn, $_GET));
+            $res = mov_listar($conn, $_GET);
+            json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $res["dados"] ?? $res);
             break;
 
         case "registrar_movimentacao":
@@ -107,9 +108,10 @@ try {
             $tipo = $body["tipo"] ?? "";
             $quantidade = (int)($body["quantidade"] ?? 0);
             if ($produto_id <= 0 || $quantidade <= 0 || !in_array($tipo, ["entrada", "saida", "remocao"])) {
-                echo json_encode(resposta(false, "Dados inválidos para movimentação."));
+                json_response(false, "Dados inválidos para movimentação.");
             } else {
-                echo json_encode(mov_registrar($conn, $produto_id, $tipo, $quantidade, $usuario["id"] ?? null));
+                $res = mov_registrar($conn, $produto_id, $tipo, $quantidade, $usuario["id"] ?? null);
+                json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
             }
             break;
 
@@ -120,11 +122,10 @@ try {
             $sql = "SELECT id, nome FROM usuarios ORDER BY nome";
             $res = $conn->query($sql);
             $dados = [];
-            while ($r = $res->fetch_assoc()) $dados[] = $r;
-            echo json_encode([
-                "sucesso" => true,
-                "dados" => $dados
-            ], JSON_UNESCAPED_UNICODE);
+            if ($res) {
+                while ($r = $res->fetch_assoc()) $dados[] = $r;
+            }
+            json_response(true, "Usuários listados com sucesso.", $dados);
             break;
 
         // ------------------------
@@ -132,7 +133,8 @@ try {
         // ------------------------
         case "relatorio_movimentacoes":
             $filtros = array_merge($_GET, $body);
-            echo json_encode(relatorio($conn, $filtros));
+            $res = relatorio($conn, $filtros);
+            json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $res["dados"] ?? $res);
             break;
 
         // ------------------------
@@ -140,14 +142,15 @@ try {
         // ------------------------
         case "exportar_relatorio":
             require_once __DIR__ . "/exportar.php";
-            echo json_encode(exportar_relatorio($conn, $_GET));
+            $res = exportar_relatorio($conn, $_GET);
+            json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $res["dados"] ?? null);
             break;
 
         default:
-            echo json_encode(resposta(false, "Ação inválida ou não informada."));
+            json_response(false, "Ação inválida ou não informada.");
     }
 
 } catch (Throwable $e) {
     error_log("Erro global: " . $e->getMessage());
-    echo json_encode(resposta(false, "Erro interno no servidor."));
+    json_response(false, "Erro interno no servidor.");
 }
