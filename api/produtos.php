@@ -16,12 +16,12 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = true): array {
         ? "SELECT id, nome, quantidade, ativo FROM produtos ORDER BY nome ASC"
         : "SELECT id, nome, quantidade, ativo FROM produtos WHERE ativo = 1 ORDER BY nome ASC";
 
-    $dados = [];
+    $produtos = [];
     if ($res = $conn->query($sql)) {
         while ($row = $res->fetch_assoc()) {
-            $dados[] = [
+            $produtos[] = [
                 "id"         => (int)$row["id"],
-                "nome"       => (string)$row["nome"],
+                "nome"       => $row["nome"] ?? "(sem nome)",
                 "quantidade" => (int)$row["quantidade"],
                 "ativo"      => (int)$row["ativo"]
             ];
@@ -29,14 +29,13 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = true): array {
         $res->free();
     } else {
         error_log("produtos_listar falhou: " . $conn->error);
+        return resposta(false, "Erro ao listar produtos: " . $conn->error);
     }
 
     // 🔹 Retorna formato padronizado esperado pelo frontend
-    return [
-        "sucesso" => true,
-        "mensagem" => "Lista de produtos carregada com sucesso.",
-        "dados" => $dados
-    ];
+    return resposta(true, "Lista de produtos carregada com sucesso.", [
+        "produtos" => $produtos
+    ]);
 }
 
 /**
