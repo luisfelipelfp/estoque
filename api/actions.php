@@ -30,12 +30,18 @@ ini_set("display_errors", 0);
 ini_set("log_errors", 1);
 ini_set("error_log", __DIR__ . "/debug.log");
 
+/**
+ * Lê o corpo JSON ou POST
+ */
 function read_body() {
     $body = file_get_contents("php://input");
     $json = json_decode($body, true);
     return (json_last_error() === JSON_ERROR_NONE && is_array($json)) ? $json : ($_POST ?? []);
 }
 
+/**
+ * Grava auditoria básica em log
+ */
 function auditoria_log($usuario, $acao, $dados = []) {
     $file = __DIR__ . "/debug.log";
     $time = date("Y-m-d H:i:s");
@@ -66,33 +72,21 @@ try {
 
     switch ($acao) {
 
+        // ✅ Corrigido — usa a função central produtos_listar()
         case "listar_produtos":
-            try {
-                $stmt = $conn->query("SELECT id, nome, quantidade FROM produtos ORDER BY nome ASC");
-                $produtos = [];
-                while ($r = $stmt->fetch_assoc()) {
-                    $nome = trim($r["nome"] ?? "");
-                    if ($nome === "") $nome = "(sem nome)";
-                    $produtos[] = [
-                        "id" => (int)$r["id"],
-                        "nome" => $nome,
-                        "quantidade" => (int)$r["quantidade"]
-                    ];
-                }
-                json_response(true, "Produtos listados com sucesso.", $produtos);
-            } catch (Throwable $e) {
-                error_log("Erro em listar_produtos: " . $e->getMessage());
-                json_response(false, "Falha ao listar produtos.");
-            }
+            $res = produtos_listar($conn, true);
+            json_response($res["sucesso"], $res["mensagem"], $res["dados"]);
             break;
 
         case "adicionar_produto":
             $nome = trim($body["nome"] ?? "");
             $qtd  = (int)($body["quantidade"] ?? 0);
+
             if ($nome === "") {
                 json_response(false, "O nome do produto não pode estar vazio.");
             }
-            $res  = produtos_adicionar($conn, $nome, $qtd, $usuario["id"] ?? null);
+
+            $res = produtos_adicionar($conn, $nome, $qtd, $usuario["id"] ?? null);
             json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
             break;
 
@@ -111,6 +105,7 @@ try {
             $produto_id = (int)($body["produto_id"] ?? 0);
             $tipo = $body["tipo"] ?? "";
             $quantidade = (int)($body["quantidade"] ?? 0);
+
             if ($produto_id <= 0 || $quantidade <= 0 || !in_array($tipo, ["entrada", "saida", "remocao"])) {
                 json_response(false, "Dados inválidos para movimentação.");
             } else {
@@ -149,3 +144,4 @@ try {
     error_log("Erro global em actions.php: " . $e->getMessage() . " Linha: " . $e->getLine());
     json_response(false, "Erro interno no servidor.");
 }
+    
