@@ -31,7 +31,6 @@ if (!window.__PRODUTOS_JS_BOUND__) {
       }
 
       produtos.forEach(p => {
-        // ✅ Agora aceita nome ou nome_produto
         const nome =
           (p.nome && p.nome.trim()) ||
           (p.nome_produto && p.nome_produto.trim()) ||
