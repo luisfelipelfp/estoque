@@ -19,9 +19,13 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = true): array {
     $produtos = [];
     if ($res = $conn->query($sql)) {
         while ($row = $res->fetch_assoc()) {
+            // ✅ Corrigido — força nome legível
+            $nome = trim((string)$row["nome"]);
+            if ($nome === "" || $nome === null) $nome = "(sem nome)";
+
             $produtos[] = [
                 "id"         => (int)$row["id"],
-                "nome"       => $row["nome"] ?? "(sem nome)",
+                "nome"       => $nome,
                 "quantidade" => (int)$row["quantidade"],
                 "ativo"      => (int)$row["ativo"]
             ];
