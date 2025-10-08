@@ -5,11 +5,14 @@ if (!window.__PRODUTOS_JS_BOUND__) {
 
   const inflight = new Set();
 
+  // ==============================
+  // 🔹 Função principal — Listar produtos
+  // ==============================
   async function listarProdutos() {
     try {
       const resp = await apiRequest("listar_produtos", null, "GET");
 
-      // ✅ Corrige estrutura do retorno
+      // Verifica a estrutura do retorno
       const produtosRaw = resp?.dados;
       const produtos = Array.isArray(produtosRaw)
         ? produtosRaw
@@ -28,7 +31,7 @@ if (!window.__PRODUTOS_JS_BOUND__) {
       }
 
       produtos.forEach(p => {
-        const nome = p.nome ?? "(sem nome)";
+        const nome = (p.nome && p.nome.trim()) ? p.nome : "(sem nome)";
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${p.id ?? "-"}</td>
@@ -44,11 +47,15 @@ if (!window.__PRODUTOS_JS_BOUND__) {
       });
     } catch (err) {
       console.error("Erro ao listar produtos:", err);
+      alert("Erro ao carregar produtos. Verifique o servidor.");
     }
   }
 
   window.listarProdutos = listarProdutos;
 
+  // ==============================
+  // 🔹 Função genérica para executar ações
+  // ==============================
   async function execAcao(acao, id, quantidade) {
     const key = `${acao}-${id}`;
     if (inflight.has(key)) {
@@ -71,13 +78,16 @@ if (!window.__PRODUTOS_JS_BOUND__) {
       }
     } catch (err) {
       console.error(`Erro em ${acao}:`, err);
-      return { sucesso: false, mensagem: "Erro de comunicação." };
+      return { sucesso: false, mensagem: "Erro de comunicação com o servidor." };
     } finally {
       inflight.delete(key);
       rowBtns.forEach(b => (b.disabled = false));
     }
   }
 
+  // ==============================
+  // 🔹 Ações específicas
+  // ==============================
   window.entrada = async function (id) {
     const qtd = prompt("Quantidade de entrada:");
     if (qtd === null) return;
@@ -89,7 +99,7 @@ if (!window.__PRODUTOS_JS_BOUND__) {
 
     const resp = await execAcao("entrada", id, quantidade);
     if (resp?.sucesso) {
-      alert(resp.mensagem || "Entrada registrada.");
+      alert(resp.mensagem || "Entrada registrada com sucesso.");
       await listarProdutos();
       if (typeof listarMovimentacoes === "function") await listarMovimentacoes();
     } else {
@@ -108,7 +118,7 @@ if (!window.__PRODUTOS_JS_BOUND__) {
 
     const resp = await execAcao("saida", id, quantidade);
     if (resp?.sucesso) {
-      alert(resp.mensagem || "Saída registrada.");
+      alert(resp.mensagem || "Saída registrada com sucesso.");
       await listarProdutos();
       if (typeof listarMovimentacoes === "function") await listarMovimentacoes();
     } else {
@@ -121,7 +131,7 @@ if (!window.__PRODUTOS_JS_BOUND__) {
 
     const resp = await execAcao("remover", id);
     if (resp?.sucesso) {
-      alert(resp.mensagem || "Produto removido.");
+      alert(resp.mensagem || "Produto removido com sucesso.");
       await listarProdutos();
       if (typeof listarMovimentacoes === "function") await listarMovimentacoes();
     } else {
@@ -129,22 +139,9 @@ if (!window.__PRODUTOS_JS_BOUND__) {
     }
   };
 
-  document.addEventListener("click", e => {
-    const btn = e.target.closest("button");
-    if (!btn) return;
-
-    const id = btn.dataset.id;
-    if (!id) return;
-
-    if (btn.classList.contains("btn-entrada")) {
-      window.entrada(parseInt(id, 10));
-    } else if (btn.classList.contains("btn-saida")) {
-      window.saida(parseInt(id, 10));
-    } else if (btn.classList.contains("btn-remover")) {
-      window.remover(parseInt(id, 10));
-    }
-  });
-
+  // ==============================
+  // 🔹 Formulário — Adicionar produto
+  // ==============================
   document.querySelector("#formAdicionarProduto")?.addEventListener("submit", async function (e) {
     e.preventDefault();
     const nome = (document.querySelector("#nomeProduto")?.value || "").trim();
@@ -152,10 +149,12 @@ if (!window.__PRODUTOS_JS_BOUND__) {
       alert("Informe o nome do produto.");
       return;
     }
+
     try {
       const resp = await apiRequest("adicionar_produto", { nome, quantidade: 0 }, "POST");
       if (resp?.sucesso) {
         this.reset();
+        alert(resp?.mensagem || "Produto adicionado com sucesso.");
         await listarProdutos();
         if (typeof preencherFiltroProdutos === "function") await preencherFiltroProdutos();
       } else {
@@ -163,10 +162,13 @@ if (!window.__PRODUTOS_JS_BOUND__) {
       }
     } catch (err) {
       console.error("Erro ao adicionar produto:", err);
-      alert("Erro de comunicação.");
+      alert("Erro de comunicação com o servidor.");
     }
   });
 
+  // ==============================
+  // 🔹 Inicialização
+  // ==============================
   window.addEventListener("DOMContentLoaded", () => {
     listarProdutos();
   });

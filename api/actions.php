@@ -30,18 +30,12 @@ ini_set("display_errors", 0);
 ini_set("log_errors", 1);
 ini_set("error_log", __DIR__ . "/debug.log");
 
-/**
- * Lê o corpo JSON ou POST
- */
 function read_body() {
     $body = file_get_contents("php://input");
     $json = json_decode($body, true);
     return (json_last_error() === JSON_ERROR_NONE && is_array($json)) ? $json : ($_POST ?? []);
 }
 
-/**
- * Grava auditoria básica em log
- */
 function auditoria_log($usuario, $acao, $dados = []) {
     $file = __DIR__ . "/debug.log";
     $time = date("Y-m-d H:i:s");
@@ -71,10 +65,9 @@ try {
     ob_clean();
 
     switch ($acao) {
-
-        // ✅ Corrigido — usa a função central produtos_listar()
         case "listar_produtos":
-            $res = produtos_listar($conn, true);
+            // ✅ Chamando função padronizada e segura
+            $res = produtos_listar($conn);
             json_response($res["sucesso"], $res["mensagem"], $res["dados"]);
             break;
 
@@ -108,19 +101,17 @@ try {
 
             if ($produto_id <= 0 || $quantidade <= 0 || !in_array($tipo, ["entrada", "saida", "remocao"])) {
                 json_response(false, "Dados inválidos para movimentação.");
-            } else {
-                $res = mov_registrar($conn, $produto_id, $tipo, $quantidade, $usuario["id"] ?? null);
-                json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
             }
+
+            $res = mov_registrar($conn, $produto_id, $tipo, $quantidade, $usuario["id"] ?? null);
+            json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
             break;
 
         case "listar_usuarios":
             $sql = "SELECT id, nome FROM usuarios ORDER BY nome";
             $res = $conn->query($sql);
             $dados = [];
-            if ($res) {
-                while ($r = $res->fetch_assoc()) $dados[] = $r;
-            }
+            if ($res) while ($r = $res->fetch_assoc()) $dados[] = $r;
             json_response(true, "Usuários listados com sucesso.", $dados);
             break;
 
@@ -144,4 +135,3 @@ try {
     error_log("Erro global em actions.php: " . $e->getMessage() . " Linha: " . $e->getLine());
     json_response(false, "Erro interno no servidor.");
 }
-    
