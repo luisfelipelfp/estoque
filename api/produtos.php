@@ -11,7 +11,6 @@ require_once __DIR__ . "/utils.php";
  * Lista produtos
  */
 function produtos_listar(mysqli $conn, bool $incluir_inativos = true): array {
-    // 🔹 Inclui todos ou apenas ativos conforme o parâmetro
     $sql = $incluir_inativos
         ? "SELECT id, nome, quantidade, ativo FROM produtos ORDER BY nome ASC"
         : "SELECT id, nome, quantidade, ativo FROM produtos WHERE ativo = 1 ORDER BY nome ASC";
@@ -19,7 +18,6 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = true): array {
     $produtos = [];
     if ($res = $conn->query($sql)) {
         while ($row = $res->fetch_assoc()) {
-            // ✅ Corrigido — força nome legível
             $nome = trim((string)$row["nome"]);
             if ($nome === "" || $nome === null) $nome = "(sem nome)";
 
@@ -36,10 +34,8 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = true): array {
         return resposta(false, "Erro ao listar produtos: " . $conn->error);
     }
 
-    // 🔹 Retorna formato padronizado esperado pelo frontend
-    return resposta(true, "Lista de produtos carregada com sucesso.", [
-        "produtos" => $produtos
-    ]);
+    // 🔹 Retorna lista diretamente, sem aninhar em ["produtos"]
+    return resposta(true, "Lista de produtos carregada com sucesso.", $produtos);
 }
 
 /**
@@ -119,7 +115,6 @@ function produtos_remover(mysqli $conn, int $produto_id, ?int $usuario_id = null
 
     $conn->begin_transaction();
     try {
-        // 🔍 Verifica se o produto existe e está ativo
         $stmt = $conn->prepare("SELECT id, nome, quantidade, ativo FROM produtos WHERE id = ?");
         $stmt->bind_param("i", $produto_id);
         $stmt->execute();
@@ -136,7 +131,7 @@ function produtos_remover(mysqli $conn, int $produto_id, ?int $usuario_id = null
             return resposta(false, "Produto já está inativo.");
         }
 
-        // ⚠️ Registra movimentação de remoção *antes* da atualização
+        // ⚠️ Registra movimentação de remoção
         if ((int)$produto["quantidade"] > 0) {
             $resMov = mov_registrar($conn, $produto_id, "remocao", (int)$produto["quantidade"], $usuario_id ?? 0);
             if (!$resMov["sucesso"]) {
@@ -145,7 +140,6 @@ function produtos_remover(mysqli $conn, int $produto_id, ?int $usuario_id = null
             }
         }
 
-        // 🚫 Marca produto como inativo e zera quantidade
         $stmt = $conn->prepare("UPDATE produtos SET ativo = 0, quantidade = 0 WHERE id = ?");
         if (!$stmt) {
             $conn->rollback();
