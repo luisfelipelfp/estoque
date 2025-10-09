@@ -12,12 +12,13 @@ if (!window.__PRODUTOS_JS_BOUND__) {
     try {
       const resp = await apiRequest("listar_produtos", null, "GET");
 
-      console.log("🔍 resposta listar_produtos:", resp);
+      console.log("📦 resposta listar_produtos:", resp);
 
-      // Garante que pegamos corretamente o array de produtos
+      // Detecta corretamente o array de produtos, independente da estrutura
       const produtos =
         Array.isArray(resp?.dados?.produtos) ? resp.dados.produtos :
         Array.isArray(resp?.dados) ? resp.dados :
+        Array.isArray(resp) ? resp :
         [];
 
       const tbody = document.querySelector("#tabelaProdutos tbody");
@@ -32,15 +33,18 @@ if (!window.__PRODUTOS_JS_BOUND__) {
 
       produtos.forEach(p => {
         const nome =
-          (typeof p.nome === "string" && p.nome.trim() !== "" ? p.nome.trim() :
-          typeof p.nome_produto === "string" && p.nome_produto.trim() !== "" ? p.nome_produto.trim() :
-          "(sem nome)");
+          p.nome?.trim?.() ||
+          p.nome_produto?.trim?.() ||
+          p.nomeProduto?.trim?.() ||
+          "(sem nome)";
+
+        const quantidade = p.quantidade ?? p.qtd ?? 0;
 
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${p.id ?? "-"}</td>
           <td>${nome}</td>
-          <td>${p.quantidade ?? 0}</td>
+          <td>${quantidade}</td>
           <td class="d-flex gap-2">
             <button class="btn btn-success btn-sm" onclick="entrada(${p.id})">Entrada</button>
             <button class="btn btn-warning btn-sm" onclick="saida(${p.id})">Saída</button>
@@ -49,8 +53,9 @@ if (!window.__PRODUTOS_JS_BOUND__) {
         `;
         tbody.appendChild(tr);
       });
+
     } catch (err) {
-      console.error("Erro ao listar produtos:", err);
+      console.error("❌ Erro ao listar produtos:", err);
       alert("Erro ao carregar produtos. Verifique o servidor.");
     }
   }
