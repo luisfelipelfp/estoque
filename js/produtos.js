@@ -12,13 +12,13 @@ if (!window.__PRODUTOS_JS_BOUND__) {
     try {
       const resp = await apiRequest("listar_produtos", null, "GET");
 
-      // Verifica a estrutura do retorno
-      const produtosRaw = resp?.dados;
-      const produtos = Array.isArray(produtosRaw)
-        ? produtosRaw
-        : Array.isArray(produtosRaw?.produtos)
-        ? produtosRaw.produtos
-        : [];
+      console.log("🔍 resposta listar_produtos:", resp);
+
+      // Garante que pegamos corretamente o array de produtos
+      const produtos =
+        Array.isArray(resp?.dados?.produtos) ? resp.dados.produtos :
+        Array.isArray(resp?.dados) ? resp.dados :
+        [];
 
       const tbody = document.querySelector("#tabelaProdutos tbody");
       if (!tbody) return;
@@ -32,9 +32,9 @@ if (!window.__PRODUTOS_JS_BOUND__) {
 
       produtos.forEach(p => {
         const nome =
-          (p.nome && p.nome.trim()) ||
-          (p.nome_produto && p.nome_produto.trim()) ||
-          "(sem nome)";
+          (typeof p.nome === "string" && p.nome.trim() !== "" ? p.nome.trim() :
+          typeof p.nome_produto === "string" && p.nome_produto.trim() !== "" ? p.nome_produto.trim() :
+          "(sem nome)");
 
         const tr = document.createElement("tr");
         tr.innerHTML = `
@@ -42,9 +42,9 @@ if (!window.__PRODUTOS_JS_BOUND__) {
           <td>${nome}</td>
           <td>${p.quantidade ?? 0}</td>
           <td class="d-flex gap-2">
-            <button class="btn btn-success btn-sm btn-entrada" data-id="${p.id}">Entrada</button>
-            <button class="btn btn-warning btn-sm btn-saida" data-id="${p.id}">Saída</button>
-            <button class="btn btn-danger btn-sm btn-remover" data-id="${p.id}">Remover</button>
+            <button class="btn btn-success btn-sm" onclick="entrada(${p.id})">Entrada</button>
+            <button class="btn btn-warning btn-sm" onclick="saida(${p.id})">Saída</button>
+            <button class="btn btn-danger btn-sm" onclick="remover(${p.id})">Remover</button>
           </td>
         `;
         tbody.appendChild(tr);
