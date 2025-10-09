@@ -22,10 +22,11 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = true): array {
             if ($nome === "" || $nome === null) $nome = "(sem nome)";
 
             $produtos[] = [
-                "id"         => (int)$row["id"],
-                "nome"       => $nome,
-                "quantidade" => (int)$row["quantidade"],
-                "ativo"      => (int)$row["ativo"]
+                "id"            => (int)$row["id"],
+                "nome"          => $nome,
+                "produto_nome"  => $nome, // 🔹 compatível com relatórios
+                "quantidade"    => (int)$row["quantidade"],
+                "ativo"         => (int)$row["ativo"]
             ];
         }
         $res->free();
@@ -94,10 +95,11 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
 
         $conn->commit();
         return resposta(true, "Produto adicionado com sucesso.", [
-            "id"         => $produto_id,
-            "nome"       => $nome,
-            "quantidade" => $quantidade_inicial,
-            "ativo"      => 1
+            "id"            => $produto_id,
+            "nome"          => $nome,
+            "produto_nome"  => $nome,
+            "quantidade"    => $quantidade_inicial,
+            "ativo"         => 1
         ]);
 
     } catch (Throwable $e) {
@@ -157,8 +159,9 @@ function produtos_remover(mysqli $conn, int $produto_id, ?int $usuario_id = null
 
         $conn->commit();
         return resposta(true, "Produto removido com sucesso.", [
-            "id" => $produto_id,
-            "nome" => $produto["nome"]
+            "id"           => $produto_id,
+            "nome"         => $produto["nome"],
+            "produto_nome" => $produto["nome"]
         ]);
 
     } catch (Throwable $e) {
