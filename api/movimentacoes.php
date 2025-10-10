@@ -11,11 +11,9 @@ require_once __DIR__ . "/utils.php";
  * Registrar movimentação (entrada, saída ou remoção)
  */
 function mov_registrar(mysqli $conn, int $produto_id, string $tipo, int $quantidade, int $usuario_id): array {
-    if ($quantidade <= 0) {
-        return resposta(false, "Quantidade inválida.");
-    }
+    if ($quantidade <= 0) return resposta(false, "Quantidade inválida.");
 
-    // Busca nome do produto
+    // Busca nome e quantidade atual
     $stmt = $conn->prepare("SELECT nome, quantidade FROM produtos WHERE id = ?");
     $stmt->bind_param("i", $produto_id);
     $stmt->execute();
@@ -23,48 +21,39 @@ function mov_registrar(mysqli $conn, int $produto_id, string $tipo, int $quantid
     $produto = $res->fetch_assoc();
     $stmt->close();
 
-    if (!$produto) {
-        return resposta(false, "Produto não encontrado.");
-    }
+    if (!$produto) return resposta(false, "Produto não encontrado.");
 
     // Atualiza estoque
     if ($tipo === "entrada") {
-        $sqlUpdate = "UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?";
-        $stmt = $conn->prepare($sqlUpdate);
-        $stmt->bind_param("ii", $quantidade, $produto_id);
+        $sql = "UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?";
     } else {
-        // saída ou remoção
         if ($produto["quantidade"] < $quantidade) {
             return resposta(false, "Quantidade insuficiente em estoque.");
         }
-        $sqlUpdate = "UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?";
-        $stmt = $conn->prepare($sqlUpdate);
-        $stmt->bind_param("ii", $quantidade, $produto_id);
+        $sql = "UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?";
     }
 
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("ii", $quantidade, $produto_id);
     if (!$stmt->execute()) {
         $stmt->close();
         return resposta(false, "Erro ao atualizar estoque.");
     }
     $stmt->close();
 
-    // Registrar na tabela movimentacoes
-    $sqlMov = "INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, usuario_id, data) 
+    // Registra a movimentação
+    $sqlMov = "INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, usuario_id, data)
                VALUES (?, ?, ?, ?, ?, NOW())";
     $stmt = $conn->prepare($sqlMov);
     $stmt->bind_param("issii", $produto_id, $produto["nome"], $tipo, $quantidade, $usuario_id);
-    $ok = $stmt->execute();
+    $stmt->execute();
     $stmt->close();
-
-    if (!$ok) {
-        return resposta(false, "Erro ao registrar movimentação.");
-    }
 
     return resposta(true, "Movimentação registrada com sucesso.");
 }
 
 /**
- * Listar movimentações (uso operacional do dia a dia)
+ * Listar movimentações
  */
 function mov_listar(mysqli $conn, array $f): array {
     $pagina = max(1, (int)($f["pagina"] ?? 1));
@@ -96,28 +85,12 @@ function mov_listar(mysqli $conn, array $f): array {
         $types .= "s";
     }
 
-    $whereSql = $where ? " WHERE " . implode(" AND ", $where) : "";
+    $whereSql = $where ? "WHERE " . implode(" AND ", $where) : "";
 
-    // 🔹 Total de registros
-    $sqlTotal = "
-        SELECT COUNT(*) AS total
-        FROM movimentacoes m
-        LEFT JOIN usuarios u ON u.id = m.usuario_id
-        $whereSql
-    ";
-    $stmtT = $conn->prepare($sqlTotal);
-    if ($types) {
-        $stmtT->bind_param($types, ...$params);
-    }
-    $stmtT->execute();
-    $total = (int)($stmtT->get_result()->fetch_assoc()["total"] ?? 0);
-    $stmtT->close();
-
-    // 🔹 Dados paginados
     $sql = "
         SELECT 
             m.id,
-            COALESCE(m.produto_nome, p.nome) AS produto_nome,
+            COALESCE(m.produto_nome, p.nome, '[Produto removido]') AS produto_nome,
             m.produto_id,
             m.tipo,
             m.quantidade,
@@ -127,43 +100,31 @@ function mov_listar(mysqli $conn, array $f): array {
         LEFT JOIN produtos p ON p.id = m.produto_id
         LEFT JOIN usuarios u ON u.id = m.usuario_id
         $whereSql
-        ORDER BY m.data DESC, m.id DESC
+        ORDER BY m.data DESC
         LIMIT ? OFFSET ?
     ";
 
-    $paramsPage = $params;
-    $typesPage  = $types . "ii";
-    $paramsPage[] = $limite;
-    $paramsPage[] = $offset;
+    $params[] = $limite;
+    $params[] = $offset;
+    $types .= "ii";
 
     $stmt = $conn->prepare($sql);
-    if ($typesPage) {
-        $stmt->bind_param($typesPage, ...$paramsPage);
-    }
+    if ($types) $stmt->bind_param($types, ...$params);
     $stmt->execute();
     $res = $stmt->get_result();
 
     $dados = [];
-    while ($row = $res->fetch_assoc()) {
+    while ($r = $res->fetch_assoc()) {
         $dados[] = [
-            "id"           => (int)$row["id"],
-            "produto_id"   => (int)$row["produto_id"],
-            "produto_nome" => $row["produto_nome"] ?? "",
-            "tipo"         => $row["tipo"],
-            "quantidade"   => (int)$row["quantidade"],
-            "data"         => $row["data"],
-            "usuario"      => $row["usuario"] ?? "Sistema",
+            "id"           => (int)$r["id"],
+            "produto_id"   => (int)$r["produto_id"],
+            "produto_nome" => $r["produto_nome"],
+            "tipo"         => $r["tipo"],
+            "quantidade"   => (int)$r["quantidade"],
+            "data"         => $r["data"],
+            "usuario"      => $r["usuario"]
         ];
     }
 
-    $res->free();
-    $stmt->close();
-
-    return resposta(true, $total === 0 ? "Nenhuma movimentação encontrada." : "", [
-        "total"   => $total,
-        "pagina"  => $pagina,
-        "limite"  => $limite,
-        "paginas" => (int)ceil($total / $limite),
-        "dados"   => $dados
-    ]);
+    return resposta(true, "Movimentações listadas com sucesso.", $dados);
 }
