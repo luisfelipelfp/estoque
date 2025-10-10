@@ -65,12 +65,26 @@ try {
     ob_clean();
 
     switch ($acao) {
+        // =======================================
+        // 🔹 Listar Produtos
+        // =======================================
         case "listar_produtos":
-            // ✅ Chamando função padronizada e segura
             $res = produtos_listar($conn);
-            json_response($res["sucesso"], $res["mensagem"], $res["dados"]);
+
+            // 🔧 Padroniza o retorno para manter compatibilidade com todas as telas
+            if (isset($res["dados"]) && array_keys($res["dados"]) === range(0, count($res["dados"]) - 1)) {
+                // Se for um array simples, envolve em 'produtos'
+                $dados = ["produtos" => $res["dados"]];
+            } else {
+                $dados = $res["dados"];
+            }
+
+            json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $dados);
             break;
 
+        // =======================================
+        // 🔹 Adicionar Produto
+        // =======================================
         case "adicionar_produto":
             $nome = trim($body["nome"] ?? "");
             $qtd  = (int)($body["quantidade"] ?? 0);
@@ -83,12 +97,18 @@ try {
             json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
             break;
 
+        // =======================================
+        // 🔹 Remover Produto
+        // =======================================
         case "remover_produto":
             $produto_id = (int)($body["produto_id"] ?? $body["id"] ?? 0);
             $res = produtos_remover($conn, $produto_id, $usuario["id"] ?? null);
             json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
             break;
 
+        // =======================================
+        // 🔹 Movimentações
+        // =======================================
         case "listar_movimentacoes":
             $res = mov_listar($conn, $_GET);
             json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $res["dados"] ?? $res);
@@ -107,6 +127,9 @@ try {
             json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
             break;
 
+        // =======================================
+        // 🔹 Usuários
+        // =======================================
         case "listar_usuarios":
             $sql = "SELECT id, nome FROM usuarios ORDER BY nome";
             $res = $conn->query($sql);
@@ -115,6 +138,9 @@ try {
             json_response(true, "Usuários listados com sucesso.", $dados);
             break;
 
+        // =======================================
+        // 🔹 Relatórios
+        // =======================================
         case "relatorio_movimentacoes":
             $filtros = array_merge($_GET, $body);
             $res = relatorio($conn, $filtros);
@@ -127,6 +153,9 @@ try {
             json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $res["dados"] ?? null);
             break;
 
+        // =======================================
+        // 🔹 Default
+        // =======================================
         default:
             json_response(false, "Ação inválida ou não informada.");
     }
