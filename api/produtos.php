@@ -24,7 +24,7 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = true): array {
             $produtos[] = [
                 "id"            => (int)$row["id"],
                 "nome"          => $nome,
-                "produto_nome"  => $nome, // 🔹 compatível com relatórios
+                "produto_nome"  => $nome, // compatível com relatórios
                 "quantidade"    => (int)$row["quantidade"],
                 "ativo"         => (int)$row["ativo"]
             ];
@@ -35,7 +35,6 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = true): array {
         return resposta(false, "Erro ao listar produtos: " . $conn->error);
     }
 
-    // 🔹 Retorna lista diretamente, sem aninhar em ["produtos"]
     return resposta(true, "Lista de produtos carregada com sucesso.", $produtos);
 }
 
@@ -49,7 +48,7 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
 
     $conn->begin_transaction();
     try {
-        // 🔎 Verifica duplicidade
+        // Verifica duplicidade
         $stmtCheck = $conn->prepare("SELECT id FROM produtos WHERE nome = ?");
         if (!$stmtCheck) {
             $conn->rollback();
@@ -66,7 +65,7 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
         }
         $stmtCheck->close();
 
-        // 🟢 Insere o novo produto
+        // Insere o novo produto
         $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade, ativo) VALUES (?, ?, 1)");
         if (!$stmt) {
             $conn->rollback();
@@ -84,7 +83,7 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
         $produto_id = $conn->insert_id;
         $stmt->close();
 
-        // 🔹 Registra movimentação inicial (se aplicável)
+        // Registra movimentação inicial (se aplicável)
         if ($quantidade_inicial > 0) {
             $resMov = mov_registrar($conn, $produto_id, "entrada", $quantidade_inicial, $usuario_id ?? 0);
             if (!$resMov["sucesso"]) {
@@ -133,7 +132,7 @@ function produtos_remover(mysqli $conn, int $produto_id, ?int $usuario_id = null
             return resposta(false, "Produto já está inativo.");
         }
 
-        // ⚠️ Registra movimentação de remoção
+        // Registra movimentação de remoção
         if ((int)$produto["quantidade"] > 0) {
             $resMov = mov_registrar($conn, $produto_id, "remocao", (int)$produto["quantidade"], $usuario_id ?? 0);
             if (!$resMov["sucesso"]) {
@@ -159,9 +158,11 @@ function produtos_remover(mysqli $conn, int $produto_id, ?int $usuario_id = null
 
         $conn->commit();
         return resposta(true, "Produto removido com sucesso.", [
-            "id"           => $produto_id,
-            "nome"         => $produto["nome"],
-            "produto_nome" => $produto["nome"]
+            "id"            => $produto_id,
+            "nome"          => $produto["nome"],
+            "produto_nome"  => $produto["nome"],
+            "quantidade"    => 0,
+            "ativo"         => 0
         ]);
 
     } catch (Throwable $e) {
