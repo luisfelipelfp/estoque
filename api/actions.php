@@ -1,6 +1,6 @@
 <?php
 // =======================================
-// api/actions.php — Roteador central
+// api/actions.php — Roteador central (versão revisada)
 // =======================================
 
 session_set_cookie_params([
@@ -30,10 +30,15 @@ ini_set("display_errors", 0);
 ini_set("log_errors", 1);
 ini_set("error_log", __DIR__ . "/debug.log");
 
+// =======================================
+// 🔹 Leitura e auditoria
+// =======================================
 function read_body() {
     $body = file_get_contents("php://input");
     $json = json_decode($body, true);
-    return (json_last_error() === JSON_ERROR_NONE && is_array($json)) ? $json : ($_POST ?? []);
+    return (json_last_error() === JSON_ERROR_NONE && is_array($json))
+        ? $json
+        : ($_POST ?? []);
 }
 
 function auditoria_log($usuario, $acao, $dados = []) {
@@ -45,6 +50,9 @@ function auditoria_log($usuario, $acao, $dados = []) {
     file_put_contents($file, $linha, FILE_APPEND);
 }
 
+// =======================================
+// 🔹 Dependências
+// =======================================
 require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/movimentacoes.php";
 require_once __DIR__ . "/relatorios.php";
@@ -71,12 +79,11 @@ try {
         case "listar_produtos":
             $res = produtos_listar($conn);
 
-            // 🔧 Padroniza o retorno para manter compatibilidade com todas as telas
-            if (isset($res["dados"]) && array_keys($res["dados"]) === range(0, count($res["dados"]) - 1)) {
-                // Se for um array simples, envolve em 'produtos'
-                $dados = ["produtos" => $res["dados"]];
-            } else {
-                $dados = $res["dados"];
+            // 🔧 Padroniza o retorno
+            $dados = $res["dados"] ?? $res;
+            if (is_array($dados) && isset($dados[0]) && is_array($dados[0])) {
+                // Se o retorno for uma lista simples, normaliza em 'produtos'
+                $dados = ["produtos" => $dados];
             }
 
             json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $dados);
@@ -144,7 +151,12 @@ try {
         case "relatorio_movimentacoes":
             $filtros = array_merge($_GET, $body);
             $res = relatorio($conn, $filtros);
-            json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $res["dados"] ?? $res);
+
+            // 🔧 Garante que o campo 'dados' exista e seja array
+            $dados = $res["dados"] ?? [];
+            if (!is_array($dados)) $dados = [];
+
+            json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $dados);
             break;
 
         case "exportar_relatorio":
