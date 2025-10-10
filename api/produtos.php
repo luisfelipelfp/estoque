@@ -18,13 +18,13 @@ function produtos_listar(mysqli $conn, bool $incluir_inativos = true): array {
     $produtos = [];
     if ($res = $conn->query($sql)) {
         while ($row = $res->fetch_assoc()) {
-            $nome = trim((string)($row["nome"] ?? ""));
-            if ($nome === "") $nome = "(sem nome)";
+            $nome = trim((string)$row["nome"]);
+            if ($nome === "" || $nome === null) $nome = "(sem nome)";
 
             $produtos[] = [
                 "id"            => (int)$row["id"],
                 "nome"          => $nome,
-                "nome_produto"  => $nome, // compatível com relatórios
+                "produto_nome"  => $nome, // compatível com relatórios
                 "quantidade"    => (int)$row["quantidade"],
                 "ativo"         => (int)$row["ativo"]
             ];
@@ -50,11 +50,16 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
     try {
         // Verifica duplicidade
         $stmtCheck = $conn->prepare("SELECT id FROM produtos WHERE nome = ?");
-        if (!$stmtCheck) throw new Exception($conn->error);
+        if (!$stmtCheck) {
+            $conn->rollback();
+            return resposta(false, "Erro ao preparar consulta: " . $conn->error);
+        }
         $stmtCheck->bind_param("s", $nome);
         $stmtCheck->execute();
         $resCheck = $stmtCheck->get_result();
+
         if ($resCheck && $resCheck->num_rows > 0) {
+            $stmtCheck->close();
             $conn->rollback();
             return resposta(false, "Já existe um produto com esse nome.");
         }
@@ -62,14 +67,23 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
 
         // Insere o novo produto
         $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade, ativo) VALUES (?, ?, 1)");
-        if (!$stmt) throw new Exception($conn->error);
+        if (!$stmt) {
+            $conn->rollback();
+            return resposta(false, "Erro ao preparar inserção: " . $conn->error);
+        }
 
         $stmt->bind_param("si", $nome, $quantidade_inicial);
-        $stmt->execute();
+        if (!$stmt->execute()) {
+            $erro = $stmt->error;
+            $stmt->close();
+            $conn->rollback();
+            return resposta(false, "Erro ao adicionar produto: " . $erro);
+        }
+
         $produto_id = $conn->insert_id;
         $stmt->close();
 
-        // Registra movimentação inicial
+        // Registra movimentação inicial (se aplicável)
         if ($quantidade_inicial > 0) {
             $resMov = mov_registrar($conn, $produto_id, "entrada", $quantidade_inicial, $usuario_id ?? 0);
             if (!$resMov["sucesso"]) {
@@ -82,7 +96,7 @@ function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial 
         return resposta(true, "Produto adicionado com sucesso.", [
             "id"            => $produto_id,
             "nome"          => $nome,
-            "nome_produto"  => $nome,
+            "produto_nome"  => $nome,
             "quantidade"    => $quantidade_inicial,
             "ativo"         => 1
         ]);
@@ -128,15 +142,25 @@ function produtos_remover(mysqli $conn, int $produto_id, ?int $usuario_id = null
         }
 
         $stmt = $conn->prepare("UPDATE produtos SET ativo = 0, quantidade = 0 WHERE id = ?");
+        if (!$stmt) {
+            $conn->rollback();
+            return resposta(false, "Erro ao preparar atualização: " . $conn->error);
+        }
+
         $stmt->bind_param("i", $produto_id);
-        $stmt->execute();
+        if (!$stmt->execute()) {
+            $erro = $stmt->error;
+            $stmt->close();
+            $conn->rollback();
+            return resposta(false, "Erro ao remover produto: " . $erro);
+        }
         $stmt->close();
 
         $conn->commit();
         return resposta(true, "Produto removido com sucesso.", [
             "id"            => $produto_id,
             "nome"          => $produto["nome"],
-            "nome_produto"  => $produto["nome"],
+            "produto_nome"  => $produto["nome"],
             "quantidade"    => 0,
             "ativo"         => 0
         ]);
