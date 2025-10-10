@@ -6,15 +6,14 @@ if (!window.__PRODUTOS_JS_BOUND__) {
   const inflight = new Set();
 
   // ==============================
-  // 🔹 Função principal — Listar produtos
+  // 🔹 Listar produtos
   // ==============================
   async function listarProdutos() {
     try {
       const resp = await apiRequest("listar_produtos", null, "GET");
-
       console.log("📦 resposta listar_produtos:", resp);
 
-      // Detecta corretamente o array de produtos, independente da estrutura
+      // Garante que sempre teremos um array de produtos
       const produtos =
         Array.isArray(resp?.dados?.produtos) ? resp.dados.produtos :
         Array.isArray(resp?.dados) ? resp.dados :
@@ -32,25 +31,32 @@ if (!window.__PRODUTOS_JS_BOUND__) {
       }
 
       produtos.forEach(p => {
-        const nome =
-          p.nome?.trim?.() ||
-          p.nome_produto?.trim?.() ||
-          p.nomeProduto?.trim?.() ||
-          "(sem nome)";
+        // Normaliza nome do produto
+        const nome = (
+          p.produto_nome ||
+          p.nome ||
+          p.nome_produto ||
+          p.nomeProduto ||
+          "(sem nome)"
+        ).trim();
 
-        const quantidade = p.quantidade ?? p.qtd ?? 0;
+        const quantidade = Number(p.quantidade ?? p.qtd ?? 0);
+        const ativo = Number(p.ativo ?? 1);
 
         const tr = document.createElement("tr");
+        if (!ativo) tr.classList.add("table-secondary", "text-muted");
+
         tr.innerHTML = `
           <td>${p.id ?? "-"}</td>
           <td>${nome}</td>
           <td>${quantidade}</td>
           <td class="d-flex gap-2">
-            <button class="btn btn-success btn-sm" onclick="entrada(${p.id})">Entrada</button>
-            <button class="btn btn-warning btn-sm" onclick="saida(${p.id})">Saída</button>
-            <button class="btn btn-danger btn-sm" onclick="remover(${p.id})">Remover</button>
+            <button class="btn btn-success btn-sm" data-id="${p.id}" onclick="entrada(${p.id})" ${!ativo ? "disabled" : ""}>Entrada</button>
+            <button class="btn btn-warning btn-sm" data-id="${p.id}" onclick="saida(${p.id})" ${!ativo ? "disabled" : ""}>Saída</button>
+            <button class="btn btn-danger btn-sm" data-id="${p.id}" onclick="remover(${p.id})">Remover</button>
           </td>
         `;
+
         tbody.appendChild(tr);
       });
 
@@ -63,7 +69,7 @@ if (!window.__PRODUTOS_JS_BOUND__) {
   window.listarProdutos = listarProdutos;
 
   // ==============================
-  // 🔹 Função genérica para executar ações
+  // 🔹 Função genérica de ação
   // ==============================
   async function execAcao(acao, id, quantidade) {
     const key = `${acao}-${id}`;
@@ -86,7 +92,7 @@ if (!window.__PRODUTOS_JS_BOUND__) {
         return await apiRequest("remover_produto", { produto_id: id }, "POST");
       }
     } catch (err) {
-      console.error(`Erro em ${acao}:`, err);
+      console.error(`❌ Erro em ${acao}:`, err);
       return { sucesso: false, mensagem: "Erro de comunicação com o servidor." };
     } finally {
       inflight.delete(key);
@@ -110,7 +116,7 @@ if (!window.__PRODUTOS_JS_BOUND__) {
     if (resp?.sucesso) {
       alert(resp.mensagem || "Entrada registrada com sucesso.");
       await listarProdutos();
-      if (typeof listarMovimentacoes === "function") await listarMovimentacoes();
+      if (typeof listarMovimentacoes === "function") listarMovimentacoes();
     } else {
       alert(resp?.mensagem || "Erro ao registrar entrada.");
     }
@@ -129,7 +135,7 @@ if (!window.__PRODUTOS_JS_BOUND__) {
     if (resp?.sucesso) {
       alert(resp.mensagem || "Saída registrada com sucesso.");
       await listarProdutos();
-      if (typeof listarMovimentacoes === "function") await listarMovimentacoes();
+      if (typeof listarMovimentacoes === "function") listarMovimentacoes();
     } else {
       alert(resp?.mensagem || "Erro ao registrar saída.");
     }
@@ -142,14 +148,14 @@ if (!window.__PRODUTOS_JS_BOUND__) {
     if (resp?.sucesso) {
       alert(resp.mensagem || "Produto removido com sucesso.");
       await listarProdutos();
-      if (typeof listarMovimentacoes === "function") await listarMovimentacoes();
+      if (typeof listarMovimentacoes === "function") listarMovimentacoes();
     } else {
       alert(resp?.mensagem || "Erro ao remover produto.");
     }
   };
 
   // ==============================
-  // 🔹 Formulário — Adicionar produto
+  // 🔹 Adicionar produto
   // ==============================
   document.querySelector("#formAdicionarProduto")?.addEventListener("submit", async function (e) {
     e.preventDefault();
@@ -165,12 +171,12 @@ if (!window.__PRODUTOS_JS_BOUND__) {
         this.reset();
         alert(resp?.mensagem || "Produto adicionado com sucesso.");
         await listarProdutos();
-        if (typeof preencherFiltroProdutos === "function") await preencherFiltroProdutos();
+        if (typeof preencherFiltroProdutos === "function") preencherFiltroProdutos();
       } else {
         alert(resp?.mensagem || "Erro ao adicionar produto.");
       }
     } catch (err) {
-      console.error("Erro ao adicionar produto:", err);
+      console.error("❌ Erro ao adicionar produto:", err);
       alert("Erro de comunicação com o servidor.");
     }
   });
