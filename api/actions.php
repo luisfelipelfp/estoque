@@ -1,6 +1,6 @@
 <?php
 // =======================================
-// api/actions.php — Roteador central (versão revisada)
+// api/actions.php — Roteador central (versão final revisada)
 // =======================================
 
 session_set_cookie_params([
@@ -31,7 +31,7 @@ ini_set("log_errors", 1);
 ini_set("error_log", __DIR__ . "/debug.log");
 
 // =======================================
-// 🔹 Leitura e auditoria
+// 🔹 Funções auxiliares
 // =======================================
 function read_body() {
     $body = file_get_contents("php://input");
@@ -73,49 +73,29 @@ try {
     ob_clean();
 
     switch ($acao) {
-        // =======================================
-        // 🔹 Listar Produtos
-        // =======================================
         case "listar_produtos":
             $res = produtos_listar($conn);
-
-            // 🔧 Padroniza o retorno
             $dados = $res["dados"] ?? $res;
             if (is_array($dados) && isset($dados[0]) && is_array($dados[0])) {
-                // Se o retorno for uma lista simples, normaliza em 'produtos'
                 $dados = ["produtos" => $dados];
             }
-
             json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $dados);
             break;
 
-        // =======================================
-        // 🔹 Adicionar Produto
-        // =======================================
         case "adicionar_produto":
             $nome = trim($body["nome"] ?? "");
             $qtd  = (int)($body["quantidade"] ?? 0);
-
-            if ($nome === "") {
-                json_response(false, "O nome do produto não pode estar vazio.");
-            }
-
+            if ($nome === "") json_response(false, "O nome do produto não pode estar vazio.");
             $res = produtos_adicionar($conn, $nome, $qtd, $usuario["id"] ?? null);
             json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
             break;
 
-        // =======================================
-        // 🔹 Remover Produto
-        // =======================================
         case "remover_produto":
             $produto_id = (int)($body["produto_id"] ?? $body["id"] ?? 0);
             $res = produtos_remover($conn, $produto_id, $usuario["id"] ?? null);
             json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
             break;
 
-        // =======================================
-        // 🔹 Movimentações
-        // =======================================
         case "listar_movimentacoes":
             $res = mov_listar($conn, $_GET);
             json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $res["dados"] ?? $res);
@@ -134,9 +114,6 @@ try {
             json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
             break;
 
-        // =======================================
-        // 🔹 Usuários
-        // =======================================
         case "listar_usuarios":
             $sql = "SELECT id, nome FROM usuarios ORDER BY nome";
             $res = $conn->query($sql);
@@ -145,17 +122,11 @@ try {
             json_response(true, "Usuários listados com sucesso.", $dados);
             break;
 
-        // =======================================
-        // 🔹 Relatórios
-        // =======================================
         case "relatorio_movimentacoes":
             $filtros = array_merge($_GET, $body);
             $res = relatorio($conn, $filtros);
-
-            // 🔧 Garante que o campo 'dados' exista e seja array
             $dados = $res["dados"] ?? [];
             if (!is_array($dados)) $dados = [];
-
             json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $dados);
             break;
 
@@ -165,9 +136,6 @@ try {
             json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $res["dados"] ?? null);
             break;
 
-        // =======================================
-        // 🔹 Default
-        // =======================================
         default:
             json_response(false, "Ação inválida ou não informada.");
     }
