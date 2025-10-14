@@ -1,173 +1,146 @@
 <?php
-/**
- * produtos.php
- * Funções para manipulação de produtos (CRUD + integração com movimentações)
- */
+// =======================================
+// api/actions.php — Roteador central (versão final revisada)
+// =======================================
 
-require_once __DIR__ . "/movimentacoes.php";
+session_set_cookie_params([
+    "lifetime" => 0,
+    "path"     => "/",
+    "domain"   => "",
+    "secure"   => false,
+    "httponly" => true,
+    "samesite" => "Lax"
+]);
+if (session_status() === PHP_SESSION_NONE) session_start();
+
 require_once __DIR__ . "/utils.php";
 
-/**
- * Lista produtos
- */
-function produtos_listar(mysqli $conn, bool $incluir_inativos = true): array {
-    $sql = $incluir_inativos
-        ? "SELECT id, nome, quantidade, ativo FROM produtos ORDER BY nome ASC"
-        : "SELECT id, nome, quantidade, ativo FROM produtos WHERE ativo = 1 ORDER BY nome ASC";
+header("Content-Type: application/json; charset=utf-8");
+header("Access-Control-Allow-Origin: http://192.168.15.100");
+header("Access-Control-Allow-Credentials: true");
+header("Access-Control-Allow-Headers: Content-Type");
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 
-    $produtos = [];
-    if ($res = $conn->query($sql)) {
-        while ($row = $res->fetch_assoc()) {
-            $nome = trim((string)$row["nome"]);
-            if ($nome === "" || $nome === null) $nome = "(sem nome)";
-
-            $produtos[] = [
-                "id"            => (int)$row["id"],
-                "nome"          => $nome,
-                "produto_nome"  => $nome, // compatível com relatórios
-                "quantidade"    => (int)$row["quantidade"],
-                "ativo"         => (int)$row["ativo"]
-            ];
-        }
-        $res->free();
-    } else {
-        error_log("produtos_listar falhou: " . $conn->error);
-        return resposta(false, "Erro ao listar produtos: " . $conn->error);
-    }
-
-    return resposta(true, "Lista de produtos carregada com sucesso.", $produtos);
+if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
+    http_response_code(200);
+    exit;
 }
 
-/**
- * Adiciona um novo produto
- */
-function produtos_adicionar(mysqli $conn, string $nome, int $quantidade_inicial = 0, ?int $usuario_id = null): array {
-    $nome = trim($nome);
-    if ($nome === "") return resposta(false, "Nome do produto é obrigatório.");
-    if ($quantidade_inicial < 0) return resposta(false, "Quantidade inicial inválida.");
+ini_set("display_errors", 0);
+ini_set("log_errors", 1);
+ini_set("error_log", __DIR__ . "/debug.log");
 
-    $conn->begin_transaction();
-    try {
-        // Verifica duplicidade
-        $stmtCheck = $conn->prepare("SELECT id FROM produtos WHERE nome = ?");
-        if (!$stmtCheck) {
-            $conn->rollback();
-            return resposta(false, "Erro ao preparar consulta: " . $conn->error);
-        }
-        $stmtCheck->bind_param("s", $nome);
-        $stmtCheck->execute();
-        $resCheck = $stmtCheck->get_result();
-
-        if ($resCheck && $resCheck->num_rows > 0) {
-            $stmtCheck->close();
-            $conn->rollback();
-            return resposta(false, "Já existe um produto com esse nome.");
-        }
-        $stmtCheck->close();
-
-        // Insere o novo produto
-        $stmt = $conn->prepare("INSERT INTO produtos (nome, quantidade, ativo) VALUES (?, ?, 1)");
-        if (!$stmt) {
-            $conn->rollback();
-            return resposta(false, "Erro ao preparar inserção: " . $conn->error);
-        }
-
-        $stmt->bind_param("si", $nome, $quantidade_inicial);
-        if (!$stmt->execute()) {
-            $erro = $stmt->error;
-            $stmt->close();
-            $conn->rollback();
-            return resposta(false, "Erro ao adicionar produto: " . $erro);
-        }
-
-        $produto_id = $conn->insert_id;
-        $stmt->close();
-
-        // Registra movimentação inicial (se aplicável)
-        if ($quantidade_inicial > 0) {
-            $resMov = mov_registrar($conn, $produto_id, "entrada", $quantidade_inicial, $usuario_id ?? 0);
-            if (!$resMov["sucesso"]) {
-                $conn->rollback();
-                return $resMov;
-            }
-        }
-
-        $conn->commit();
-        return resposta(true, "Produto adicionado com sucesso.", [
-            "id"            => $produto_id,
-            "nome"          => $nome,
-            "produto_nome"  => $nome,
-            "quantidade"    => $quantidade_inicial,
-            "ativo"         => 1
-        ]);
-
-    } catch (Throwable $e) {
-        $conn->rollback();
-        error_log("produtos_adicionar erro: " . $e->getMessage());
-        return resposta(false, "Erro interno ao adicionar produto.");
-    }
+// =======================================
+// 🔹 Funções auxiliares
+// =======================================
+function read_body() {
+    $body = file_get_contents("php://input");
+    $json = json_decode($body, true);
+    return (json_last_error() === JSON_ERROR_NONE && is_array($json))
+        ? $json
+        : ($_POST ?? []);
 }
 
-/**
- * Remove (desativa) um produto
- */
-function produtos_remover(mysqli $conn, int $produto_id, ?int $usuario_id = null): array {
-    if ($produto_id <= 0) return resposta(false, "ID inválido para remoção.");
+function auditoria_log($usuario, $acao, $dados = []) {
+    $file = __DIR__ . "/debug.log";
+    $time = date("Y-m-d H:i:s");
+    $uid = $usuario["id"] ?? "anon";
+    $nome = $usuario["nome"] ?? "desconhecido";
+    $linha = "[AUDITORIA][$time][user:$uid|$nome] ação='$acao' dados=" . json_encode($dados, JSON_UNESCAPED_UNICODE) . "\n";
+    file_put_contents($file, $linha, FILE_APPEND);
+}
 
-    $conn->begin_transaction();
-    try {
-        $stmt = $conn->prepare("SELECT id, nome, quantidade, ativo FROM produtos WHERE id = ?");
-        $stmt->bind_param("i", $produto_id);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        $produto = $res->fetch_assoc();
-        $stmt->close();
+// =======================================
+// 🔹 Dependências
+// =======================================
+require_once __DIR__ . "/db.php";
+require_once __DIR__ . "/movimentacoes.php";
+require_once __DIR__ . "/relatorios.php";
+require_once __DIR__ . "/produtos.php";
 
-        if (!$produto) {
-            $conn->rollback();
-            return resposta(false, "Produto não encontrado.");
-        }
-        if ((int)$produto["ativo"] === 0) {
-            $conn->rollback();
-            return resposta(false, "Produto já está inativo.");
-        }
+$conn = db();
+$acao = $_REQUEST["acao"] ?? "";
+$body = read_body();
 
-        // Registra movimentação de remoção
-        if ((int)$produto["quantidade"] > 0) {
-            $resMov = mov_registrar($conn, $produto_id, "remocao", (int)$produto["quantidade"], $usuario_id ?? 0);
-            if (!$resMov["sucesso"]) {
-                $conn->rollback();
-                return $resMov;
+if ($acao === "login")  { require __DIR__ . "/login.php"; exit; }
+if ($acao === "logout") { require __DIR__ . "/logout.php"; exit; }
+
+require_once __DIR__ . "/auth.php";
+$usuario = $_SESSION["usuario"] ?? [];
+auditoria_log($usuario, $acao, $body ?: $_GET);
+
+try {
+    ob_clean();
+
+    switch ($acao) {
+        case "listar_produtos":
+            $res = produtos_listar($conn);
+            $dados = $res["dados"] ?? $res;
+            if (is_array($dados) && isset($dados[0]) && is_array($dados[0])) {
+                $dados = ["produtos" => $dados];
             }
-        }
+            json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $dados);
+            break;
 
-        $stmt = $conn->prepare("UPDATE produtos SET ativo = 0, quantidade = 0 WHERE id = ?");
-        if (!$stmt) {
-            $conn->rollback();
-            return resposta(false, "Erro ao preparar atualização: " . $conn->error);
-        }
+        case "adicionar_produto":
+            $nome = trim($body["nome"] ?? "");
+            $qtd  = (int)($body["quantidade"] ?? 0);
+            if ($nome === "") json_response(false, "O nome do produto não pode estar vazio.");
+            $res = produtos_adicionar($conn, $nome, $qtd, $usuario["id"] ?? null);
+            json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
+            break;
 
-        $stmt->bind_param("i", $produto_id);
-        if (!$stmt->execute()) {
-            $erro = $stmt->error;
-            $stmt->close();
-            $conn->rollback();
-            return resposta(false, "Erro ao remover produto: " . $erro);
-        }
-        $stmt->close();
+        case "remover_produto":
+            $produto_id = (int)($body["produto_id"] ?? $body["id"] ?? 0);
+            $res = produtos_remover($conn, $produto_id, $usuario["id"] ?? null);
+            json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
+            break;
 
-        $conn->commit();
-        return resposta(true, "Produto removido com sucesso.", [
-            "id"            => $produto_id,
-            "nome"          => $produto["nome"],
-            "produto_nome"  => $produto["nome"],
-            "quantidade"    => 0,
-            "ativo"         => 0
-        ]);
+        case "listar_movimentacoes":
+            $res = mov_listar($conn, $_GET);
+            json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $res["dados"] ?? $res);
+            break;
 
-    } catch (Throwable $e) {
-        $conn->rollback();
-        error_log("produtos_remover erro: " . $e->getMessage());
-        return resposta(false, "Erro interno ao remover produto.");
+        case "registrar_movimentacao":
+            $produto_id = (int)($body["produto_id"] ?? 0);
+            $tipo = $body["tipo"] ?? "";
+            $quantidade = (int)($body["quantidade"] ?? 0);
+
+            if ($produto_id <= 0 || $quantidade <= 0 || !in_array($tipo, ["entrada", "saida", "remocao"])) {
+                json_response(false, "Dados inválidos para movimentação.");
+            }
+
+            $res = mov_registrar($conn, $produto_id, $tipo, $quantidade, $usuario["id"] ?? null);
+            json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
+            break;
+
+        case "listar_usuarios":
+            $sql = "SELECT id, nome FROM usuarios ORDER BY nome";
+            $res = $conn->query($sql);
+            $dados = [];
+            if ($res) while ($r = $res->fetch_assoc()) $dados[] = $r;
+            json_response(true, "Usuários listados com sucesso.", $dados);
+            break;
+
+        case "relatorio_movimentacoes":
+            $filtros = array_merge($_GET, $body);
+            $res = relatorio($conn, $filtros);
+            $dados = $res["dados"] ?? [];
+            if (!is_array($dados)) $dados = [];
+            json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $dados);
+            break;
+
+        case "exportar_relatorio":
+            require_once __DIR__ . "/exportar.php";
+            $res = exportar_relatorio($conn, $_GET);
+            json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $res["dados"] ?? null);
+            break;
+
+        default:
+            json_response(false, "Ação inválida ou não informada.");
     }
+
+} catch (Throwable $e) {
+    error_log("Erro global em actions.php: " . $e->getMessage() . " Linha: " . $e->getLine());
+    json_response(false, "Erro interno no servidor.");
 }

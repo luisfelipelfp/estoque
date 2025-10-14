@@ -9,58 +9,101 @@ require_once __DIR__ . "/utils.php";
 
 /**
  * Registrar movimentação (entrada, saída ou remoção)
+ *
+ * Agora com transação explícita para garantir consistência:
+ * - inicia transaction
+ * - atualiza produtos (quantidade)
+ * - insere movimentação
+ * - commit ou rollback em caso de erro
  */
 function mov_registrar(mysqli $conn, int $produto_id, string $tipo, int $quantidade, int $usuario_id): array {
     if ($quantidade <= 0) {
         return resposta(false, "Quantidade inválida.");
     }
 
-    // Busca nome do produto
-    $stmt = $conn->prepare("SELECT nome, quantidade FROM produtos WHERE id = ?");
-    $stmt->bind_param("i", $produto_id);
-    $stmt->execute();
-    $res = $stmt->get_result();
-    $produto = $res->fetch_assoc();
-    $stmt->close();
-
-    if (!$produto) {
-        return resposta(false, "Produto não encontrado.");
-    }
-
-    // Atualiza estoque
-    if ($tipo === "entrada") {
-        $sqlUpdate = "UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?";
-        $stmt = $conn->prepare($sqlUpdate);
-        $stmt->bind_param("ii", $quantidade, $produto_id);
-    } else {
-        // saída ou remoção
-        if ($produto["quantidade"] < $quantidade) {
-            return resposta(false, "Quantidade insuficiente em estoque.");
+    // Inicia transação
+    $conn->begin_transaction();
+    try {
+        // Busca nome e quantidade do produto com FOR UPDATE para bloquear linha (opcional)
+        $stmt = $conn->prepare("SELECT nome, quantidade FROM produtos WHERE id = ? FOR UPDATE");
+        if (!$stmt) {
+            $conn->rollback();
+            return resposta(false, "Erro ao preparar consulta do produto: " . $conn->error);
         }
-        $sqlUpdate = "UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?";
-        $stmt = $conn->prepare($sqlUpdate);
-        $stmt->bind_param("ii", $quantidade, $produto_id);
-    }
-
-    if (!$stmt->execute()) {
+        $stmt->bind_param("i", $produto_id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $produto = $res->fetch_assoc();
         $stmt->close();
-        return resposta(false, "Erro ao atualizar estoque.");
+
+        if (!$produto) {
+            $conn->rollback();
+            return resposta(false, "Produto não encontrado.");
+        }
+
+        // Atualiza estoque
+        if ($tipo === "entrada") {
+            $sqlUpdate = "UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?";
+            $stmtUpd = $conn->prepare($sqlUpdate);
+            if (!$stmtUpd) {
+                $conn->rollback();
+                return resposta(false, "Erro ao preparar atualização (entrada): " . $conn->error);
+            }
+            $stmtUpd->bind_param("ii", $quantidade, $produto_id);
+        } else {
+            // saída ou remoção
+            if ((int)$produto["quantidade"] < $quantidade) {
+                $conn->rollback();
+                return resposta(false, "Quantidade insuficiente em estoque.");
+            }
+            $sqlUpdate = "UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?";
+            $stmtUpd = $conn->prepare($sqlUpdate);
+            if (!$stmtUpd) {
+                $conn->rollback();
+                return resposta(false, "Erro ao preparar atualização (saida/remocao): " . $conn->error);
+            }
+            $stmtUpd->bind_param("ii", $quantidade, $produto_id);
+        }
+
+        if (!$stmtUpd->execute()) {
+            $erro = $stmtUpd->error;
+            $stmtUpd->close();
+            $conn->rollback();
+            return resposta(false, "Erro ao atualizar estoque: " . $erro);
+        }
+        // opcional: checar affected_rows? não é estritamente necessário
+        $stmtUpd->close();
+
+        // Registrar na tabela movimentacoes
+        $sqlMov = "INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, usuario_id, data) 
+                   VALUES (?, ?, ?, ?, ?, NOW())";
+        $stmtMov = $conn->prepare($sqlMov);
+        if (!$stmtMov) {
+            $conn->rollback();
+            return resposta(false, "Erro ao preparar inserção de movimentação: " . $conn->error);
+        }
+        $nomeProduto = $produto["nome"];
+        $stmtMov->bind_param("issii", $produto_id, $nomeProduto, $tipo, $quantidade, $usuario_id);
+        $ok = $stmtMov->execute();
+        if (!$ok) {
+            $erro = $stmtMov->error;
+            $stmtMov->close();
+            $conn->rollback();
+            return resposta(false, "Erro ao registrar movimentação: " . $erro);
+        }
+        $stmtMov->close();
+
+        // Commit da transação
+        $conn->commit();
+        return resposta(true, "Movimentação registrada com sucesso.");
+    } catch (Throwable $e) {
+        // Garantir rollback em qualquer exceção
+        if ($conn->in_transaction) {
+            $conn->rollback();
+        }
+        error_log("mov_registrar erro: " . $e->getMessage());
+        return resposta(false, "Erro interno ao registrar movimentação.");
     }
-    $stmt->close();
-
-    // Registrar na tabela movimentacoes
-    $sqlMov = "INSERT INTO movimentacoes (produto_id, produto_nome, tipo, quantidade, usuario_id, data) 
-               VALUES (?, ?, ?, ?, ?, NOW())";
-    $stmt = $conn->prepare($sqlMov);
-    $stmt->bind_param("issii", $produto_id, $produto["nome"], $tipo, $quantidade, $usuario_id);
-    $ok = $stmt->execute();
-    $stmt->close();
-
-    if (!$ok) {
-        return resposta(false, "Erro ao registrar movimentação.");
-    }
-
-    return resposta(true, "Movimentação registrada com sucesso.");
 }
 
 /**
