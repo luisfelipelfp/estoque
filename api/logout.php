@@ -11,13 +11,14 @@ session_set_cookie_params([
     "httponly" => true,
     "samesite" => "Lax"
 ]);
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
 require_once __DIR__ . "/utils.php";
 
-// Headers padrão + CORS
+// CORS
 header("Content-Type: application/json; charset=utf-8");
 header("Access-Control-Allow-Origin: http://192.168.15.100");
 header("Access-Control-Allow-Credentials: true");
@@ -31,18 +32,27 @@ if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
 
 debug_log("Iniciando logout...", "logout.php");
 
-// Limpa sessão
 $_SESSION = [];
 
 if (ini_get("session.use_cookies")) {
     $params = session_get_cookie_params();
-    setcookie(session_name(), "", time() - 42000,
-        $params["path"], $params["domain"],
-        $params["secure"], $params["httponly"]
+    setcookie(
+        session_name(),
+        "",
+        [
+            "expires"  => time() - 3600,
+            "path"     => $params["path"],
+            "domain"   => $params["domain"],
+            "secure"   => $params["secure"],
+            "httponly" => $params["httponly"],
+            "samesite" => "Lax"
+        ]
     );
 }
 
 session_destroy();
 
-debug_log(["status" => "logout_ok"], "logout.php");
+debug_log("logout_ok", "logout.php");
+
 json_response(true, "Logout realizado com sucesso.", null, 200);
+                                
