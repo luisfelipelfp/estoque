@@ -18,3 +18,11 @@ api/
  ├── buttons.css     → estilos de botões
  ├── produtos.css    → estilos específicos de produtos
  ├── movimentacoes.css → estilos específicos de movimentações
+
+├── api/
+├── css/
+├── js/
+├── index.html
+├── login.html
+├── relatorios.html
+└── README.md
