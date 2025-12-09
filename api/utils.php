@@ -1,15 +1,18 @@
 <?php
 // =======================================
 // api/utils.php
-// Funções utilitárias globais
+// Funções utilitárias globais (compatível com PHP 8.5)
 // =======================================
 
-// ✅ Padroniza respostas da API
+// =======================================
+// 🔹 Resposta padronizada
+// =======================================
 if (!function_exists("resposta")) {
+
     /**
-     * Cria um array padronizado de resposta.
+     * Cria uma resposta padronizada.
      */
-    function resposta(bool $sucesso, string $mensagem = "", $dados = null): array {
+    function resposta(bool $sucesso, string $mensagem = "", mixed $dados = null): array {
         return [
             "sucesso"  => $sucesso,
             "mensagem" => $mensagem,
@@ -18,58 +21,73 @@ if (!function_exists("resposta")) {
     }
 }
 
-// ✅ Log de debug genérico e seguro
+// =======================================
+// 🔹 Log seguro
+// =======================================
 if (!function_exists("debug_log")) {
+
     /**
-     * Grava uma linha no log de debug.
+     * Escreve no log de debug com segurança.
      *
-     * @param mixed  $msg    Mensagem, array ou objeto (será convertido para JSON)
-     * @param string $origem Origem do log (ex: arquivo ou módulo)
+     * @param mixed  $msg
+     * @param string $origem
      */
-    function debug_log($msg, string $origem = "geral"): void {
+    function debug_log(mixed $msg, string $origem = "geral"): void {
         $logFile = __DIR__ . "/debug.log";
         $data    = date("Y-m-d H:i:s");
 
+        // Converte arrays/objetos para JSON
         if (is_array($msg) || is_object($msg)) {
             $msg = json_encode($msg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
 
-        // Sanitiza quebras de linha
-        $msg = str_replace(["\r", "\n"], " ", (string)$msg);
+        // Garante que msg é string
+        $msg = (string)$msg;
 
-        file_put_contents($logFile, "[$data][$origem] $msg\n", FILE_APPEND);
+        // Remove quebras de linha para manter integridade
+        $msg = str_replace(["\r", "\n"], " ", $msg);
+
+        // Escreve log
+        @file_put_contents($logFile, "[$data][$origem] $msg\n", FILE_APPEND);
     }
 }
 
-// ✅ Atalho seguro para enviar resposta JSON e encerrar
+// =======================================
+// 🔹 Resposta JSON com saída segura
+// =======================================
 if (!function_exists("json_response")) {
+
     /**
-     * Envia uma resposta JSON padronizada e encerra a execução.
+     * Envia uma resposta JSON e finaliza o script.
      */
     function json_response(
         bool $sucesso,
         string $mensagem = "",
-        $dados = null,
+        mixed $dados = null,
         int $httpCode = 200
     ): void {
+
         http_response_code($httpCode);
         header("Content-Type: application/json; charset=utf-8");
 
-        // 🔹 Limpa buffer de saída apenas se existir
+        // Limpa buffer de saída (se existir)
         if (ob_get_level() > 0) {
-            ob_clean();
+            while (ob_get_level() > 0) {
+                ob_end_clean(); // Evita warnings no PHP 8.5
+            }
         }
 
         $payload = resposta($sucesso, $mensagem, $dados);
         $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        // 🔹 Tratamento de erro de JSON (raro, mas possível)
+        // Trata erros de codificação JSON
         if ($json === false) {
             $erro = json_last_error_msg();
-            debug_log("Falha ao gerar JSON: $erro", "json_response");
+            debug_log("Erro ao gerar JSON: $erro", "json_response");
+
             $json = json_encode([
                 "sucesso"  => false,
-                "mensagem" => "Erro interno ao gerar resposta JSON.",
+                "mensagem" => "Erro ao gerar resposta JSON.",
                 "dados"    => null
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }

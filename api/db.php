@@ -1,24 +1,37 @@
 <?php
+// =======================================
+// db.php — Conexão MySQL (versão segura / PHP 8.4+)
+// =======================================
+
 function db() {
-    $host = "192.168.15.100";   // IP do servidor MySQL
-    $user = "root";             // Usuário do banco
-    $pass = "#Shakka01";        // Senha do banco
+
+    $host = "192.168.15.100";   // IP do MySQL
+    $user = "root";             // Usuário
+    $pass = "#Shakka01";        // Senha
     $db   = "estoque";          // Nome do banco
 
-    // Cria a conexão
-    $conn = new mysqli($host, $user, $pass, $db);
+    // Cria objeto mysqli
+    $conn = @new mysqli($host, $user, $pass, $db);
 
-    // Verifica se houve erro na conexão
-    if ($conn->connect_error) {
-        die(json_encode([
+    // Erro na conexão
+    if ($conn->connect_errno) {
+
+        error_log("ERRO MySQL: " . $conn->connect_error);
+
+        // NÃO exponha erro interno ao usuário
+        echo json_encode([
             "sucesso" => false,
-            "mensagem" => "Erro na conexão com o banco: " . $conn->connect_error
-        ]));
+            "mensagem" => "Não foi possível conectar ao banco de dados."
+        ]);
+
+        http_response_code(500);
+        exit;
     }
 
-    // Garante que a comunicação será em UTF-8
-    $conn->set_charset("utf8mb4");
+    // Força UTF-8 real
+    if (!$conn->set_charset("utf8mb4")) {
+        error_log("Falha ao configurar charset UTF8MB4: " . $conn->error);
+    }
 
     return $conn;
 }
-?>

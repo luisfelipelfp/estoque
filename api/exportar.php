@@ -1,19 +1,25 @@
 <?php
 // =======================================
-// api/exportar.php
+// api/exportar.php (PHP 8.5 adaptado)
 // Gera relatórios PDF e Excel
 // =======================================
+
+declare(strict_types=1);
 
 require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/utils.php";
 require_once __DIR__ . "/relatorios.php";
 require_once __DIR__ . "/../libs/fpdf.php"; // Ajuste o caminho se necessário
 
+/**
+ * Exporta um relatório em PDF ou Excel.
+ */
 function exportar_relatorio(mysqli $conn, array $filtros): array {
     $tipo = strtolower($filtros["tipo"] ?? "pdf");
 
-    // Busca os dados do relatório
+    // Busca os dados
     $dados = relatorio($conn, $filtros);
+
     if (!$dados["sucesso"] || empty($dados["dados"])) {
         return resposta(false, "Nenhum dado encontrado para exportação.");
     }
@@ -21,49 +27,67 @@ function exportar_relatorio(mysqli $conn, array $filtros): array {
     $registros = $dados["dados"];
     $arquivo = "";
 
-    if ($tipo === "pdf") {
-        $arquivo = gerar_pdf($registros);
-        $url = "http://192.168.15.100/estoque/tmp/" . basename($arquivo);
-        return resposta(true, "Relatório PDF gerado com sucesso.", ["arquivo" => $url]);
-    } elseif ($tipo === "excel") {
-        $arquivo = gerar_excel($registros);
-        $url = "http://192.168.15.100/estoque/tmp/" . basename($arquivo);
-        return resposta(true, "Relatório Excel gerado com sucesso.", ["arquivo" => $url]);
+    switch ($tipo) {
+        case "pdf":
+            $arquivo = gerar_pdf($registros);
+            break;
+
+        case "excel":
+        case "csv":
+            $arquivo = gerar_excel($registros);
+            break;
+
+        default:
+            return resposta(false, "Formato de exportação inválido.");
     }
 
-    return resposta(false, "Formato de exportação inválido.");
+    $url = "http://192.168.15.100/estoque/tmp/" . basename($arquivo);
+
+    return resposta(true, "Arquivo gerado com sucesso.", ["arquivo" => $url]);
 }
 
-// ----------------------
-// Gera PDF
-// ----------------------
+/**
+ * Gera um PDF usando FPDF.
+ */
 function gerar_pdf(array $registros): string {
     $tmpDir = __DIR__ . "/../tmp";
-    if (!is_dir($tmpDir)) mkdir($tmpDir, 0777, true);
+
+    if (!is_dir($tmpDir)) {
+        mkdir($tmpDir, 0777, true);
+    }
+
     $arquivo = "$tmpDir/relatorio_" . date("Ymd_His") . ".pdf";
 
     $pdf = new FPDF("L", "mm", "A4");
     $pdf->AddPage();
     $pdf->SetFont("Arial", "B", 14);
-    $pdf->Cell(0, 10, utf8_decode("Relatório de Movimentações"), 0, 1, "C");
+    $pdf->Cell(0, 10, "Relatorio de Movimentacoes", 0, 1, "C");
     $pdf->Ln(5);
 
+    // Cabeçalho
     $pdf->SetFont("Arial", "B", 10);
-    $pdf->Cell(20, 8, "ID", 1);
-    $pdf->Cell(50, 8, "Produto", 1);
-    $pdf->Cell(30, 8, "Tipo", 1);
-    $pdf->Cell(30, 8, "Quantidade", 1);
-    $pdf->Cell(50, 8, "Usuário", 1);
-    $pdf->Cell(40, 8, "Data", 1);
+    $headers = [
+        ["ID", 20],
+        ["Produto", 50],
+        ["Tipo", 30],
+        ["Quantidade", 30],
+        ["Usuário", 50],
+        ["Data", 40]
+    ];
+
+    foreach ($headers as [$titulo, $largura]) {
+        $pdf->Cell($largura, 8, $titulo, 1);
+    }
     $pdf->Ln();
 
+    // Linhas
     $pdf->SetFont("Arial", "", 9);
     foreach ($registros as $r) {
-        $pdf->Cell(20, 8, $r["id"], 1);
-        $pdf->Cell(50, 8, utf8_decode($r["produto_nome"]), 1);
+        $pdf->Cell(20, 8, (string)$r["id"], 1);
+        $pdf->Cell(50, 8, $r["produto_nome"], 1);
         $pdf->Cell(30, 8, $r["tipo"], 1);
-        $pdf->Cell(30, 8, $r["quantidade"], 1);
-        $pdf->Cell(50, 8, utf8_decode($r["usuario"]), 1);
+        $pdf->Cell(30, 8, (string)$r["quantidade"], 1);
+        $pdf->Cell(50, 8, $r["usuario"], 1);
         $pdf->Cell(40, 8, $r["data"], 1);
         $pdf->Ln();
     }
@@ -72,17 +96,24 @@ function gerar_pdf(array $registros): string {
     return $arquivo;
 }
 
-// ----------------------
-// Gera Excel (CSV)
-// ----------------------
+/**
+ * Gera um arquivo Excel (CSV).
+ */
 function gerar_excel(array $registros): string {
     $tmpDir = __DIR__ . "/../tmp";
-    if (!is_dir($tmpDir)) mkdir($tmpDir, 0777, true);
+
+    if (!is_dir($tmpDir)) {
+        mkdir($tmpDir, 0777, true);
+    }
+
     $arquivo = "$tmpDir/relatorio_" . date("Ymd_His") . ".csv";
 
     $fp = fopen($arquivo, "w");
+
+    // Cabeçalho
     fputcsv($fp, ["ID", "Produto", "Tipo", "Quantidade", "Usuário", "Data"], ";");
 
+    // Dados
     foreach ($registros as $r) {
         fputcsv($fp, [
             $r["id"],
@@ -93,6 +124,7 @@ function gerar_excel(array $registros): string {
             $r["data"]
         ], ";");
     }
+
     fclose($fp);
 
     return $arquivo;

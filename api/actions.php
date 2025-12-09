@@ -1,20 +1,26 @@
 <?php
 // =======================================
-// api/actions.php — Roteador central (versão final revisada)
+// api/actions.php — Roteador central (versão compatível PHP 8.5)
 // =======================================
 
-session_set_cookie_params([
-    "lifetime" => 0,
-    "path"     => "/",
-    "domain"   => "",
-    "secure"   => false,
-    "httponly" => true,
-    "samesite" => "Lax"
-]);
-if (session_status() === PHP_SESSION_NONE) session_start();
+// --- SAMESITE deve ser configurado no php.ini (PHP 8.4+) ---
+session_set_cookie_params(
+    0,      // lifetime
+    "/",    // path
+    "",     // domain
+    false,  // secure
+    true    // httponly
+);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 require_once __DIR__ . "/utils.php";
 
+// =======================================
+// Headers
+// =======================================
 header("Content-Type: application/json; charset=utf-8");
 header("Access-Control-Allow-Origin: http://192.168.15.100");
 header("Access-Control-Allow-Credentials: true");
@@ -26,12 +32,15 @@ if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
     exit;
 }
 
+// =======================================
+// Logs
+// =======================================
 ini_set("display_errors", 0);
 ini_set("log_errors", 1);
 ini_set("error_log", __DIR__ . "/debug.log");
 
 // =======================================
-// 🔹 Funções auxiliares
+// Funções auxiliares
 // =======================================
 function read_body() {
     $body = file_get_contents("php://input");
@@ -51,41 +60,48 @@ function auditoria_log($usuario, $acao, $dados = []) {
 }
 
 // =======================================
-// 🔹 Dependências
+// Dependências
 // =======================================
 require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/movimentacoes.php";
 require_once __DIR__ . "/relatorios.php";
 require_once __DIR__ . "/produtos.php";
 
-$conn = db();
-$acao = $_REQUEST["acao"] ?? "";
-$body = read_body();
+$conn  = db();
+$acao  = $_REQUEST["acao"] ?? "";
+$body  = read_body();
 
+// Login/logout não requer auth
 if ($acao === "login")  { require __DIR__ . "/login.php"; exit; }
 if ($acao === "logout") { require __DIR__ . "/logout.php"; exit; }
 
+// Após login:
 require_once __DIR__ . "/auth.php";
+
 $usuario = $_SESSION["usuario"] ?? [];
 auditoria_log($usuario, $acao, $body ?: $_GET);
 
+// =======================================
+// Execução das ações
+// =======================================
 try {
-    ob_clean();
+    if (ob_get_length()) ob_clean();
 
     switch ($acao) {
+
         case "listar_produtos":
             $res = produtos_listar($conn);
-            $dados = $res["dados"] ?? $res;
-            if (is_array($dados) && isset($dados[0]) && is_array($dados[0])) {
-                $dados = ["produtos" => $dados];
-            }
-            json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $dados);
+            json_response(true, "", $res["dados"] ?? $res);
             break;
 
         case "adicionar_produto":
             $nome = trim($body["nome"] ?? "");
             $qtd  = (int)($body["quantidade"] ?? 0);
-            if ($nome === "") json_response(false, "O nome do produto não pode estar vazio.");
+
+            if ($nome === "") {
+                json_response(false, "O nome do produto não pode estar vazio.");
+            }
+
             $res = produtos_adicionar($conn, $nome, $qtd, $usuario["id"] ?? null);
             json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
             break;
@@ -98,19 +114,19 @@ try {
 
         case "listar_movimentacoes":
             $res = mov_listar($conn, $_GET);
-            json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $res["dados"] ?? $res);
+            json_response(true, "", $res["dados"] ?? $res);
             break;
 
         case "registrar_movimentacao":
             $produto_id = (int)($body["produto_id"] ?? 0);
-            $tipo = $body["tipo"] ?? "";
+            $tipo       = $body["tipo"] ?? "";
             $quantidade = (int)($body["quantidade"] ?? 0);
 
             if ($produto_id <= 0 || $quantidade <= 0 || !in_array($tipo, ["entrada", "saida", "remocao"])) {
                 json_response(false, "Dados inválidos para movimentação.");
             }
 
-            $res = mov_registrar($conn, $produto_id, $tipo, $quantidade, $usuario["id"] ?? null);
+            $res = mov_registrar($conn, $produto_id, $tipo, $quantidade, $usuario["id"]);
             json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
             break;
 
@@ -125,15 +141,13 @@ try {
         case "relatorio_movimentacoes":
             $filtros = array_merge($_GET, $body);
             $res = relatorio($conn, $filtros);
-            $dados = $res["dados"] ?? [];
-            if (!is_array($dados)) $dados = [];
-            json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $dados);
+            json_response(true, "", $res["dados"] ?? []);
             break;
 
         case "exportar_relatorio":
             require_once __DIR__ . "/exportar.php";
             $res = exportar_relatorio($conn, $_GET);
-            json_response($res["sucesso"] ?? true, $res["mensagem"] ?? "", $res["dados"] ?? null);
+            json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
             break;
 
         default:
@@ -144,3 +158,4 @@ try {
     error_log("Erro global em actions.php: " . $e->getMessage() . " Linha: " . $e->getLine());
     json_response(false, "Erro interno no servidor.");
 }
+

@@ -1,7 +1,7 @@
 <?php
 /**
- * api/relatorios.php — Relatórios e estatísticas de movimentações
- * Inclui suporte a produtos inativos/removidos e filtros refinados
+ * relatorios.php — Relatórios e estatísticas de movimentações
+ * Compatível e revisado para PHP 8.5
  */
 
 require_once __DIR__ . "/db.php";
@@ -31,28 +31,32 @@ try {
     $bind  = [];
     $types = "";
 
-    // 🔸 Filtros dinâmicos
-    if (!empty($filtros["tipo"])) {
+    // 🔸 Filtros dinâmicos (SQL seguro)
+    if ($filtros["tipo"] !== "") {
         $cond[] = "m.tipo = ?";
         $bind[] = $filtros["tipo"];
         $types .= "s";
     }
-    if (!empty($filtros["produto_id"])) {
+
+    if ($filtros["produto_id"] !== "") {
         $cond[] = "m.produto_id = ?";
         $bind[] = (int)$filtros["produto_id"];
         $types .= "i";
     }
-    if (!empty($filtros["usuario_id"])) {
+
+    if ($filtros["usuario_id"] !== "") {
         $cond[] = "m.usuario_id = ?";
         $bind[] = (int)$filtros["usuario_id"];
         $types .= "i";
     }
-    if (!empty($filtros["data_inicio"])) {
+
+    if ($filtros["data_inicio"] !== "") {
         $cond[] = "m.data >= ?";
         $bind[] = $filtros["data_inicio"] . " 00:00:00";
         $types .= "s";
     }
-    if (!empty($filtros["data_fim"])) {
+
+    if ($filtros["data_fim"] !== "") {
         $cond[] = "m.data <= ?";
         $bind[] = $filtros["data_fim"] . " 23:59:59";
         $types .= "s";
@@ -60,19 +64,27 @@ try {
 
     $where = $cond ? "WHERE " . implode(" AND ", $cond) : "";
 
-    // 🔹 Total de registros
+    // ============================================================
+    // 🔹 TOTAL DE REGISTROS
+    // ============================================================
     $sqlTotal = "SELECT COUNT(*) AS total FROM movimentacoes m $where";
     $stmtT = $conn->prepare($sqlTotal);
-    if ($stmtT === false) {
+    if (!$stmtT) {
         throw new Exception("Erro ao preparar SQL total: " . $conn->error);
     }
-    if ($bind) $stmtT->bind_param($types, ...$bind);
+
+    if ($bind) {
+        $stmtT->bind_param($types, ...$bind);
+    }
+
     $stmtT->execute();
     $resT = $stmtT->get_result();
     $total = (int)($resT->fetch_assoc()["total"] ?? 0);
     $stmtT->close();
 
-    // 🔹 Lista paginada (inclui produtos inativos/removidos)
+    // ============================================================
+    // 🔹 LISTA PRINCIPAL (paginada)
+    // ============================================================
     $sql = "
         SELECT 
             m.id,
@@ -90,12 +102,15 @@ try {
     ";
 
     $stmt = $conn->prepare($sql);
-    if ($stmt === false) {
+    if (!$stmt) {
         throw new Exception("Erro ao preparar SQL principal: " . $conn->error);
     }
 
+    // parâmetros dinâmicos
     if ($bind) {
-        $stmt->bind_param($types . "ii", ...array_merge($bind, [$limite, $offset]));
+        $types2 = $types . "ii";
+        $params = array_merge($bind, [$limite, $offset]);
+        $stmt->bind_param($types2, ...$params);
     } else {
         $stmt->bind_param("ii", $limite, $offset);
     }
@@ -116,44 +131,50 @@ try {
     }
     $stmt->close();
 
-    // 🔹 Dados para gráfico — garantido mesmo sem movimentações
+    // ============================================================
+    // 🔹 DADOS PARA GRÁFICO
+    // ============================================================
     $sqlGraf = "SELECT tipo, COUNT(*) AS total FROM movimentacoes m $where GROUP BY tipo";
+
     $stmtG = $conn->prepare($sqlGraf);
-    if ($stmtG === false) {
+    if (!$stmtG) {
         throw new Exception("Erro ao preparar SQL gráfico: " . $conn->error);
     }
-    if ($bind) $stmtG->bind_param($types, ...$bind);
+
+    if ($bind) {
+        $stmtG->bind_param($types, ...$bind);
+    }
+
     $stmtG->execute();
     $resG = $stmtG->get_result();
 
-    $graf = ["entrada" => 0, "saida" => 0, "remocao" => 0];
+    $grafico = [
+        "entrada" => 0,
+        "saida"   => 0,
+        "remocao" => 0
+    ];
+
     while ($g = $resG->fetch_assoc()) {
-        $graf[$g["tipo"]] = (int)$g["total"];
+        $grafico[$g["tipo"]] = (int)$g["total"];
     }
+
     $stmtG->close();
 
-    // 🔹 Resposta JSON final
-    header("Content-Type: application/json; charset=utf-8");
-    ob_clean();
-    echo json_encode([
-        "sucesso" => true,
+    // ============================================================
+    // 🔹 RESPOSTA FINAL
+    // ============================================================
+    @ob_clean();
+    json_response(true, "Relatório gerado com sucesso.", [
         "total"   => $total,
         "pagina"  => $pagina,
         "limite"  => $limite,
         "paginas" => (int)ceil($total / $limite),
         "dados"   => $dados,
-        "grafico" => $graf
-    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-    exit;
+        "grafico" => $grafico
+    ]);
 
 } catch (Throwable $e) {
     error_log("[relatorios.php] " . $e->getMessage());
-    header("Content-Type: application/json; charset=utf-8");
-    ob_clean();
-    echo json_encode([
-        "sucesso" => false,
-        "erro"    => $e->getMessage()
-    ], JSON_UNESCAPED_UNICODE);
-    exit;
+    @ob_clean();
+    json_response(false, "Erro ao gerar relatório: " . $e->getMessage());
 }
-                            

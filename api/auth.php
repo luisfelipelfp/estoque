@@ -2,6 +2,7 @@
 // =======================================
 // api/auth.php
 // Middleware de autenticação + timeout
+// Compatível com PHP 8.4/8.5
 // =======================================
 
 require_once __DIR__ . "/utils.php";
@@ -9,30 +10,30 @@ require_once __DIR__ . "/utils.php";
 // Garantir que a sessão esteja ativa
 if (session_status() === PHP_SESSION_NONE) {
 
-    session_set_cookie_params([
-        "lifetime" => 0,
-        "path"     => "/",
-        "domain"   => "",
-        "secure"   => false,   // coloque true se usar HTTPS
-        "httponly" => true,
-        "samesite" => "Lax"
-    ]);
+    // PHP 8.4+ NÃO aceita mais array aqui
+    session_set_cookie_params(
+        0,      // lifetime
+        "/",    // path
+        "",     // domain
+        false,  // secure (mude para true em HTTPS)
+        true    // httponly
+    );
 
     session_start();
 }
 
-// Timeout de 30 min
+// Timeout de 30 minutos
 $SESSION_TIMEOUT = 1800;
 
-// Verifica timeout
+// Verifica timeout de inatividade
 if (isset($_SESSION["LAST_ACTIVITY"])) {
     $inativo = time() - $_SESSION["LAST_ACTIVITY"];
 
     if ($inativo > $SESSION_TIMEOUT) {
 
         debug_log([
-            "mensagem" => "Sessão expirada por inatividade",
-            "inatividade" => $inativo
+            "mensagem"      => "Sessão expirada por inatividade",
+            "inatividade"   => $inativo
         ], "auth.php");
 
         session_unset();
@@ -44,10 +45,10 @@ if (isset($_SESSION["LAST_ACTIVITY"])) {
     }
 }
 
-// Atualiza atividade
+// Atualiza atividade da sessão
 $_SESSION["LAST_ACTIVITY"] = time();
 
-// Verifica login
+// Verifica se o usuário está logado
 if (!isset($_SESSION["usuario"])) {
     debug_log("Acesso negado -> usuário não autenticado.", "auth.php");
     http_response_code(401);
@@ -55,7 +56,7 @@ if (!isset($_SESSION["usuario"])) {
     exit;
 }
 
-// Usuário autenticado
+// Dados do usuário autenticado
 $usuario = $_SESSION["usuario"];
 
 debug_log([
@@ -66,4 +67,3 @@ debug_log([
         "nivel" => $usuario["nivel"] ?? null
     ]
 ], "auth.php");
-        
