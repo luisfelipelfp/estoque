@@ -8,11 +8,16 @@
 declare(strict_types=1);
 
 // ---------------------------------------
+// DEBUG CONTROLADO (DESATIVAR EM PRODUÇÃO)
+// ---------------------------------------
+error_reporting(E_ALL);
+ini_set('display_errors', '0');
+
+// ---------------------------------------
 // SESSÃO (ANTES DE QUALQUER OUTPUT)
 // ---------------------------------------
 if (session_status() === PHP_SESSION_NONE) {
 
-    // PHP 8.x seguro (SameSite via php.ini)
     session_set_cookie_params(
         0,      // lifetime
         '/',    // path
@@ -45,6 +50,9 @@ header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Headers: Content-Type');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 
+// ---------------------------------------
+// PREFLIGHT
+// ---------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
@@ -59,7 +67,6 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         'metodo' => $_SERVER['REQUEST_METHOD']
     ]);
 
-    @ob_clean();
     json_response(false, 'Método inválido.', null, 405);
     exit;
 }
@@ -82,13 +89,12 @@ $login = trim(
     ?? ''
 );
 
-$senha = $input['senha'] ?? $_POST['senha'] ?? '';
+$senha = (string) ($input['senha'] ?? $_POST['senha'] ?? '');
 
 if ($login === '' || $senha === '') {
 
     logWarning('login', 'Campos obrigatórios ausentes');
 
-    @ob_clean();
     json_response(false, 'Preencha login e senha.', null, 400);
     exit;
 }
@@ -102,7 +108,17 @@ logInfo('login', 'Tentativa de login', [
 // ---------------------------------------
 // CONEXÃO
 // ---------------------------------------
-$conn = db();
+try {
+    $conn = db();
+} catch (Throwable $e) {
+
+    logError('login', 'Erro ao conectar no banco', [
+        'erro' => $e->getMessage()
+    ]);
+
+    json_response(false, 'Erro interno.', null, 500);
+    exit;
+}
 
 // ---------------------------------------
 // BUSCA USUÁRIO
@@ -141,12 +157,10 @@ try {
 } catch (Throwable $e) {
 
     logError('login', 'Erro ao consultar usuário', [
-        'erro'    => $e->getMessage(),
-        'arquivo' => $e->getFile(),
-        'linha'   => $e->getLine()
+        'erro'   => $e->getMessage(),
+        'linha'  => $e->getLine()
     ]);
 
-    @ob_clean();
     json_response(false, 'Erro interno.', null, 500);
     exit;
 }
@@ -165,7 +179,6 @@ if (
         'ip'    => $_SERVER['REMOTE_ADDR'] ?? 'desconhecido'
     ]);
 
-    @ob_clean();
     json_response(false, 'Usuário/e-mail ou senha inválidos.', null, 401);
     exit;
 }
@@ -185,8 +198,8 @@ logInfo('login', 'Login realizado com sucesso', [
     'nivel'      => $usuario['nivel']
 ]);
 
-@ob_clean();
 json_response(true, 'Login realizado com sucesso.', [
     'usuario' => $usuario
 ], 200);
+
 exit;
