@@ -59,7 +59,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         'metodo' => $_SERVER['REQUEST_METHOD']
     ]);
 
+    @ob_clean();
     json_response(false, 'Método inválido.', null, 405);
+    exit;
 }
 
 // ---------------------------------------
@@ -86,7 +88,9 @@ if ($login === '' || $senha === '') {
 
     logWarning('login', 'Campos obrigatórios ausentes');
 
+    @ob_clean();
     json_response(false, 'Preencha login e senha.', null, 400);
+    exit;
 }
 
 logInfo('login', 'Tentativa de login', [
@@ -137,25 +141,33 @@ try {
 } catch (Throwable $e) {
 
     logError('login', 'Erro ao consultar usuário', [
-        'erro'   => $e->getMessage(),
-        'arquivo'=> $e->getFile(),
-        'linha'  => $e->getLine()
+        'erro'    => $e->getMessage(),
+        'arquivo' => $e->getFile(),
+        'linha'   => $e->getLine()
     ]);
 
+    @ob_clean();
     json_response(false, 'Erro interno.', null, 500);
+    exit;
 }
 
 // ---------------------------------------
 // VALIDA SENHA
 // ---------------------------------------
-if (!$usuario || !password_verify($senha, $usuario['senha'])) {
+if (
+    !$usuario ||
+    empty($usuario['senha']) ||
+    !password_verify($senha, $usuario['senha'])
+) {
 
     logWarning('login', 'Falha de autenticação', [
         'login' => $login,
         'ip'    => $_SERVER['REMOTE_ADDR'] ?? 'desconhecido'
     ]);
 
+    @ob_clean();
     json_response(false, 'Usuário/e-mail ou senha inválidos.', null, 401);
+    exit;
 }
 
 // ---------------------------------------
@@ -173,6 +185,8 @@ logInfo('login', 'Login realizado com sucesso', [
     'nivel'      => $usuario['nivel']
 ]);
 
+@ob_clean();
 json_response(true, 'Login realizado com sucesso.', [
     'usuario' => $usuario
 ], 200);
+exit;
