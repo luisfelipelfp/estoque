@@ -1,26 +1,17 @@
 <?php
-// api/log.php
 declare(strict_types=1);
 
 /**
- * ==========================================
  * Sistema central de logs da API
- * ==========================================
- * - Logs separados por contexto (login.log, auth.log, db.log, etc)
- * - Captura erros PHP, warnings, notices, exceções e fatal errors
- * - Compatível PHP 8.2+ / 8.5
- * - NÃO é endpoint HTTP
- * ==========================================
+ * Compatível PHP 8.2+ / 8.5
  */
 
 const LOG_DIR = __DIR__ . '/../logs_api';
 
-// Evita múltiplas inicializações
-$LOG_INITIALIZED = [];
+static $LOG_INITIALIZED = [];
 
 /**
- * Inicializa sistema de log para um contexto
- * Exemplo: initLog('login');
+ * Inicializa sistema de log
  */
 function initLog(string $contexto): void
 {
@@ -40,69 +31,53 @@ function initLog(string $contexto): void
     ini_set('error_log', $logFile);
     ini_set('display_errors', '0');
 
-    // Captura warnings, notices etc
-    set_error_handler(
-        function (
-            int $severity,
-            string $message,
-            string $file,
-            int $line
-        ) use ($contexto): bool {
+    set_error_handler(function (
+        int $severity,
+        string $message,
+        string $file,
+        int $line
+    ) use ($contexto): bool {
 
+        logError($contexto, "PHP ERROR [$severity] $message", $file, $line);
+        return true;
+    });
+
+    set_exception_handler(function (Throwable $e) use ($contexto): void {
+
+        logError(
+            $contexto,
+            'EXCEPTION: ' . $e->getMessage(),
+            $e->getFile(),
+            $e->getLine(),
+            $e->getTraceAsString()
+        );
+
+        http_response_code(500);
+        echo json_encode([
+            'sucesso'  => false,
+            'mensagem' => 'Erro interno no servidor.'
+        ], JSON_UNESCAPED_UNICODE);
+
+        exit;
+    });
+
+    register_shutdown_function(function () use ($contexto): void {
+
+        $error = error_get_last();
+
+        if ($error && in_array(
+            $error['type'],
+            [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR],
+            true
+        )) {
             logError(
                 $contexto,
-                "PHP ERROR [$severity] $message",
-                $file,
-                $line
+                'FATAL ERROR: ' . $error['message'],
+                $error['file'] ?? null,
+                $error['line'] ?? null
             );
-
-            return true;
         }
-    );
-
-    // Captura exceções não tratadas
-    set_exception_handler(
-        function (Throwable $e) use ($contexto): void {
-
-            logError(
-                $contexto,
-                'EXCEPTION: ' . $e->getMessage(),
-                $e->getFile(),
-                $e->getLine(),
-                $e->getTraceAsString()
-            );
-
-            http_response_code(500);
-            echo json_encode([
-                'sucesso'  => false,
-                'mensagem' => 'Erro interno no servidor.'
-            ], JSON_UNESCAPED_UNICODE);
-
-            exit;
-        }
-    );
-
-    // Captura fatal errors
-    register_shutdown_function(
-        function () use ($contexto): void {
-
-            $error = error_get_last();
-
-            if ($error && in_array(
-                $error['type'],
-                [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR],
-                true
-            )) {
-
-                logError(
-                    $contexto,
-                    'FATAL ERROR: ' . $error['message'],
-                    $error['file'] ?? null,
-                    $error['line'] ?? null
-                );
-            }
-        }
-    );
+    });
 
     $LOG_INITIALIZED[$contexto] = true;
 }
@@ -122,17 +97,9 @@ function logError(
 
     $log = "[$data] [$contexto] ERROR: $mensagem";
 
-    if ($arquivo) {
-        $log .= " | Arquivo: $arquivo";
-    }
-
-    if ($linha) {
-        $log .= " | Linha: $linha";
-    }
-
-    if ($trace) {
-        $log .= PHP_EOL . $trace;
-    }
+    if ($arquivo) $log .= " | Arquivo: $arquivo";
+    if ($linha)   $log .= " | Linha: $linha";
+    if ($trace)   $log .= PHP_EOL . $trace;
 
     error_log($log);
 }
@@ -157,7 +124,7 @@ function logInfo(string $contexto, string $mensagem, array $dados = []): void
 }
 
 /**
- * Log de aviso (warning)
+ * Log de aviso
  */
 function logWarning(string $contexto, string $mensagem, array $dados = []): void
 {
