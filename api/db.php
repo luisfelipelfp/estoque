@@ -22,19 +22,14 @@ function db(): mysqli
     $pass   = '#Shakka01';
     $dbname = 'estoque';
 
+    // Garante exceções do mysqli
+    mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
     try {
-
-        // Evita impacto global
-        $oldReport = mysqli_report(MYSQLI_REPORT_OFF);
-        mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
-
         $conn = new mysqli($host, $user, $pass, $dbname);
         $conn->set_charset('utf8mb4');
 
         logInfo('db', 'Conexão com banco estabelecida');
-
-        // Restaura comportamento anterior
-        mysqli_report($oldReport);
 
         return $conn;
 
@@ -43,18 +38,18 @@ function db(): mysqli
         logError(
             'db',
             'Erro ao conectar no banco de dados',
-            [
-                'arquivo' => $e->getFile(),
-                'linha'   => $e->getLine(),
-                'erro'    => $e->getMessage()
-            ]
+            $e->getFile(),
+            $e->getLine(),
+            $e->getMessage()
         );
 
+        @ob_clean();
         json_response(
             false,
             'Erro interno ao conectar ao banco de dados.',
             null,
             500
         );
+        exit;
     }
 }
