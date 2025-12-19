@@ -7,6 +7,26 @@
 
 declare(strict_types=1);
 
+// ---------------------------------------
+// SESSÃO (ANTES DE QUALQUER OUTPUT)
+// ---------------------------------------
+if (session_status() === PHP_SESSION_NONE) {
+
+    // PHP 8.x seguro (SameSite via php.ini)
+    session_set_cookie_params(
+        0,      // lifetime
+        '/',    // path
+        '',     // domain
+        false,  // secure (true se HTTPS)
+        true    // httponly
+    );
+
+    session_start();
+}
+
+// ---------------------------------------
+// DEPENDÊNCIAS
+// ---------------------------------------
 require_once __DIR__ . '/log.php';
 require_once __DIR__ . '/utils.php';
 require_once __DIR__ . '/db.php';
@@ -34,28 +54,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // MÉTODO
 // ---------------------------------------
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+
     logWarning('login', 'Método HTTP inválido', [
         'metodo' => $_SERVER['REQUEST_METHOD']
     ]);
 
     json_response(false, 'Método inválido.', null, 405);
-}
-
-// ---------------------------------------
-// SESSÃO (PHP 8.5 SAFE)
-// ---------------------------------------
-if (session_status() === PHP_SESSION_NONE) {
-
-    session_set_cookie_params([
-        'lifetime' => 0,
-        'path'     => '/',
-        'domain'   => '',
-        'secure'   => false, // true se HTTPS
-        'httponly' => true,
-        'samesite' => 'Lax'
-    ]);
-
-    session_start();
 }
 
 // ---------------------------------------
@@ -118,6 +122,10 @@ try {
              WHERE nome = ?
              LIMIT 1'
         );
+    }
+
+    if (!$stmt) {
+        throw new RuntimeException($conn->error);
     }
 
     $stmt->bind_param('s', $login);
