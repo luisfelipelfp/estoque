@@ -16,7 +16,7 @@ declare(strict_types=1);
 const LOG_DIR = __DIR__ . '/../logs_api';
 
 // Evita múltiplas inicializações
-static $LOG_INITIALIZED = [];
+$LOG_INITIALIZED = [];
 
 /**
  * Inicializa sistema de log para um contexto
@@ -30,7 +30,6 @@ function initLog(string $contexto): void
         return;
     }
 
-    // Cria diretório de logs
     if (!is_dir(LOG_DIR)) {
         mkdir(LOG_DIR, 0775, true);
     }
@@ -41,9 +40,7 @@ function initLog(string $contexto): void
     ini_set('error_log', $logFile);
     ini_set('display_errors', '0');
 
-    // -------------------------------
-    // Captura erros PHP (warnings, notices, etc)
-    // -------------------------------
+    // Captura warnings, notices etc
     set_error_handler(
         function (
             int $severity,
@@ -59,14 +56,11 @@ function initLog(string $contexto): void
                 $line
             );
 
-            // true = erro tratado
             return true;
         }
     );
 
-    // -------------------------------
     // Captura exceções não tratadas
-    // -------------------------------
     set_exception_handler(
         function (Throwable $e) use ($contexto): void {
 
@@ -88,9 +82,7 @@ function initLog(string $contexto): void
         }
     );
 
-    // -------------------------------
     // Captura fatal errors
-    // -------------------------------
     register_shutdown_function(
         function () use ($contexto): void {
 
@@ -153,7 +145,7 @@ function logInfo(string $contexto, string $mensagem, array $dados = []): void
     $data = date('Y-m-d H:i:s');
 
     $log = "[$data] [$contexto] INFO: $mensagem";
-oliiiiwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwssssss
+
     if (!empty($dados)) {
         $log .= ' | Dados: ' . json_encode(
             $dados,
@@ -177,7 +169,7 @@ function logWarning(string $contexto, string $mensagem, array $dados = []): void
         $log .= ' | Dados: ' . json_encode(
             $dados,
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-     b                                                                                                 );
+        );
     }
 
     error_log($log);
