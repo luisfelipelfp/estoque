@@ -1,160 +1,274 @@
 <?php
 // =======================================
-// produtos.php — Roteador central (corrigido e compatível com PHP 8.5)
+// api/produtos.php
+// Roteador central de produtos
+// Compatível PHP 8.2+ / 8.5
 // =======================================
 
-// ----------------------
-// Configuração de sessão
-// ----------------------
-session_set_cookie_params([
-    "lifetime" => 0,
-    "path"     => "/",
-    "domain"   => "",
-    "secure"   => false,
-    "httponly" => true,
-    "samesite" => "Lax"
-]);
+declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/log.php';
+require_once __DIR__ . '/utils.php';
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/movimentacoes.php';
+require_once __DIR__ . '/relatorios.php';
+require_once __DIR__ . '/produtos_funcoes.php';
 
-require_once __DIR__ . "/utils.php";
+// ---------------------------------------
+// Inicializa log do contexto
+// ---------------------------------------
+initLog('produtos');
 
-// ----------------------
-// Cabeçalhos gerais
-// ----------------------
-header("Content-Type: application/json; charset=utf-8");
-header("Access-Control-Allow-Origin: http://192.168.15.100");
-header("Access-Control-Allow-Credentials: true");
-header("Access-Control-Allow-Headers: Content-Type");
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+// ---------------------------------------
+// HEADERS / CORS
+// ---------------------------------------
+header('Content-Type: application/json; charset=utf-8');
+header('Access-Control-Allow-Origin: http://192.168.15.100');
+header('Access-Control-Allow-Credentials: true');
+header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 
-if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
 
-ini_set("display_errors", 0);
-ini_set("log_errors", 1);
-ini_set("error_log", __DIR__ . "/debug.log");
+// ---------------------------------------
+// SESSÃO
+// ---------------------------------------
+if (session_status() === PHP_SESSION_NONE) {
 
-// =======================================
-// Funções auxiliares
-// =======================================
-function read_body() {
-    $body = file_get_contents("php://input");
-    $json = json_decode($body, true);
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path'     => '/',
+        'domain'   => '',
+        'secure'   => false, // true em HTTPS
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
 
-    return (json_last_error() === JSON_ERROR_NONE && is_array($json))
-        ? $json
-        : ($_POST ?? []);
+    session_start();
 }
 
-function auditoria_log($usuario, $acao, $dados = []) {
-    $file = __DIR__ . "/debug.log";
-    $time = date("Y-m-d H:i:s");
-    $uid  = $usuario["id"]   ?? "anon";
-    $nome = $usuario["nome"] ?? "desconhecido";
-
-    $linha = "[AUDITORIA][$time][user:$uid|$nome] ação='$acao' dados="
-        . json_encode($dados, JSON_UNESCAPED_UNICODE) . "\n";
-
-    file_put_contents($file, $linha, FILE_APPEND);
+// ---------------------------------------
+// Helpers locais
+// ---------------------------------------
+function read_body(): array
+{
+    return get_json_input('produtos') ?: ($_POST ?? []);
 }
 
-// =======================================
-// Dependências obrigatórias
-// =======================================
-require_once __DIR__ . "/db.php";
-require_once __DIR__ . "/movimentacoes.php";
-require_once __DIR__ . "/relatorios.php";
-require_once __DIR__ . "/produtos_funcoes.php"; // <<< renomeado para evitar incluir o próprio arquivo
+function auditoria(
+    array $usuario,
+    string $acao,
+    array $dados = []
+): void {
+    logInfo('produtos', 'AUDITORIA', [
+        'usuario_id' => $usuario['id']   ?? null,
+        'usuario'    => $usuario['nome'] ?? null,
+        'acao'       => $acao,
+        'dados'      => $dados
+    ]);
+}
 
-$conn  = db();
-$acao  = $_REQUEST["acao"] ?? "";
-$body  = read_body();
+// ---------------------------------------
+// Conexão com banco
+// ---------------------------------------
+$conn = db();
 
-// Rotas de login/logout antes de exigir autenticação
-if ($acao === "login")  { require __DIR__ . "/login.php"; exit; }
-if ($acao === "logout") { require __DIR__ . "/logout.php"; exit; }
+// ---------------------------------------
+// Ação solicitada
+// ---------------------------------------
+$acao = $_REQUEST['acao'] ?? '';
+$body = read_body();
 
-// Autenticação obrigatória
-require_once __DIR__ . "/auth.php";
+// ---------------------------------------
+// ROTAS PÚBLICAS (sem auth)
+// ---------------------------------------
+if ($acao === 'login') {
+    require __DIR__ . '/login.php';
+    exit;
+}
 
-$usuario = $_SESSION["usuario"] ?? [];
-auditoria_log($usuario, $acao, $body ?: $_GET);
+if ($acao === 'logout') {
+    require __DIR__ . '/logout.php';
+    exit;
+}
 
+// ---------------------------------------
+// AUTENTICAÇÃO OBRIGATÓRIA
+// ---------------------------------------
+require_once __DIR__ . '/auth.php';
+
+$usuario = $_SESSION['usuario'] ?? [];
+
+// Log de auditoria
+auditoria($usuario, $acao, $body ?: $_GET);
+
+// ---------------------------------------
+// ROTEAMENTO
+// ---------------------------------------
 try {
-    ob_clean();
 
     switch ($acao) {
 
-        case "listar_produtos":
+        case 'listar_produtos': {
+
             $res = produtos_listar($conn);
-            json_response($res["sucesso"], $res["mensagem"], ["produtos" => $res["dados"]]);
+
+            json_response(
+                $res['sucesso'],
+                $res['mensagem'],
+                ['produtos' => $res['dados']]
+            );
             break;
+        }
 
-        case "adicionar_produto":
-            $nome = trim($body["nome"] ?? "");
-            $qtd  = (int)($body["quantidade"] ?? 0);
+        case 'adicionar_produto': {
 
-            if ($nome === "") {
-                json_response(false, "O nome do produto não pode estar vazio.");
+            $nome = trim($body['nome'] ?? '');
+            $qtd  = (int) ($body['quantidade'] ?? 0);
+
+            if ($nome === '') {
+                logWarning('produtos', 'Nome de produto vazio', $body);
+                json_response(false, 'O nome do produto não pode estar vazio.');
             }
 
-            $res = produtos_adicionar($conn, $nome, $qtd, $usuario["id"] ?? null);
-            json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
-            break;
+            $res = produtos_adicionar(
+                $conn,
+                $nome,
+                $qtd,
+                $usuario['id'] ?? null
+            );
 
-        case "remover_produto":
-            $produto_id = (int)($body["produto_id"] ?? $body["id"] ?? 0);
-            $res = produtos_remover($conn, $produto_id, $usuario["id"] ?? null);
-            json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
+            json_response(
+                $res['sucesso'],
+                $res['mensagem'],
+                $res['dados'] ?? null
+            );
             break;
+        }
 
-        case "listar_movimentacoes":
+        case 'remover_produto': {
+
+            $produto_id = (int) ($body['produto_id'] ?? $body['id'] ?? 0);
+
+            if ($produto_id <= 0) {
+                logWarning('produtos', 'Produto ID inválido', $body);
+                json_response(false, 'ID do produto inválido.');
+            }
+
+            $res = produtos_remover(
+                $conn,
+                $produto_id,
+                $usuario['id'] ?? null
+            );
+
+            json_response(
+                $res['sucesso'],
+                $res['mensagem'],
+                $res['dados'] ?? null
+            );
+            break;
+        }
+
+        case 'listar_movimentacoes': {
+
             $res = mov_listar($conn, $_GET);
-            json_response($res["sucesso"], $res["mensagem"], $res["dados"]);
+
+            json_response(
+                $res['sucesso'],
+                $res['mensagem'],
+                $res['dados']
+            );
             break;
+        }
 
-        case "registrar_movimentacao":
-            $produto_id = (int)($body["produto_id"] ?? 0);
-            $tipo       = $body["tipo"] ?? "";
-            $quantidade = (int)($body["quantidade"] ?? 0);
+        case 'registrar_movimentacao': {
 
-            if ($produto_id <= 0 || $quantidade <= 0 || !in_array($tipo, ["entrada", "saida", "remocao"])) {
-                json_response(false, "Dados inválidos para movimentação.");
+            $produto_id = (int) ($body['produto_id'] ?? 0);
+            $tipo       = $body['tipo'] ?? '';
+            $quantidade = (int) ($body['quantidade'] ?? 0);
+
+            if (
+                $produto_id <= 0 ||
+                $quantidade <= 0 ||
+                !in_array($tipo, ['entrada', 'saida', 'remocao'], true)
+            ) {
+                logWarning('produtos', 'Dados inválidos de movimentação', $body);
+                json_response(false, 'Dados inválidos para movimentação.');
             }
 
-            $res = mov_registrar($conn, $produto_id, $tipo, $quantidade, $usuario["id"] ?? null);
-            json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
-            break;
+            $res = mov_registrar(
+                $conn,
+                $produto_id,
+                $tipo,
+                $quantidade,
+                $usuario['id'] ?? null
+            );
 
-        case "listar_usuarios":
-            $sql = "SELECT id, nome FROM usuarios ORDER BY nome";
+            json_response(
+                $res['sucesso'],
+                $res['mensagem'],
+                $res['dados'] ?? null
+            );
+            break;
+        }
+
+        case 'listar_usuarios': {
+
+            $sql = 'SELECT id, nome FROM usuarios ORDER BY nome';
             $res = $conn->query($sql);
-            $lista = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
-            json_response(true, "Usuários listados com sucesso.", $lista);
-            break;
 
-        case "relatorio_movimentacoes":
+            $lista = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
+
+            json_response(true, 'Usuários listados com sucesso.', $lista);
+            break;
+        }
+
+        case 'relatorio_movimentacoes': {
+
             $filtros = array_merge($_GET, $body);
             $res = relatorio($conn, $filtros);
-            json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? []);
-            break;
 
-        case "exportar_relatorio":
-            require_once __DIR__ . "/exportar.php";
-            $res = exportar_relatorio($conn, $_GET);
-            json_response($res["sucesso"], $res["mensagem"], $res["dados"] ?? null);
+            json_response(
+                $res['sucesso'],
+                $res['mensagem'],
+                $res['dados'] ?? []
+            );
             break;
+        }
+
+        case 'exportar_relatorio': {
+
+            require_once __DIR__ . '/exportar.php';
+
+            $res = exportar_relatorio($conn, $_GET);
+
+            json_response(
+                $res['sucesso'],
+                $res['mensagem'],
+                $res['dados'] ?? null
+            );
+            break;
+        }
 
         default:
-            json_response(false, "Ação inválida ou não informada.");
+            logWarning('produtos', 'Ação inválida', [
+                'acao' => $acao
+            ]);
+            json_response(false, 'Ação inválida ou não informada.');
     }
 
 } catch (Throwable $e) {
-    error_log("Erro global em produtos.php: " . $e->getMessage() . " Linha: " . $e->getLine());
-    json_response(false, "Erro interno no servidor.");
+
+    logError(
+        'produtos',
+        'Erro global não tratado',
+        $e->getFile(),
+        $e->getLine(),
+        $e->getMessage()
+    );
+
+    json_response(false, 'Erro interno no servidor.');
 }

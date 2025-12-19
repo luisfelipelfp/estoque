@@ -1,42 +1,72 @@
 <?php
-// api/usuario.php — Compatível com PHP 8.5
+/**
+ * api/usuario.php
+ * Verificação de usuário logado
+ * Compatível com PHP 8.2+ / 8.5
+ */
 
-// Sessão segura
+declare(strict_types=1);
+
+// =====================================================
+// Sessão
+// =====================================================
 session_set_cookie_params([
-    "lifetime" => 0,
-    "path"     => "/",
-    "secure"   => false,      // alterar para true se usar HTTPS
-    "httponly" => true,
-    "samesite" => "Lax"
+    'lifetime' => 0,
+    'path'     => '/',
+    'secure'   => false, // altere para true se usar HTTPS
+    'httponly' => true,
+    'samesite' => 'Lax'
 ]);
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-header("Content-Type: application/json; charset=utf-8");
+// =====================================================
+// Dependências
+// =====================================================
+require_once __DIR__ . '/log.php';
 
-// 📂 Caminho do log
-$logFile = __DIR__ . "/debug.log";
+// Inicializa log
+initLog('usuario');
 
-function debug_log(string $msg): void {
-    global $logFile;
-    $data = date("Y-m-d H:i:s");
-    @file_put_contents($logFile, "[$data] usuario.php -> $msg\n", FILE_APPEND);
-}
+// =====================================================
+// Headers
+// =====================================================
+header('Content-Type: application/json; charset=utf-8');
 
-function resposta(bool $logado, ?array $usuario = null): array {
+// =====================================================
+// Função de resposta
+// =====================================================
+function resposta(bool $logado, ?array $usuario = null): array
+{
     return [
-        "sucesso" => $logado,
-        "usuario" => $usuario
+        'sucesso' => $logado,
+        'usuario' => $usuario
     ];
 }
 
-// 🔍 Verifica login
-if (!empty($_SESSION["usuario"]) && is_array($_SESSION["usuario"])) {
-    debug_log("Usuário logado: " . json_encode($_SESSION["usuario"], JSON_UNESCAPED_UNICODE));
-    echo json_encode(resposta(true, $_SESSION["usuario"]), JSON_UNESCAPED_UNICODE);
+// =====================================================
+// Verificação de sessão
+// =====================================================
+if (!empty($_SESSION['usuario']) && is_array($_SESSION['usuario'])) {
+
+    logInfo('usuario', 'Usuário autenticado', [
+        'id'   => $_SESSION['usuario']['id']   ?? null,
+        'nome' => $_SESSION['usuario']['nome'] ?? null
+    ]);
+
+    echo json_encode(
+        resposta(true, $_SESSION['usuario']),
+        JSON_UNESCAPED_UNICODE
+    );
+
 } else {
-    debug_log("Nenhum usuário logado");
-    echo json_encode(resposta(false, null), JSON_UNESCAPED_UNICODE);
+
+    logInfo('usuario', 'Nenhum usuário logado');
+
+    echo json_encode(
+        resposta(false, null),
+        JSON_UNESCAPED_UNICODE
+    );
 }

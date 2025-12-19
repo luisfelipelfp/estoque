@@ -2,68 +2,119 @@
 // =======================================
 // api/auth.php
 // Middleware de autenticação + timeout
-// Compatível com PHP 8.4/8.5
+// Compatível PHP 8.2+ / 8.5
 // =======================================
 
-require_once __DIR__ . "/utils.php";
+declare(strict_types=1);
 
-// Garantir que a sessão esteja ativa
+require_once __DIR__ . '/log.php';
+require_once __DIR__ . '/utils.php';
+
+// ---------------------------------------
+// LOG
+// ---------------------------------------
+initLog('auth');
+
+// ---------------------------------------
+// HEADERS
+// ---------------------------------------
+header('Content-Type: application/json; charset=utf-8');
+
+// ---------------------------------------
+// SESSÃO (PHP 8.5 SAFE)
+// ---------------------------------------
 if (session_status() === PHP_SESSION_NONE) {
 
-    // PHP 8.4+ NÃO aceita mais array aqui
-    session_set_cookie_params(
-        0,      // lifetime
-        "/",    // path
-        "",     // domain
-        false,  // secure (mude para true em HTTPS)
-        true    // httponly
-    );
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path'     => '/',
+        'domain'   => '',
+        'secure'   => false, // true se HTTPS
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
 
     session_start();
 }
 
-// Timeout de 30 minutos
-$SESSION_TIMEOUT = 1800;
+// ---------------------------------------
+// TIMEOUT DE SESSÃO
+// ---------------------------------------
+$SESSION_TIMEOUT = 1800; // 30 minutos
 
-// Verifica timeout de inatividade
-if (isset($_SESSION["LAST_ACTIVITY"])) {
-    $inativo = time() - $_SESSION["LAST_ACTIVITY"];
+if (isset($_SESSION['LAST_ACTIVITY'])) {
 
-    if ($inativo > $SESSION_TIMEOUT) {
+    $inatividade = time() - (int) $_SESSION['LAST_ACTIVITY'];
 
-        debug_log([
-            "mensagem"      => "Sessão expirada por inatividade",
-            "inatividade"   => $inativo
-        ], "auth.php");
+    if ($inatividade > $SESSION_TIMEOUT) {
+
+        logWarning('auth', 'Sessão expirada por inatividade', [
+            'tempo_inativo' => $inatividade,
+            'ip'            => $_SERVER['REMOTE_ADDR'] ?? 'desconhecido',
+            'agent'         => $_SERVER['HTTP_USER_AGENT'] ?? 'desconhecido'
+        ]);
 
         session_unset();
         session_destroy();
 
-        http_response_code(440);
-        echo json_encode(["ok" => false, "mensagem" => "Sessão expirada por inatividade."]);
-        exit;
+        json_response(
+            false,
+            'Sessão expirada por inatividade.',
+            null,
+            440
+        );
     }
 }
 
-// Atualiza atividade da sessão
-$_SESSION["LAST_ACTIVITY"] = time();
+// Atualiza atividade
+$_SESSION['LAST_ACTIVITY'] = time();
 
-// Verifica se o usuário está logado
-if (!isset($_SESSION["usuario"])) {
-    debug_log("Acesso negado -> usuário não autenticado.", "auth.php");
-    http_response_code(401);
-    echo json_encode(["ok" => false, "mensagem" => "Usuário não autenticado"]);
-    exit;
+// ---------------------------------------
+// AUTENTICAÇÃO
+// ---------------------------------------
+if (
+    !isset($_SESSION['usuario']) ||
+    !is_array($_SESSION['usuario']) ||
+    !isset($_SESSION['usuario']['id'])
+) {
+
+    logWarning('auth', 'Acesso negado: usuário não autenticado', [
+        'ip'    => $_SERVER['REMOTE_ADDR'] ?? 'desconhecido',
+        'agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'desconhecido'
+    ]);
+
+    json_response(
+        false,
+        'Usuário não autenticado.',
+        null,
+        401
+    );
 }
 
-// Dados do usuário autenticado
-$usuario = $_SESSION["usuario"];
+// ---------------------------------------
+// USUÁRIO AUTENTICADO
+// ---------------------------------------
+$usuario = $_SESSION['usuario'];
 
-debug_log([
-    "mensagem" => "Usuário autenticado",
-    "dados" => [
-        "id"    => $usuario["id"]    ?? null,
-        "email" => $usuario["email"] ?? null,
-        "nivel" => $usuario["nivel"] ?? null
-    ]
-], "auth.php");
+logInfo('auth', 'Usuário autenticado', [
+    'id'    => $usuario['id']    ?? null,
+    'email' => $usuario['email'] ?? null,
+    'nivel' => $usuario['nivel'] ?? null
+]);
+
+// ---------------------------------------
+// (Opcional) Exemplo de verificação de nível
+// ---------------------------------------
+/*
+if (($usuario['nivel'] ?? '') !== 'admin') {
+
+    logWarning('auth', 'Acesso negado: nível insuficiente', [
+        'id'    => $usuario['id'] ?? null,
+        'nivel' => $usuario['nivel'] ?? null
+    ]);
+
+    json_response(false, 'Acesso restrito.', null, 403);
+}
+*/
+
+// A partir daqui, o endpoint protegido continua normalmente

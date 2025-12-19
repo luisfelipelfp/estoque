@@ -1,37 +1,60 @@
 <?php
 // =======================================
-// db.php — Conexão MySQL (versão segura / PHP 8.4+)
+// api/db.php
+// Conexão com MariaDB / MySQL
+// Compatível PHP 8.2+ / 8.5
 // =======================================
 
-function db() {
+declare(strict_types=1);
 
-    $host = "192.168.15.100";   // IP do MySQL
-    $user = "root";             // Usuário
-    $pass = "#Shakka01";        // Senha
-    $db   = "estoque";          // Nome do banco
+require_once __DIR__ . '/log.php';
+require_once __DIR__ . '/utils.php';
 
-    // Cria objeto mysqli
-    $conn = @new mysqli($host, $user, $pass, $db);
+/**
+ * Retorna uma conexão mysqli ativa
+ */
+function db(): mysqli
+{
+    initLog('db');
 
-    // Erro na conexão
-    if ($conn->connect_errno) {
+    $host   = '192.168.15.100';
+    $user   = 'root';
+    $pass   = '#Shakka01';
+    $dbname = 'estoque';
 
-        error_log("ERRO MySQL: " . $conn->connect_error);
+    try {
 
-        // NÃO exponha erro interno ao usuário
-        echo json_encode([
-            "sucesso" => false,
-            "mensagem" => "Não foi possível conectar ao banco de dados."
-        ]);
+        // Evita impacto global
+        $oldReport = mysqli_report(MYSQLI_REPORT_OFF);
+        mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-        http_response_code(500);
-        exit;
+        $conn = new mysqli($host, $user, $pass, $dbname);
+        $conn->set_charset('utf8mb4');
+
+        logInfo('db', 'Conexão com banco estabelecida');
+
+        // Restaura comportamento anterior
+        mysqli_report($oldReport);
+
+        return $conn;
+
+    } catch (mysqli_sql_exception $e) {
+
+        logError(
+            'db',
+            'Erro ao conectar no banco de dados',
+            [
+                'arquivo' => $e->getFile(),
+                'linha'   => $e->getLine(),
+                'erro'    => $e->getMessage()
+            ]
+        );
+
+        json_response(
+            false,
+            'Erro interno ao conectar ao banco de dados.',
+            null,
+            500
+        );
     }
-
-    // Força UTF-8 real
-    if (!$conn->set_charset("utf8mb4")) {
-        error_log("Falha ao configurar charset UTF8MB4: " . $conn->error);
-    }
-
-    return $conn;
 }

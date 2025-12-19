@@ -1,31 +1,184 @@
 <?php
 // api/log.php
-
 declare(strict_types=1);
 
-// Ativa log e define arquivo
-ini_set("log_errors", "1");
-ini_set("error_log", __DIR__ . "/debug.log");
+/**
+ * ==========================================
+ * Sistema central de logs da API
+ * ==========================================
+ * - Logs separados por contexto (login.log, auth.log, db.log, etc)
+ * - Captura erros PHP, warnings, notices, exceções e fatal errors
+ * - Compatível PHP 8.2+ / 8.5
+ * - NÃO é endpoint HTTP
+ * ==========================================
+ */
 
-// Cabeçalho JSON
-header("Content-Type: application/json; charset=utf-8");
+const LOG_DIR = __DIR__ . '/../logs_api';
 
-// Lê o corpo da requisição
-$body = file_get_contents("php://input");
+// Evita múltiplas inicializações
+static $LOG_INITIALIZED = [];
 
-// Decodifica JSON da requisição
-$data = json_decode($body, true);
+/**
+ * Inicializa sistema de log para um contexto
+ * Exemplo: initLog('login');
+ */
+function initLog(string $contexto): void
+{
+    global $LOG_INITIALIZED;
 
-// Garante que sempre seja um array
-if (!is_array($data)) {
-    $data = ["raw" => $body];
+    if (isset($LOG_INITIALIZED[$contexto])) {
+        return;
+    }
+
+    // Cria diretório de logs
+    if (!is_dir(LOG_DIR)) {
+        mkdir(LOG_DIR, 0775, true);
+    }
+
+    $logFile = LOG_DIR . "/{$contexto}.log";
+
+    ini_set('log_errors', '1');
+    ini_set('error_log', $logFile);
+    ini_set('display_errors', '0');
+
+    // -------------------------------
+    // Captura erros PHP (warnings, notices, etc)
+    // -------------------------------
+    set_error_handler(
+        function (
+            int $severity,
+            string $message,
+            string $file,
+            int $line
+        ) use ($contexto): bool {
+
+            logError(
+                $contexto,
+                "PHP ERROR [$severity] $message",
+                $file,
+                $line
+            );
+
+            // true = erro tratado
+            return true;
+        }
+    );
+
+    // -------------------------------
+    // Captura exceções não tratadas
+    // -------------------------------
+    set_exception_handler(
+        function (Throwable $e) use ($contexto): void {
+
+            logError(
+                $contexto,
+                'EXCEPTION: ' . $e->getMessage(),
+                $e->getFile(),
+                $e->getLine(),
+                $e->getTraceAsString()
+            );
+
+            http_response_code(500);
+            echo json_encode([
+                'sucesso'  => false,
+                'mensagem' => 'Erro interno no servidor.'
+            ], JSON_UNESCAPED_UNICODE);
+
+            exit;
+        }
+    );
+
+    // -------------------------------
+    // Captura fatal errors
+    // -------------------------------
+    register_shutdown_function(
+        function () use ($contexto): void {
+
+            $error = error_get_last();
+
+            if ($error && in_array(
+                $error['type'],
+                [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR],
+                true
+            )) {
+
+                logError(
+                    $contexto,
+                    'FATAL ERROR: ' . $error['message'],
+                    $error['file'] ?? null,
+                    $error['line'] ?? null
+                );
+            }
+        }
+    );
+
+    $LOG_INITIALIZED[$contexto] = true;
 }
 
-// Monta mensagem
-$mensagem = "[JS] " . json_encode($data, JSON_UNESCAPED_UNICODE);
+/**
+ * Log de erro
+ */
+function logError(
+    string $contexto,
+    string $mensagem,
+    ?string $arquivo = null,
+    ?int $linha = null,
+    ?string $trace = null
+): void {
 
-// Grava no log
-error_log($mensagem);
+    $data = date('Y-m-d H:i:s');
 
-// Resposta
-echo json_encode(["ok" => true], JSON_UNESCAPED_UNICODE);
+    $log = "[$data] [$contexto] ERROR: $mensagem";
+
+    if ($arquivo) {
+        $log .= " | Arquivo: $arquivo";
+    }
+
+    if ($linha) {
+        $log .= " | Linha: $linha";
+    }
+
+    if ($trace) {
+        $log .= PHP_EOL . $trace;
+    }
+
+    error_log($log);
+}
+
+/**
+ * Log informativo
+ */
+function logInfo(string $contexto, string $mensagem, array $dados = []): void
+{
+    $data = date('Y-m-d H:i:s');
+
+    $log = "[$data] [$contexto] INFO: $mensagem";
+oliiiiwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwssssss
+    if (!empty($dados)) {
+        $log .= ' | Dados: ' . json_encode(
+            $dados,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        );
+    }
+
+    error_log($log);
+}
+
+/**
+ * Log de aviso (warning)
+ */
+function logWarning(string $contexto, string $mensagem, array $dados = []): void
+{
+    $data = date('Y-m-d H:i:s');
+
+    $log = "[$data] [$contexto] WARNING: $mensagem";
+
+    if (!empty($dados)) {
+        $log .= ' | Dados: ' . json_encode(
+            $dados,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+     b                                                                                                 );
+    }
+
+    error_log($log);
+}

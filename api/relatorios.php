@@ -1,180 +1,180 @@
 <?php
 /**
- * relatorios.php — Relatórios e estatísticas de movimentações
- * Compatível e revisado para PHP 8.5
+ * api/relatorios.php
+ * Relatórios e estatísticas de movimentações
+ * Compatível com PHP 8.2+ / 8.5
  */
 
-require_once __DIR__ . "/db.php";
-require_once __DIR__ . "/utils.php";
+declare(strict_types=1);
 
-date_default_timezone_set("America/Sao_Paulo");
+require_once __DIR__ . '/log.php';
+require_once __DIR__ . '/utils.php';
+require_once __DIR__ . '/db.php';
 
-try {
-    $conn = db();
+date_default_timezone_set('America/Sao_Paulo');
 
-    // 🔹 Captura filtros via GET
-    $filtros = [
-        "pagina"      => $_GET["pagina"]      ?? 1,
-        "limite"      => $_GET["limite"]      ?? 50,
-        "tipo"        => $_GET["tipo"]        ?? "",
-        "produto_id"  => $_GET["produto_id"]  ?? "",
-        "usuario_id"  => $_GET["usuario_id"]  ?? "",
-        "data_inicio" => $_GET["data_inicio"] ?? "",
-        "data_fim"    => $_GET["data_fim"]    ?? ""
-    ];
+// Inicializa log específico
+initLog('relatorios');
 
-    $pagina = max(1, (int)$filtros["pagina"]);
-    $limite = max(1, (int)$filtros["limite"]);
+/**
+ * Gera relatório de movimentações
+ */
+function relatorio(mysqli $conn, array $filtros): array
+{
+    $pagina = max(1, (int)($filtros['pagina'] ?? 1));
+    $limite = max(1, min(100, (int)($filtros['limite'] ?? 50)));
     $offset = ($pagina - 1) * $limite;
 
-    $cond  = [];
-    $bind  = [];
-    $types = "";
+    $where  = [];
+    $params = [];
+    $types  = '';
 
-    // 🔸 Filtros dinâmicos (SQL seguro)
-    if ($filtros["tipo"] !== "") {
-        $cond[] = "m.tipo = ?";
-        $bind[] = $filtros["tipo"];
-        $types .= "s";
+    // 🔹 Filtros dinâmicos
+    if (!empty($filtros['tipo']) && in_array($filtros['tipo'], ['entrada', 'saida', 'remocao'], true)) {
+        $where[]  = 'm.tipo = ?';
+        $params[] = $filtros['tipo'];
+        $types   .= 's';
     }
 
-    if ($filtros["produto_id"] !== "") {
-        $cond[] = "m.produto_id = ?";
-        $bind[] = (int)$filtros["produto_id"];
-        $types .= "i";
+    if (!empty($filtros['produto_id'])) {
+        $where[]  = 'm.produto_id = ?';
+        $params[] = (int)$filtros['produto_id'];
+        $types   .= 'i';
     }
 
-    if ($filtros["usuario_id"] !== "") {
-        $cond[] = "m.usuario_id = ?";
-        $bind[] = (int)$filtros["usuario_id"];
-        $types .= "i";
+    if (!empty($filtros['usuario_id'])) {
+        $where[]  = 'm.usuario_id = ?';
+        $params[] = (int)$filtros['usuario_id'];
+        $types   .= 'i';
     }
 
-    if ($filtros["data_inicio"] !== "") {
-        $cond[] = "m.data >= ?";
-        $bind[] = $filtros["data_inicio"] . " 00:00:00";
-        $types .= "s";
+    if (!empty($filtros['data_inicio'])) {
+        $where[]  = 'm.data >= ?';
+        $params[] = $filtros['data_inicio'] . ' 00:00:00';
+        $types   .= 's';
     }
 
-    if ($filtros["data_fim"] !== "") {
-        $cond[] = "m.data <= ?";
-        $bind[] = $filtros["data_fim"] . " 23:59:59";
-        $types .= "s";
+    if (!empty($filtros['data_fim'])) {
+        $where[]  = 'm.data <= ?';
+        $params[] = $filtros['data_fim'] . ' 23:59:59';
+        $types   .= 's';
     }
 
-    $where = $cond ? "WHERE " . implode(" AND ", $cond) : "";
+    $whereSql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
 
-    // ============================================================
-    // 🔹 TOTAL DE REGISTROS
-    // ============================================================
-    $sqlTotal = "SELECT COUNT(*) AS total FROM movimentacoes m $where";
-    $stmtT = $conn->prepare($sqlTotal);
-    if (!$stmtT) {
-        throw new Exception("Erro ao preparar SQL total: " . $conn->error);
-    }
+    try {
 
-    if ($bind) {
-        $stmtT->bind_param($types, ...$bind);
-    }
+        // =====================================================
+        // 🔹 TOTAL
+        // =====================================================
+        $stmtT = $conn->prepare(
+            "SELECT COUNT(*) AS total FROM movimentacoes m $whereSql"
+        );
 
-    $stmtT->execute();
-    $resT = $stmtT->get_result();
-    $total = (int)($resT->fetch_assoc()["total"] ?? 0);
-    $stmtT->close();
+        if ($types) {
+            $stmtT->bind_param($types, ...$params);
+        }
 
-    // ============================================================
-    // 🔹 LISTA PRINCIPAL (paginada)
-    // ============================================================
-    $sql = "
-        SELECT 
-            m.id,
-            COALESCE(p.nome, m.produto_nome, '[Produto removido]') AS produto_nome,
-            m.tipo,
-            m.quantidade,
-            m.data,
-            COALESCE(u.nome, 'Sistema') AS usuario
-        FROM movimentacoes m
-        LEFT JOIN produtos p ON p.id = m.produto_id
-        LEFT JOIN usuarios u ON u.id = m.usuario_id
-        $where
-        ORDER BY m.data DESC, m.id DESC
-        LIMIT ? OFFSET ?
-    ";
+        $stmtT->execute();
+        $total = (int)($stmtT->get_result()->fetch_assoc()['total'] ?? 0);
+        $stmtT->close();
 
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        throw new Exception("Erro ao preparar SQL principal: " . $conn->error);
-    }
+        // =====================================================
+        // 🔹 LISTAGEM
+        // =====================================================
+        $sql = "
+            SELECT
+                m.id,
+                COALESCE(p.nome, m.produto_nome, '[Produto removido]') AS produto_nome,
+                m.tipo,
+                m.quantidade,
+                m.data,
+                COALESCE(u.nome, 'Sistema') AS usuario
+            FROM movimentacoes m
+            LEFT JOIN produtos p ON p.id = m.produto_id
+            LEFT JOIN usuarios u ON u.id = m.usuario_id
+            $whereSql
+            ORDER BY m.data DESC, m.id DESC
+            LIMIT ? OFFSET ?
+        ";
 
-    // parâmetros dinâmicos
-    if ($bind) {
-        $types2 = $types . "ii";
-        $params = array_merge($bind, [$limite, $offset]);
-        $stmt->bind_param($types2, ...$params);
-    } else {
-        $stmt->bind_param("ii", $limite, $offset);
-    }
+        $stmt = $conn->prepare($sql);
 
-    $stmt->execute();
-    $res = $stmt->get_result();
+        $paramsPage = $params;
+        $typesPage  = $types . 'ii';
+        $paramsPage[] = $limite;
+        $paramsPage[] = $offset;
 
-    $dados = [];
-    while ($r = $res->fetch_assoc()) {
-        $dados[] = [
-            "id"           => (int)$r["id"],
-            "produto_nome" => $r["produto_nome"],
-            "tipo"         => $r["tipo"],
-            "quantidade"   => (int)$r["quantidade"],
-            "data"         => date("d/m/Y H:i", strtotime($r["data"])),
-            "usuario"      => $r["usuario"]
+        if ($typesPage) {
+            $stmt->bind_param($typesPage, ...$paramsPage);
+        }
+
+        $stmt->execute();
+        $res = $stmt->get_result();
+
+        $dados = [];
+        while ($r = $res->fetch_assoc()) {
+            $dados[] = [
+                'id'           => (int)$r['id'],
+                'produto_nome' => $r['produto_nome'],
+                'tipo'         => $r['tipo'],
+                'quantidade'   => (int)$r['quantidade'],
+                'data'         => date('d/m/Y H:i', strtotime($r['data'])),
+                'usuario'      => $r['usuario']
+            ];
+        }
+        $stmt->close();
+
+        // =====================================================
+        // 🔹 DADOS PARA GRÁFICO
+        // =====================================================
+        $stmtG = $conn->prepare(
+            "SELECT tipo, COUNT(*) AS total FROM movimentacoes m $whereSql GROUP BY tipo"
+        );
+
+        if ($types) {
+            $stmtG->bind_param($types, ...$params);
+        }
+
+        $stmtG->execute();
+        $resG = $stmtG->get_result();
+
+        $grafico = [
+            'entrada' => 0,
+            'saida'   => 0,
+            'remocao' => 0
         ];
+
+        while ($g = $resG->fetch_assoc()) {
+            $grafico[$g['tipo']] = (int)$g['total'];
+        }
+        $stmtG->close();
+
+        logInfo('relatorios', 'Relatório gerado', [
+            'total'  => $total,
+            'pagina' => $pagina,
+            'limite' => $limite
+        ]);
+
+        return resposta(true, 'Relatório gerado com sucesso.', [
+            'total'   => $total,
+            'pagina'  => $pagina,
+            'limite'  => $limite,
+            'paginas' => (int)ceil($total / $limite),
+            'dados'   => $dados,
+            'grafico' => $grafico
+        ]);
+
+    } catch (Throwable $e) {
+
+        logError(
+            'relatorios',
+            'Erro ao gerar relatório',
+            $e->getFile(),
+            $e->getLine(),
+            $e->getMessage()
+        );
+
+        return resposta(false, 'Erro interno ao gerar relatório.');
     }
-    $stmt->close();
-
-    // ============================================================
-    // 🔹 DADOS PARA GRÁFICO
-    // ============================================================
-    $sqlGraf = "SELECT tipo, COUNT(*) AS total FROM movimentacoes m $where GROUP BY tipo";
-
-    $stmtG = $conn->prepare($sqlGraf);
-    if (!$stmtG) {
-        throw new Exception("Erro ao preparar SQL gráfico: " . $conn->error);
-    }
-
-    if ($bind) {
-        $stmtG->bind_param($types, ...$bind);
-    }
-
-    $stmtG->execute();
-    $resG = $stmtG->get_result();
-
-    $grafico = [
-        "entrada" => 0,
-        "saida"   => 0,
-        "remocao" => 0
-    ];
-
-    while ($g = $resG->fetch_assoc()) {
-        $grafico[$g["tipo"]] = (int)$g["total"];
-    }
-
-    $stmtG->close();
-
-    // ============================================================
-    // 🔹 RESPOSTA FINAL
-    // ============================================================
-    @ob_clean();
-    json_response(true, "Relatório gerado com sucesso.", [
-        "total"   => $total,
-        "pagina"  => $pagina,
-        "limite"  => $limite,
-        "paginas" => (int)ceil($total / $limite),
-        "dados"   => $dados,
-        "grafico" => $grafico
-    ]);
-
-} catch (Throwable $e) {
-    error_log("[relatorios.php] " . $e->getMessage());
-    @ob_clean();
-    json_response(false, "Erro ao gerar relatório: " . $e->getMessage());
 }
