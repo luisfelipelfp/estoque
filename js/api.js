@@ -1,22 +1,23 @@
 // js/api.js
-import { logJsError } from "./logger.js";
+const BASE_URL = "/estoque/public/api";
+const API_URL = `${BASE_URL}/actions.php`;
+const AUTH_URL = BASE_URL;
 
-const BASE_URL = "http://192.168.15.100/estoque/public";
-const API_URL  = `${BASE_URL}/api`;
-const ACTIONS_URL = `${API_URL}/actions.php`;
-
+/**
+ * Função central de comunicação com a API
+ */
 export async function apiRequest(acao, dados = null, metodo = "GET") {
   try {
     let url;
 
     if (acao === "login") {
-      url = `${API_URL}/login.php`;
+      url = `${AUTH_URL}/login.php`;
     } else if (acao === "logout") {
-      url = `${API_URL}/logout.php`;
+      url = `${AUTH_URL}/logout.php`;
     } else if (acao === "usuario_atual") {
-      url = `${API_URL}/usuario.php`;
+      url = `${AUTH_URL}/usuario.php`;
     } else {
-      url = `${ACTIONS_URL}?acao=${encodeURIComponent(acao)}`;
+      url = `${API_URL}?acao=${encodeURIComponent(acao)}`;
     }
 
     const options = {
@@ -43,19 +44,12 @@ export async function apiRequest(acao, dados = null, metodo = "GET") {
     const resp = await fetch(url, options);
 
     if (!resp.ok) {
-      throw new Error(`HTTP ${resp.status} - ${resp.statusText}`);
+      throw new Error(`HTTP ${resp.status}`);
     }
 
     return await resp.json();
   } catch (err) {
     console.error("Erro em apiRequest:", err);
-
-    logJsError({
-      origem: "apiRequest",
-      mensagem: err.message,
-      stack: err.stack
-    });
-
     return { sucesso: false, mensagem: "Erro de comunicação com o servidor." };
   }
 }
