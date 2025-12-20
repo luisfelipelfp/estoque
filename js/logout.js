@@ -1,23 +1,30 @@
 // js/logout.js
+import { logJsError } from "./logger.js";
+
 document.addEventListener("DOMContentLoaded", () => {
   const btnLogout = document.getElementById("btnLogout");
 
   if (!btnLogout) {
-    console.warn("⚠️ Botão de logout não encontrado na página.");
+    logJsError({
+      origem: "logout.js",
+      mensagem: "Botão de logout não encontrado"
+    });
     return;
   }
 
   btnLogout.addEventListener("click", async () => {
     try {
-      console.log("🔑 Enviando requisição de logout...");
       await apiRequest("logout", null, "POST");
     } catch (err) {
-      console.error("❌ Erro ao deslogar:", err);
-    } finally {
-      // 🔒 sempre limpa os dados locais
-      localStorage.removeItem("usuario");
+      console.error("Erro no logout:", err);
 
-      // 🔄 redireciona para tela de login
+      logJsError({
+        origem: "logout.js",
+        mensagem: err.message,
+        stack: err.stack
+      });
+    } finally {
+      localStorage.removeItem("usuario");
       window.location.href = "login.html";
     }
   });

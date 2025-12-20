@@ -5,10 +5,8 @@
   <title>Estoque da Gordinha e do Careca</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- Bootstrap -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
-  <!-- CSS customizados -->
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/produtos.css">
 </head>
@@ -17,10 +15,7 @@
   <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark rounded mb-4 px-3">
     <a class="navbar-brand fw-bold text-white" href="index.html">📦 Estoque</a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarNav">
+    <div class="collapse navbar-collapse">
       <ul class="navbar-nav me-auto">
         <li class="nav-item">
           <a class="nav-link active" href="index.html">Estoque</a>
@@ -31,52 +26,36 @@
       </ul>
       <div class="d-flex align-items-center">
         <span id="usuarioLogado" class="me-3 fw-bold text-info"></span>
-        <button id="btnLogout" class="btn btn-outline-danger btn-sm" aria-label="Sair do sistema">Sair</button>
+        <button id="btnLogout" class="btn btn-outline-danger btn-sm">Sair</button>
       </div>
     </div>
   </nav>
 
-  <!-- Conteúdo -->
-  <h1 class="mb-4">📦 Estoque da Gordinha e do Careca</h1>
+  <h1 class="mb-4">📦 Estoque</h1>
 
-  <!-- Formulário adicionar produto -->
   <form id="formAdicionarProduto" class="mb-4 d-flex gap-2">
-    <input 
-      type="text" 
-      id="nomeProduto" 
-      name="nome" 
-      class="form-control" 
-      placeholder="Nome do produto" 
-      required
-    >
-    <button type="submit" class="btn btn-primary" aria-label="Adicionar produto">➕ Adicionar Produto</button>
+    <input type="text" id="nomeProduto" class="form-control" required>
+    <button type="submit" class="btn btn-primary">➕ Adicionar</button>
   </form>
 
-  <!-- Tabela produtos -->
-  <h3 class="mt-4 mb-3">🛒 Produtos</h3>
-  <table id="tabelaProdutos" class="table table-bordered table-striped shadow-sm">
+  <table class="table table-bordered table-striped">
     <thead>
       <tr>
-        <th scope="col">ID</th>
-        <th scope="col">Nome</th>
-        <th scope="col">Quantidade</th>
-        <th scope="col">Ações</th>
+        <th>ID</th>
+        <th>Nome</th>
+        <th>Qtd</th>
+        <th>Ações</th>
       </tr>
     </thead>
-    <tbody></tbody>
+    <tbody id="tabelaProdutos"></tbody>
   </table>
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    // Wrapper para fetch com sessão incluída
-    async function apiFetch(url, options = {}) {
-      return fetch(url, { ...options, credentials: "include" });
-    }
-  </script>
-  <script src="js/api.js"></script>
-  <script src="js/logout.js"></script>
-  <script src="js/main.js"></script>
-  <script src="js/produtos.js"></script>
+
+  <script type="module" src="js/api.js"></script>
+  <script type="module" src="js/logout.js"></script>
+  <script type="module" src="js/main.js"></script>
+  <script type="module" src="js/produtos.js"></script>
 </body>
 </html>

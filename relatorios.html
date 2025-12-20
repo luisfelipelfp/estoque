@@ -5,13 +5,9 @@
   <title>Relatórios - Estoque</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- Bootstrap -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-
-  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <!-- CSS customizados -->
   <link rel="stylesheet" href="css/base.css">
 </head>
 <body class="container py-4">
@@ -19,10 +15,7 @@
   <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark rounded mb-4 px-3">
     <a class="navbar-brand fw-bold text-white" href="index.html">📦 Estoque</a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarNav">
+    <div class="collapse navbar-collapse">
       <ul class="navbar-nav me-auto">
         <li class="nav-item">
           <a class="nav-link" href="index.html">Estoque</a>
@@ -31,97 +24,20 @@
           <a class="nav-link active" href="relatorios.html">Relatórios</a>
         </li>
       </ul>
-      <div class="d-flex align-items-center">
+      <div>
         <span id="usuarioLogado" class="me-3 fw-bold text-info"></span>
         <button id="btnLogout" class="btn btn-outline-danger btn-sm">Sair</button>
       </div>
     </div>
   </nav>
 
-  <!-- Conteúdo -->
-  <h1 class="mb-4">📊 Relatórios e Movimentações</h1>
-
-  <!-- Filtros -->
-  <form id="form-filtros" class="row g-3 mb-4">
-    <div class="col-md-3">
-      <label for="dataInicio" class="form-label">Data Início</label>
-      <input type="date" id="dataInicio" name="data_inicio" class="form-control">
-    </div>
-    <div class="col-md-3">
-      <label for="dataFim" class="form-label">Data Fim</label>
-      <input type="date" id="dataFim" name="data_fim" class="form-control">
-    </div>
-    <div class="col-md-3">
-      <label for="usuario" class="form-label">Usuário</label>
-      <select id="usuario" name="usuario_id" class="form-select">
-        <option value="">Todos</option>
-      </select>
-    </div>
-    <div class="col-md-3">
-      <label for="produto" class="form-label">Produto</label>
-      <select id="produto" name="produto_id" class="form-select">
-        <option value="">Todos</option>
-      </select>
-    </div>
-    <div class="col-md-3">
-      <label for="tipo" class="form-label">Tipo</label>
-      <select id="tipo" name="tipo" class="form-select">
-        <option value="">Todos</option>
-        <option value="entrada">Entrada</option>
-        <option value="saida">Saída</option>
-        <option value="remocao">Remoção</option>
-      </select>
-    </div>
-    <div class="col-12 text-end">
-      <button type="button" class="btn btn-primary me-2" id="btn-filtrar">🔍 Filtrar</button>
-      <button type="reset" class="btn btn-secondary" id="btn-limpar">🧹 Limpar</button>
-    </div>
-  </form>
-
-  <!-- Tabela -->
-  <div class="table-responsive mb-4">
-    <table class="table table-bordered table-striped shadow-sm" id="tabelaRelatorios">
-      <thead class="table-dark">
-        <tr>
-          <th>ID</th>
-          <th>Data</th>
-          <th>Produto</th>
-          <th>Tipo</th>
-          <th>Quantidade</th>
-          <th>Usuário</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td colspan="6" class="text-center text-muted">Use os filtros para buscar movimentações</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- 🔹 Paginação -->
-  <div id="paginacao" class="d-flex justify-content-center align-items-center mb-4"></div>
-
-  <!-- Exportações -->
-  <div class="mb-4">
-    <button class="btn btn-danger" id="btn-pdf">📄 Exportar PDF</button>
-    <button class="btn btn-success" id="btn-excel">📊 Exportar Excel</button>
-  </div>
-
-  <!-- Gráficos -->
-  <div class="row">
-    <div class="col-md-6 mb-4">
-      <canvas id="graficoBarras"></canvas>
-    </div>
-    <div class="col-md-6 mb-4">
-      <canvas id="graficoPizza"></canvas>
-    </div>
-  </div>
+  <h1 class="mb-4">📊 Relatórios</h1>
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/logout.js"></script>
-  <script src="js/relatorios.js"></script>
+
+  <script type="module" src="js/api.js"></script>
+  <script type="module" src="js/logout.js"></script>
+  <script type="module" src="js/relatorios.js"></script>
 </body>
 </html>
