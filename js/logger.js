@@ -2,18 +2,13 @@
 
 const LOG_ENDPOINT = "/estoque/public/api/log_js.php";
 
-export function logJsError(payload = {}) {
+function enviarLog(payload) {
   try {
     fetch(LOG_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        origem: payload.origem || "frontend",
-        mensagem: payload.mensagem || "Erro JS",
-        arquivo: payload.arquivo || null,
-        linha: payload.linha || null,
-        coluna: payload.coluna || null,
-        stack: payload.stack || null,
+        ...payload,
         url: window.location.href,
         userAgent: navigator.userAgent,
         data: new Date().toISOString()
@@ -24,7 +19,21 @@ export function logJsError(payload = {}) {
   }
 }
 
-// Captura erros globais
+export function logJsError(payload = {}) {
+  enviarLog({
+    nivel: "ERROR",
+    ...payload
+  });
+}
+
+export function logJsInfo(payload = {}) {
+  enviarLog({
+    nivel: "INFO",
+    ...payload
+  });
+}
+
+// Erros globais
 window.onerror = function (msg, url, linha, coluna, erro) {
   logJsError({
     origem: "window.onerror",
@@ -32,7 +41,7 @@ window.onerror = function (msg, url, linha, coluna, erro) {
     arquivo: url,
     linha,
     coluna,
-    stack: erro?.stack || null
+    stack: erro?.stack
   });
 };
 
@@ -40,6 +49,6 @@ window.onunhandledrejection = function (event) {
   logJsError({
     origem: "unhandledrejection",
     mensagem: event.reason?.message || event.reason,
-    stack: event.reason?.stack || null
+    stack: event.reason?.stack
   });
 };
