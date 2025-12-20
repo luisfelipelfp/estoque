@@ -1,9 +1,15 @@
 <?php
+// api/log.php
 declare(strict_types=1);
 
 /**
+ * ==========================================
  * Sistema central de logs da API
- * Compatível PHP 8.2+ / 8.5
+ * ==========================================
+ * - Logs separados por contexto
+ * - NÃO usa error_log (incompatível com PHP-FPM)
+ * - Escrita direta em arquivo (produção-safe)
+ * ==========================================
  */
 
 const LOG_DIR = __DIR__ . '/../logs_api';
@@ -11,7 +17,7 @@ const LOG_DIR = __DIR__ . '/../logs_api';
 static $LOG_INITIALIZED = [];
 
 /**
- * Inicializa sistema de log
+ * Inicializa o log de um contexto
  */
 function initLog(string $contexto): void
 {
@@ -25,25 +31,15 @@ function initLog(string $contexto): void
         mkdir(LOG_DIR, 0775, true);
     }
 
-    $logFile = LOG_DIR . "/{$contexto}.log";
+    $arquivo = LOG_DIR . "/{$contexto}.log";
 
-    ini_set('log_errors', '1');
-    ini_set('error_log', $logFile);
-    ini_set('display_errors', '0');
+    if (!file_exists($arquivo)) {
+        touch($arquivo);
+        chmod($arquivo, 0664);
+    }
 
-    set_error_handler(function (
-        int $severity,
-        string $message,
-        string $file,
-        int $line
-    ) use ($contexto): bool {
-
-        logError($contexto, "PHP ERROR [$severity] $message", $file, $line);
-        return true;
-    });
-
+    // Captura exceções não tratadas
     set_exception_handler(function (Throwable $e) use ($contexto): void {
-
         logError(
             $contexto,
             'EXCEPTION: ' . $e->getMessage(),
@@ -61,8 +57,8 @@ function initLog(string $contexto): void
         exit;
     });
 
+    // Captura fatal errors
     register_shutdown_function(function () use ($contexto): void {
-
         $error = error_get_last();
 
         if ($error && in_array(
@@ -83,6 +79,21 @@ function initLog(string $contexto): void
 }
 
 /**
+ * Escrita física no arquivo
+ */
+function writeLog(string $contexto, string $nivel, string $mensagem): void
+{
+    $data = date('Y-m-d H:i:s');
+    $linha = "[$data] [$contexto] $nivel: $mensagem" . PHP_EOL;
+
+    file_put_contents(
+        LOG_DIR . "/{$contexto}.log",
+        $linha,
+        FILE_APPEND | LOCK_EX
+    );
+}
+
+/**
  * Log de erro
  */
 function logError(
@@ -92,16 +103,22 @@ function logError(
     ?int $linha = null,
     ?string $trace = null
 ): void {
+    $extra = [];
 
-    $data = date('Y-m-d H:i:s');
+    if ($arquivo) $extra[] = "Arquivo: $arquivo";
+    if ($linha)   $extra[] = "Linha: $linha";
 
-    $log = "[$data] [$contexto] ERROR: $mensagem";
+    $msg = $mensagem;
 
-    if ($arquivo) $log .= " | Arquivo: $arquivo";
-    if ($linha)   $log .= " | Linha: $linha";
-    if ($trace)   $log .= PHP_EOL . $trace;
+    if ($extra) {
+        $msg .= ' | ' . implode(' | ', $extra);
+    }
 
-    error_log($log);
+    writeLog($contexto, 'ERROR', $msg);
+
+    if ($trace) {
+        writeLog($contexto, 'TRACE', $trace);
+    }
 }
 
 /**
@@ -109,18 +126,14 @@ function logError(
  */
 function logInfo(string $contexto, string $mensagem, array $dados = []): void
 {
-    $data = date('Y-m-d H:i:s');
-
-    $log = "[$data] [$contexto] INFO: $mensagem";
-
-    if (!empty($dados)) {
-        $log .= ' | Dados: ' . json_encode(
+    if ($dados) {
+        $mensagem .= ' | Dados: ' . json_encode(
             $dados,
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
         );
     }
 
-    error_log($log);
+    writeLog($contexto, 'INFO', $mensagem);
 }
 
 /**
@@ -128,16 +141,12 @@ function logInfo(string $contexto, string $mensagem, array $dados = []): void
  */
 function logWarning(string $contexto, string $mensagem, array $dados = []): void
 {
-    $data = date('Y-m-d H:i:s');
-
-    $log = "[$data] [$contexto] WARNING: $mensagem";
-
-    if (!empty($dados)) {
-        $log .= ' | Dados: ' . json_encode(
+    if ($dados) {
+        $mensagem .= ' | Dados: ' . json_encode(
             $dados,
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
         );
     }
 
-    error_log($log);
+    writeLog($contexto, 'WARNING', $mensagem);
 }
