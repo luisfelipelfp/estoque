@@ -2,30 +2,28 @@
 // =======================================
 // api/login.php
 // Login do sistema
-// Compatível PHP 8.2+ / 8.5
+// Compatível PHP 8.2+
 // =======================================
 
 declare(strict_types=1);
 
 // ---------------------------------------
-// DEBUG CONTROLADO (DESATIVAR EM PRODUÇÃO)
+// CONFIGURAÇÃO DE ERROS
 // ---------------------------------------
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 
 // ---------------------------------------
-// SESSÃO (ANTES DE QUALQUER OUTPUT)
+// SESSÃO
 // ---------------------------------------
 if (session_status() === PHP_SESSION_NONE) {
-
-    session_set_cookie_params(
-        0,      // lifetime
-        '/',    // path
-        '',     // domain
-        false,  // secure (true se HTTPS)
-        true    // httponly
-    );
-
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path'     => '/',
+        'secure'   => false, // true se HTTPS
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
     session_start();
 }
 
@@ -42,31 +40,17 @@ require_once __DIR__ . '/db.php';
 initLog('login');
 
 // ---------------------------------------
-// HEADERS + CORS
+// HEADER
 // ---------------------------------------
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: http://192.168.15.100');
-header('Access-Control-Allow-Credentials: true');
-header('Access-Control-Allow-Headers: Content-Type');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
-
-// ---------------------------------------
-// PREFLIGHT
-// ---------------------------------------
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
-}
 
 // ---------------------------------------
 // MÉTODO
 // ---------------------------------------
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-
-    logWarning('login', 'Método HTTP inválido', [
+    logWarning('login', 'Método inválido', [
         'metodo' => $_SERVER['REQUEST_METHOD']
     ]);
-
     json_response(false, 'Método inválido.', null, 405);
     exit;
 }
@@ -74,9 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 // ---------------------------------------
 // ENTRADA (JSON ou FORM)
 // ---------------------------------------
-$rawInput = file_get_contents('php://input');
-$input = json_decode($rawInput, true);
-
+$input = json_decode(file_get_contents('php://input'), true);
 if (!is_array($input)) {
     $input = [];
 }
@@ -92,30 +74,25 @@ $login = trim(
 $senha = (string) ($input['senha'] ?? $_POST['senha'] ?? '');
 
 if ($login === '' || $senha === '') {
-
     logWarning('login', 'Campos obrigatórios ausentes');
-
     json_response(false, 'Preencha login e senha.', null, 400);
     exit;
 }
 
 logInfo('login', 'Tentativa de login', [
     'login' => $login,
-    'ip'    => $_SERVER['REMOTE_ADDR'] ?? 'desconhecido',
-    'agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'desconhecido'
+    'ip'    => $_SERVER['REMOTE_ADDR'] ?? 'desconhecido'
 ]);
 
 // ---------------------------------------
-// CONEXÃO
+// CONEXÃO COM BANCO
 // ---------------------------------------
 try {
     $conn = db();
 } catch (Throwable $e) {
-
-    logError('login', 'Erro ao conectar no banco', [
+    logError('login', 'Erro de conexão', [
         'erro' => $e->getMessage()
     ]);
-
     json_response(false, 'Erro interno.', null, 500);
     exit;
 }
@@ -124,28 +101,20 @@ try {
 // BUSCA USUÁRIO
 // ---------------------------------------
 try {
-
     if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
-
         $stmt = $conn->prepare(
             'SELECT id, nome, email, senha, nivel
              FROM usuarios
              WHERE email = ?
              LIMIT 1'
         );
-
     } else {
-
         $stmt = $conn->prepare(
             'SELECT id, nome, email, senha, nivel
              FROM usuarios
              WHERE nome = ?
              LIMIT 1'
         );
-    }
-
-    if (!$stmt) {
-        throw new RuntimeException($conn->error);
     }
 
     $stmt->bind_param('s', $login);
@@ -155,12 +124,9 @@ try {
     $stmt->close();
 
 } catch (Throwable $e) {
-
-    logError('login', 'Erro ao consultar usuário', [
-        'erro'   => $e->getMessage(),
-        'linha'  => $e->getLine()
+    logError('login', 'Erro ao buscar usuário', [
+        'erro' => $e->getMessage()
     ]);
-
     json_response(false, 'Erro interno.', null, 500);
     exit;
 }
@@ -173,12 +139,9 @@ if (
     empty($usuario['senha']) ||
     !password_verify($senha, $usuario['senha'])
 ) {
-
     logWarning('login', 'Falha de autenticação', [
-        'login' => $login,
-        'ip'    => $_SERVER['REMOTE_ADDR'] ?? 'desconhecido'
+        'login' => $login
     ]);
-
     json_response(false, 'Usuário/e-mail ou senha inválidos.', null, 401);
     exit;
 }
@@ -189,17 +152,14 @@ if (
 unset($usuario['senha']);
 
 session_regenerate_id(true);
-
 $_SESSION['usuario'] = $usuario;
 $_SESSION['LAST_ACTIVITY'] = time();
 
 logInfo('login', 'Login realizado com sucesso', [
-    'usuario_id' => $usuario['id'],
-    'nivel'      => $usuario['nivel']
+    'usuario_id' => $usuario['id']
 ]);
 
 json_response(true, 'Login realizado com sucesso.', [
     'usuario' => $usuario
 ], 200);
-
 exit;
