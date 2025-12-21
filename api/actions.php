@@ -13,7 +13,7 @@ declare(strict_types=1);
 session_set_cookie_params([
     'lifetime' => 0,
     'path'     => '/',
-    'secure'   => false, // true se HTTPS
+    'secure'   => false, // true em HTTPS
     'httponly' => true,
     'samesite' => 'Lax'
 ]);
@@ -107,17 +107,19 @@ try {
 
         // ================= PRODUTOS =================
         case 'listar_produtos': {
+
             $res = produtos_listar($conn);
 
-            if (is_array($res) && isset($res['dados'])) {
-                json_response(true, '', $res['dados']);
-            }
-
-            json_response(true, '', $res);
+            json_response(
+                $res['sucesso'] ?? false,
+                $res['mensagem'] ?? '',
+                $res['dados'] ?? null
+            );
             break;
         }
 
         case 'adicionar_produto': {
+
             $nome = trim($body['nome'] ?? '');
             $qtd  = (int)($body['quantidade'] ?? 0);
 
@@ -125,27 +127,54 @@ try {
                 json_response(false, 'O nome do produto não pode estar vazio.');
             }
 
-            $res = produtos_adicionar($conn, $nome, $qtd, $usuario['id'] ?? null);
-            json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
+            $res = produtos_adicionar(
+                $conn,
+                $nome,
+                $qtd,
+                $usuario['id'] ?? null
+            );
+
+            json_response(
+                $res['sucesso'],
+                $res['mensagem'],
+                $res['dados'] ?? null
+            );
             break;
         }
 
         case 'remover_produto': {
+
             $produto_id = (int)($body['produto_id'] ?? $body['id'] ?? 0);
 
-            $res = produtos_remover($conn, $produto_id, $usuario['id'] ?? null);
-            json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
+            $res = produtos_remover(
+                $conn,
+                $produto_id,
+                $usuario['id'] ?? null
+            );
+
+            json_response(
+                $res['sucesso'],
+                $res['mensagem'],
+                $res['dados'] ?? null
+            );
             break;
         }
 
         // ================= MOVIMENTAÇÕES =================
         case 'listar_movimentacoes': {
+
             $res = mov_listar($conn, $_GET);
-            json_response(true, '', $res['dados'] ?? $res);
+
+            json_response(
+                $res['sucesso'] ?? true,
+                $res['mensagem'] ?? '',
+                $res['dados'] ?? $res
+            );
             break;
         }
 
         case 'registrar_movimentacao': {
+
             $produto_id = (int)($body['produto_id'] ?? 0);
             $tipo       = $body['tipo'] ?? '';
             $quantidade = (int)($body['quantidade'] ?? 0);
@@ -166,12 +195,17 @@ try {
                 $usuario['id']
             );
 
-            json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
+            json_response(
+                $res['sucesso'],
+                $res['mensagem'],
+                $res['dados'] ?? null
+            );
             break;
         }
 
         // ================= USUÁRIOS =================
         case 'listar_usuarios': {
+
             $res = $conn->query('SELECT id, nome FROM usuarios ORDER BY nome');
             $dados = [];
 
@@ -187,9 +221,15 @@ try {
 
         // ================= RELATÓRIOS =================
         case 'relatorio_movimentacoes': {
+
             $filtros = array_merge($_GET, $body);
             $res = relatorio($conn, $filtros);
-            json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
+
+            json_response(
+                $res['sucesso'],
+                $res['mensagem'],
+                $res['dados'] ?? null
+            );
             break;
         }
 
@@ -199,15 +239,11 @@ try {
 
 } catch (Throwable $e) {
 
-    logError(
-        'actions',
-        'Erro global',
-        [
-            'arquivo' => $e->getFile(),
-            'linha'   => $e->getLine(),
-            'erro'    => $e->getMessage()
-        ]
-    );
+    logError('actions', 'Erro global', [
+        'arquivo' => $e->getFile(),
+        'linha'   => $e->getLine(),
+        'erro'    => $e->getMessage()
+    ]);
 
     json_response(false, 'Erro interno no servidor.');
 }
