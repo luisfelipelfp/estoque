@@ -1,8 +1,9 @@
 // js/logger.js
 
-const LOG_JS_ENDPOINT = "/estoque/public/api/log_js.php";
+// Endpoint real da API (NGINX root)
+const LOG_JS_ENDPOINT = "/api/log_js.php";
 
-export function logJsError(payload) {
+export function logJsError(payload = {}) {
   try {
     fetch(LOG_JS_ENDPOINT, {
       method: "POST",

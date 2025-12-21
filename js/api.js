@@ -1,5 +1,7 @@
 // js/api.js
-const BASE_URL = "/estoque/public/api";
+
+// Base da API (NGINX root: /var/www/estoque/public)
+const BASE_URL = "/api";
 const API_URL = `${BASE_URL}/actions.php`;
 const AUTH_URL = BASE_URL;
 
@@ -32,12 +34,9 @@ export async function apiRequest(acao, dados = null, metodo = "GET") {
 
     if (metodo === "POST" && dados) {
       const formData = new FormData();
-      formData.append("acao", acao);
-
       for (const k in dados) {
         formData.append(k, dados[k]);
       }
-
       options.body = formData;
     }
 
@@ -48,8 +47,12 @@ export async function apiRequest(acao, dados = null, metodo = "GET") {
     }
 
     return await resp.json();
+
   } catch (err) {
     console.error("Erro em apiRequest:", err);
-    return { sucesso: false, mensagem: "Erro de comunicação com o servidor." };
+    return {
+      sucesso: false,
+      mensagem: "Erro de comunicação com o servidor."
+    };
   }
 }
