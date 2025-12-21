@@ -7,10 +7,7 @@ require_once __DIR__ . '/utils.php';
 
 initLog('auth');
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
+// ⚠️ Sessão já é iniciada no actions.php
 $SESSION_TIMEOUT = 1800; // 30 minutos
 
 // ================= TIMEOUT =================
@@ -28,6 +25,7 @@ if (isset($_SESSION['LAST_ACTIVITY'])) {
         session_destroy();
 
         json_response(false, 'Sessão expirada. Faça login novamente.', null, 401);
+        exit; // 🔴 ESSENCIAL
     }
 }
 
@@ -39,7 +37,9 @@ if (
     !is_array($_SESSION['usuario']) ||
     empty($_SESSION['usuario']['id'])
 ) {
+
     logWarning('auth', 'Usuário não autenticado');
 
     json_response(false, 'Usuário não autenticado.', null, 401);
+    exit; // 🔴 ESSENCIAL
 }
