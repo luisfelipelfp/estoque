@@ -32,6 +32,7 @@ initLog('actions');
 // =====================================================
 // Headers
 // =====================================================
+header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: http://192.168.15.100');
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Headers: Content-Type');
@@ -72,23 +73,18 @@ require_once __DIR__ . '/movimentacoes.php';
 require_once __DIR__ . '/relatorios.php';
 
 // =====================================================
-// Execução protegida
+// Execução
 // =====================================================
 try {
-
-    // Limpa TODOS os buffers
-    while (ob_get_level() > 0) {
-        ob_end_clean();
-    }
 
     $conn = db();
     $acao = $_REQUEST['acao'] ?? '';
     $body = read_body();
 
-    // 🔐 Auth dentro do try
+    // 🔐 Auth (responde 401 se falhar)
     require_once __DIR__ . '/auth.php';
 
-    $usuario = $_SESSION['usuario'] ?? [];
+    $usuario = $_SESSION['usuario'];
     auditoria($usuario, $acao, $body ?: $_GET);
 
     switch ($acao) {
@@ -96,11 +92,7 @@ try {
         // ================= PRODUTOS =================
         case 'listar_produtos':
             $res = produtos_listar($conn);
-            json_response(
-                $res['sucesso'],
-                $res['mensagem'] ?? '',
-                $res['dados'] ?? []
-            );
+            json_response($res['sucesso'], $res['mensagem'] ?? '', $res['dados'] ?? []);
             break;
 
         case 'adicionar_produto':
@@ -111,13 +103,13 @@ try {
                 json_response(false, 'O nome do produto não pode estar vazio.');
             }
 
-            $res = produtos_adicionar($conn, $nome, $qtd, $usuario['id'] ?? null);
+            $res = produtos_adicionar($conn, $nome, $qtd, $usuario['id']);
             json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
             break;
 
         case 'remover_produto':
             $produto_id = (int)($body['produto_id'] ?? $body['id'] ?? 0);
-            $res = produtos_remover($conn, $produto_id, $usuario['id'] ?? null);
+            $res = produtos_remover($conn, $produto_id, $usuario['id']);
             json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
             break;
 
@@ -152,13 +144,11 @@ try {
 
 } catch (Throwable $e) {
 
-    logError(
-        'actions',
-        'Erro fatal',
-        $e->getFile(),
-        $e->getLine(),
-        $e->getMessage()
-    );
+    logError('actions', 'Erro fatal', [
+        'arquivo' => $e->getFile(),
+        'linha'   => $e->getLine(),
+        'erro'    => $e->getMessage()
+    ]);
 
     json_response(false, 'Erro interno no servidor.', null, 500);
 }
