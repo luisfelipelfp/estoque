@@ -13,7 +13,7 @@ declare(strict_types=1);
 session_set_cookie_params([
     'lifetime' => 0,
     'path'     => '/',
-    'secure'   => false,
+    'secure'   => false, // true se HTTPS
     'httponly' => true,
     'samesite' => 'Lax'
 ]);
@@ -29,7 +29,6 @@ require_once __DIR__ . '/log.php';
 require_once __DIR__ . '/utils.php';
 require_once __DIR__ . '/db.php';
 
-// Inicializa log
 initLog('actions');
 
 // =====================================================
@@ -47,12 +46,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // =====================================================
-// Funções auxiliares
+// Helpers
 // =====================================================
 function read_body(): array
 {
-    $body = file_get_contents('php://input');
-    $json = json_decode($body, true);
+    $raw = file_get_contents('php://input');
+    $json = json_decode($raw, true);
 
     if (json_last_error() === JSON_ERROR_NONE && is_array($json)) {
         return $json;
@@ -64,7 +63,7 @@ function read_body(): array
 function auditoria(array $usuario, string $acao, array $dados = []): void
 {
     logInfo('actions', 'Auditoria', [
-        'acao'    => $acao,
+        'acao' => $acao,
         'usuario' => [
             'id'   => $usuario['id']   ?? null,
             'nome' => $usuario['nome'] ?? 'anon'
@@ -76,9 +75,9 @@ function auditoria(array $usuario, string $acao, array $dados = []): void
 // =====================================================
 // Includes da API
 // =====================================================
+require_once __DIR__ . '/produtos.php';
 require_once __DIR__ . '/movimentacoes.php';
 require_once __DIR__ . '/relatorios.php';
-require_once __DIR__ . '/produtos.php';
 
 // =====================================================
 // Bootstrap
@@ -86,19 +85,6 @@ require_once __DIR__ . '/produtos.php';
 $conn = db();
 $acao = $_REQUEST['acao'] ?? '';
 $body = read_body();
-
-// =====================================================
-// Login / Logout (sem auth)
-// =====================================================
-if ($acao === 'login') {
-    require __DIR__ . '/login.php';
-    exit;
-}
-
-if ($acao === 'logout') {
-    require __DIR__ . '/logout.php';
-    exit;
-}
 
 // =====================================================
 // Autenticação obrigatória
@@ -113,19 +99,25 @@ auditoria($usuario, $acao, $body ?: $_GET);
 // =====================================================
 try {
 
-    if (ob_get_length()) {
+    if (ob_get_level() > 0) {
         ob_clean();
     }
 
     switch ($acao) {
 
-        // ---------------- PRODUTOS ----------------
-        case 'listar_produtos':
+        // ================= PRODUTOS =================
+        case 'listar_produtos': {
             $res = produtos_listar($conn);
-            json_response(true, '', $res['dados'] ?? $res);
-            break;
 
-        case 'adicionar_produto':
+            if (is_array($res) && isset($res['dados'])) {
+                json_response(true, '', $res['dados']);
+            }
+
+            json_response(true, '', $res);
+            break;
+        }
+
+        case 'adicionar_produto': {
             $nome = trim($body['nome'] ?? '');
             $qtd  = (int)($body['quantidade'] ?? 0);
 
@@ -136,20 +128,24 @@ try {
             $res = produtos_adicionar($conn, $nome, $qtd, $usuario['id'] ?? null);
             json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
             break;
+        }
 
-        case 'remover_produto':
+        case 'remover_produto': {
             $produto_id = (int)($body['produto_id'] ?? $body['id'] ?? 0);
+
             $res = produtos_remover($conn, $produto_id, $usuario['id'] ?? null);
             json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
             break;
+        }
 
-        // ---------------- MOVIMENTAÇÕES ----------------
-        case 'listar_movimentacoes':
+        // ================= MOVIMENTAÇÕES =================
+        case 'listar_movimentacoes': {
             $res = mov_listar($conn, $_GET);
             json_response(true, '', $res['dados'] ?? $res);
             break;
+        }
 
-        case 'registrar_movimentacao':
+        case 'registrar_movimentacao': {
             $produto_id = (int)($body['produto_id'] ?? 0);
             $tipo       = $body['tipo'] ?? '';
             $quantidade = (int)($body['quantidade'] ?? 0);
@@ -172,34 +168,30 @@ try {
 
             json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
             break;
+        }
 
-        // ---------------- USUÁRIOS ----------------
-        case 'listar_usuarios':
-            $sql = 'SELECT id, nome FROM usuarios ORDER BY nome';
-            $res = $conn->query($sql);
-
+        // ================= USUÁRIOS =================
+        case 'listar_usuarios': {
+            $res = $conn->query('SELECT id, nome FROM usuarios ORDER BY nome');
             $dados = [];
+
             if ($res) {
                 while ($r = $res->fetch_assoc()) {
                     $dados[] = $r;
                 }
             }
 
-            json_response(true, 'Usuários listados com sucesso.', $dados);
+            json_response(true, '', $dados);
             break;
+        }
 
-        // ---------------- RELATÓRIOS ----------------
-        case 'relatorio_movimentacoes':
+        // ================= RELATÓRIOS =================
+        case 'relatorio_movimentacoes': {
             $filtros = array_merge($_GET, $body);
             $res = relatorio($conn, $filtros);
             json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
             break;
-
-        case 'exportar_relatorio':
-            require_once __DIR__ . '/exportar.php';
-            $res = exportar_relatorio($conn, $_GET);
-            json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
-            break;
+        }
 
         default:
             json_response(false, 'Ação inválida ou não informada.');
@@ -210,9 +202,11 @@ try {
     logError(
         'actions',
         'Erro global',
-        $e->getFile(),
-        $e->getLine(),
-        $e->getMessage()
+        [
+            'arquivo' => $e->getFile(),
+            'linha'   => $e->getLine(),
+            'erro'    => $e->getMessage()
+        ]
     );
 
     json_response(false, 'Erro interno no servidor.');
