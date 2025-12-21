@@ -1,4 +1,5 @@
 // js/relatorios.js
+import { apiRequest } from "./api.js";
 import { logJsInfo, logJsError } from "./logger.js";
 
 let filtrosAtuais = {};

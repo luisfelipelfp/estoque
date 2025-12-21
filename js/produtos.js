@@ -1,4 +1,5 @@
 // js/produtos.js
+import { apiRequest } from "./api.js";
 import { logJsInfo, logJsError } from "./logger.js";
 
 const inflight = new Set();

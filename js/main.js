@@ -1,5 +1,5 @@
 import { apiRequest } from "./api.js";
-import { logJsError, logJsInfo } from "./logger.js";
+import { logJsInfo, logJsError } from "./logger.js";
 
 async function verificarLogin() {
   try {

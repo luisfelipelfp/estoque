@@ -1,5 +1,5 @@
 import { apiRequest } from "./api.js";
-import { logJsError } from "./logger.js";
+import { logJsInfo, logJsError } from "./logger.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   const btn = document.getElementById("btnLogout");
