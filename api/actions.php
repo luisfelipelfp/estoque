@@ -77,11 +77,16 @@ require_once __DIR__ . '/relatorios.php';
 // =====================================================
 try {
 
+    // Limpa qualquer buffer antes de responder
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+
     $conn = db();
     $acao = $_REQUEST['acao'] ?? '';
     $body = read_body();
 
-    // 🔐 Auth (responde 401 se falhar)
+    // 🔐 Auth
     require_once __DIR__ . '/auth.php';
 
     $usuario = $_SESSION['usuario'];
@@ -92,7 +97,11 @@ try {
         // ================= PRODUTOS =================
         case 'listar_produtos':
             $res = produtos_listar($conn);
-            json_response($res['sucesso'], $res['mensagem'] ?? '', $res['dados'] ?? []);
+            json_response(
+                $res['sucesso'],
+                $res['mensagem'] ?? '',
+                $res['dados'] ?? []
+            );
             break;
 
         case 'adicionar_produto':
@@ -116,7 +125,11 @@ try {
         // ================= MOVIMENTAÇÕES =================
         case 'listar_movimentacoes':
             $res = mov_listar($conn, $_GET);
-            json_response($res['sucesso'] ?? true, $res['mensagem'] ?? '', $res['dados'] ?? []);
+            json_response(
+                $res['sucesso'] ?? true,
+                $res['mensagem'] ?? '',
+                $res['dados'] ?? []
+            );
             break;
 
         case 'registrar_movimentacao':
@@ -124,11 +137,22 @@ try {
             $tipo       = $body['tipo'] ?? '';
             $quantidade = (int)($body['quantidade'] ?? 0);
 
-            if ($produto_id <= 0 || $quantidade <= 0 || !in_array($tipo, ['entrada', 'saida', 'remocao'], true)) {
+            if (
+                $produto_id <= 0 ||
+                $quantidade <= 0 ||
+                !in_array($tipo, ['entrada', 'saida', 'remocao'], true)
+            ) {
                 json_response(false, 'Dados inválidos para movimentação.');
             }
 
-            $res = mov_registrar($conn, $produto_id, $tipo, $quantidade, $usuario['id']);
+            $res = mov_registrar(
+                $conn,
+                $produto_id,
+                $tipo,
+                $quantidade,
+                $usuario['id']
+            );
+
             json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
             break;
 
@@ -144,11 +168,14 @@ try {
 
 } catch (Throwable $e) {
 
-    logError('actions', 'Erro fatal', [
-        'arquivo' => $e->getFile(),
-        'linha'   => $e->getLine(),
-        'erro'    => $e->getMessage()
-    ]);
+    // 🚨 LOG CORRETO (sem array)
+    logError(
+        'actions',
+        'Erro fatal',
+        $e->getFile(),
+        $e->getLine(),
+        $e->getMessage()
+    );
 
     json_response(false, 'Erro interno no servidor.', null, 500);
 }
