@@ -9,8 +9,6 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/log.php';
 
-initLog('produtos');
-
 /**
  * Lista produtos
  */
@@ -35,18 +33,15 @@ function produtos_listar(mysqli $conn): array
 
         return [
             'sucesso'  => false,
-            'mensagem' => 'Erro ao buscar produtos'
+            'mensagem' => 'Erro ao buscar produtos',
+            'dados'    => []
         ];
-    }
-
-    $dados = [];
-    while ($row = $res->fetch_assoc()) {
-        $dados[] = $row;
     }
 
     return [
         'sucesso' => true,
-        'dados'   => $dados
+        'mensagem' => '',
+        'dados'   => $res->fetch_all(MYSQLI_ASSOC)
     ];
 }
 
@@ -71,11 +66,18 @@ function produtos_adicionar(
 
         return [
             'sucesso'  => false,
-            'mensagem' => 'Erro ao preparar inserção'
+            'mensagem' => 'Erro ao preparar inserção',
+            'dados'    => null
         ];
     }
 
-    $stmt->bind_param('sii', $nome, $quantidade, $usuario_id);
+    // 🔒 garante NULL corretamente
+    if ($usuario_id === null) {
+        $stmt->bind_param('si', $nome, $quantidade);
+    } else {
+        $stmt->bind_param('sii', $nome, $quantidade, $usuario_id);
+    }
+
     $ok = $stmt->execute();
 
     if (!$ok) {
@@ -83,17 +85,23 @@ function produtos_adicionar(
             'erro' => $stmt->error
         ]);
 
+        $stmt->close();
+
         return [
             'sucesso'  => false,
-            'mensagem' => 'Erro ao adicionar produto'
+            'mensagem' => 'Erro ao adicionar produto',
+            'dados'    => null
         ];
     }
+
+    $id = $stmt->insert_id;
+    $stmt->close();
 
     return [
         'sucesso'  => true,
         'mensagem' => 'Produto adicionado com sucesso',
         'dados'    => [
-            'id' => $stmt->insert_id
+            'id' => $id
         ]
     ];
 }
@@ -118,7 +126,8 @@ function produtos_remover(
 
         return [
             'sucesso'  => false,
-            'mensagem' => 'Erro ao preparar remoção'
+            'mensagem' => 'Erro ao preparar remoção',
+            'dados'    => null
         ];
     }
 
@@ -130,14 +139,20 @@ function produtos_remover(
             'erro' => $stmt->error
         ]);
 
+        $stmt->close();
+
         return [
             'sucesso'  => false,
-            'mensagem' => 'Erro ao remover produto'
+            'mensagem' => 'Erro ao remover produto',
+            'dados'    => null
         ];
     }
 
+    $stmt->close();
+
     return [
         'sucesso'  => true,
-        'mensagem' => 'Produto removido com sucesso'
+        'mensagem' => 'Produto removido com sucesso',
+        'dados'    => null
     ];
 }
