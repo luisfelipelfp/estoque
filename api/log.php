@@ -1,14 +1,9 @@
 <?php
-// api/log.php
 declare(strict_types=1);
 
 /**
  * ==========================================
  * Sistema central de logs da API
- * ==========================================
- * - Logs separados por contexto
- * - NÃO usa error_log (incompatível com PHP-FPM)
- * - Escrita direta em arquivo (produção-safe)
  * ==========================================
  */
 
@@ -42,10 +37,13 @@ function initLog(string $contexto): void
     set_exception_handler(function (Throwable $e) use ($contexto): void {
         logError(
             $contexto,
-            'EXCEPTION: ' . $e->getMessage(),
-            $e->getFile(),
-            $e->getLine(),
-            $e->getTraceAsString()
+            'EXCEPTION',
+            [
+                'mensagem' => $e->getMessage(),
+                'arquivo'  => $e->getFile(),
+                'linha'    => $e->getLine(),
+                'trace'    => $e->getTraceAsString()
+            ]
         );
 
         http_response_code(500);
@@ -68,9 +66,8 @@ function initLog(string $contexto): void
         )) {
             logError(
                 $contexto,
-                'FATAL ERROR: ' . $error['message'],
-                $error['file'] ?? null,
-                $error['line'] ?? null
+                'FATAL ERROR',
+                $error
             );
         }
     });
@@ -94,31 +91,20 @@ function writeLog(string $contexto, string $nivel, string $mensagem): void
 }
 
 /**
- * Log de erro
+ * Log de erro (VERSÃO FLEXÍVEL E SEGURA)
  */
-function logError(
-    string $contexto,
-    string $mensagem,
-    ?string $arquivo = null,
-    ?int $linha = null,
-    ?string $trace = null
-): void {
-    $extra = [];
+function logError(string $contexto, string $mensagem, array $dados = []): void
+{
+    $texto = $mensagem;
 
-    if ($arquivo) $extra[] = "Arquivo: $arquivo";
-    if ($linha)   $extra[] = "Linha: $linha";
-
-    $msg = $mensagem;
-
-    if ($extra) {
-        $msg .= ' | ' . implode(' | ', $extra);
+    if ($dados) {
+        $texto .= ' | ' . json_encode(
+            $dados,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        );
     }
 
-    writeLog($contexto, 'ERROR', $msg);
-
-    if ($trace) {
-        writeLog($contexto, 'TRACE', $trace);
-    }
+    writeLog($contexto, 'ERROR', $texto);
 }
 
 /**
@@ -127,7 +113,7 @@ function logError(
 function logInfo(string $contexto, string $mensagem, array $dados = []): void
 {
     if ($dados) {
-        $mensagem .= ' | Dados: ' . json_encode(
+        $mensagem .= ' | ' . json_encode(
             $dados,
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
         );
@@ -142,7 +128,7 @@ function logInfo(string $contexto, string $mensagem, array $dados = []): void
 function logWarning(string $contexto, string $mensagem, array $dados = []): void
 {
     if ($dados) {
-        $mensagem .= ' | Dados: ' . json_encode(
+        $mensagem .= ' | ' . json_encode(
             $dados,
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
         );
