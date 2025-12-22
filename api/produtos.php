@@ -1,35 +1,34 @@
 <?php
-/**
- * api/produtos.php
- * Funções de domínio de produtos
- * Compatível PHP 8.2+ / 8.5
- */
-
 declare(strict_types=1);
 
 require_once __DIR__ . '/log.php';
 
-/**
- * Lista produtos
- */
 function produtos_listar(mysqli $conn): array
 {
-    $sql = "
-        SELECT
-            id,
-            nome,
-            quantidade,
-            criado_em
-        FROM produtos
-        ORDER BY nome
-    ";
+    try {
+        $sql = "
+            SELECT id, nome, quantidade, criado_em
+            FROM produtos
+            ORDER BY nome
+        ";
 
-    $res = $conn->query($sql);
+        $res = $conn->query($sql);
 
-    if ($res === false) {
-        logError('produtos', 'Erro ao listar produtos', [
-            'erro' => $conn->error
-        ]);
+        return [
+            'sucesso'  => true,
+            'mensagem' => '',
+            'dados'    => $res->fetch_all(MYSQLI_ASSOC)
+        ];
+
+    } catch (Throwable $e) {
+
+        logError(
+            'produtos',
+            'Erro ao listar produtos',
+            $e->getFile(),
+            $e->getLine(),
+            $e->getMessage()
+        );
 
         return [
             'sucesso'  => false,
@@ -37,55 +36,47 @@ function produtos_listar(mysqli $conn): array
             'dados'    => []
         ];
     }
-
-    return [
-        'sucesso' => true,
-        'mensagem' => '',
-        'dados'   => $res->fetch_all(MYSQLI_ASSOC)
-    ];
 }
 
-/**
- * Adiciona produto
- */
 function produtos_adicionar(
     mysqli $conn,
     string $nome,
     int $quantidade,
     ?int $usuario_id
 ): array {
+    try {
 
-    $stmt = $conn->prepare(
-        'INSERT INTO produtos (nome, quantidade, criado_por) VALUES (?, ?, ?)'
-    );
+        $stmt = $conn->prepare(
+            'INSERT INTO produtos (nome, quantidade, criado_por) VALUES (?, ?, ?)'
+        );
 
-    if (!$stmt) {
-        logError('produtos', 'Erro prepare INSERT', [
-            'erro' => $conn->error
-        ]);
+        // SEMPRE 3 parâmetros
+        $stmt->bind_param(
+            'sii',
+            $nome,
+            $quantidade,
+            $usuario_id
+        );
+
+        $stmt->execute();
+        $id = $stmt->insert_id;
+        $stmt->close();
 
         return [
-            'sucesso'  => false,
-            'mensagem' => 'Erro ao preparar inserção',
-            'dados'    => null
+            'sucesso'  => true,
+            'mensagem' => 'Produto adicionado com sucesso',
+            'dados'    => ['id' => $id]
         ];
-    }
 
-    // 🔒 garante NULL corretamente
-    if ($usuario_id === null) {
-        $stmt->bind_param('si', $nome, $quantidade);
-    } else {
-        $stmt->bind_param('sii', $nome, $quantidade, $usuario_id);
-    }
+    } catch (Throwable $e) {
 
-    $ok = $stmt->execute();
-
-    if (!$ok) {
-        logError('produtos', 'Erro execute INSERT', [
-            'erro' => $stmt->error
-        ]);
-
-        $stmt->close();
+        logError(
+            'produtos',
+            'Erro ao adicionar produto',
+            $e->getFile(),
+            $e->getLine(),
+            $e->getMessage()
+        );
 
         return [
             'sucesso'  => false,
@@ -93,53 +84,38 @@ function produtos_adicionar(
             'dados'    => null
         ];
     }
-
-    $id = $stmt->insert_id;
-    $stmt->close();
-
-    return [
-        'sucesso'  => true,
-        'mensagem' => 'Produto adicionado com sucesso',
-        'dados'    => [
-            'id' => $id
-        ]
-    ];
 }
 
-/**
- * Remove produto
- */
 function produtos_remover(
     mysqli $conn,
     int $produto_id,
     ?int $usuario_id
 ): array {
+    try {
 
-    $stmt = $conn->prepare(
-        'DELETE FROM produtos WHERE id = ?'
-    );
+        $stmt = $conn->prepare(
+            'DELETE FROM produtos WHERE id = ?'
+        );
 
-    if (!$stmt) {
-        logError('produtos', 'Erro prepare DELETE', [
-            'erro' => $conn->error
-        ]);
+        $stmt->bind_param('i', $produto_id);
+        $stmt->execute();
+        $stmt->close();
 
         return [
-            'sucesso'  => false,
-            'mensagem' => 'Erro ao preparar remoção',
+            'sucesso'  => true,
+            'mensagem' => 'Produto removido com sucesso',
             'dados'    => null
         ];
-    }
 
-    $stmt->bind_param('i', $produto_id);
-    $ok = $stmt->execute();
+    } catch (Throwable $e) {
 
-    if (!$ok) {
-        logError('produtos', 'Erro execute DELETE', [
-            'erro' => $stmt->error
-        ]);
-
-        $stmt->close();
+        logError(
+            'produtos',
+            'Erro ao remover produto',
+            $e->getFile(),
+            $e->getLine(),
+            $e->getMessage()
+        );
 
         return [
             'sucesso'  => false,
@@ -147,12 +123,4 @@ function produtos_remover(
             'dados'    => null
         ];
     }
-
-    $stmt->close();
-
-    return [
-        'sucesso'  => true,
-        'mensagem' => 'Produto removido com sucesso',
-        'dados'    => null
-    ];
 }
