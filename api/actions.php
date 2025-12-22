@@ -89,7 +89,11 @@ try {
     // 🔐 Auth
     require_once __DIR__ . '/auth.php';
 
-    $usuario = $_SESSION['usuario'];
+    $usuario = $_SESSION['usuario'] ?? [
+    'id'   => null,
+    'nome' => 'anon'
+    ];
+
     auditoria($usuario, $acao, $body ?: $_GET);
 
     switch ($acao) {
