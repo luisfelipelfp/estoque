@@ -48,17 +48,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // =====================================================
 function read_body(): array
 {
-    $raw = file_get_contents('php://input');
+    $raw  = file_get_contents('php://input');
     $json = json_decode($raw, true);
+
     return is_array($json) ? $json : ($_POST ?? []);
 }
 
-function auditoria(array $usuario, string $acao, array $dados = []): void
+/**
+ * Auditoria segura (aceita usuário nulo)
+ */
+function auditoria(?array $usuario, string $acao, array $dados = []): void
 {
     logInfo('actions', 'Auditoria', [
         'acao' => $acao,
         'usuario' => [
-            'id'   => $usuario['id'] ?? null,
+            'id'   => $usuario['id']   ?? null,
             'nome' => $usuario['nome'] ?? 'anon'
         ],
         'dados' => $dados
@@ -77,7 +81,7 @@ require_once __DIR__ . '/relatorios.php';
 // =====================================================
 try {
 
-    // Limpa qualquer buffer antes de responder
+    // Limpa buffers
     while (ob_get_level() > 0) {
         ob_end_clean();
     }
@@ -86,13 +90,11 @@ try {
     $acao = $_REQUEST['acao'] ?? '';
     $body = read_body();
 
-    // 🔐 Auth
+    // 🔐 Auth (mantido como está no seu projeto)
     require_once __DIR__ . '/auth.php';
 
-    $usuario = $_SESSION['usuario'] ?? [
-    'id'   => null,
-    'nome' => 'anon'
-    ];
+    // ⚠️ NUNCA assume que existe sessão
+    $usuario = $_SESSION['usuario'] ?? null;
 
     auditoria($usuario, $acao, $body ?: $_GET);
 
@@ -116,13 +118,25 @@ try {
                 json_response(false, 'O nome do produto não pode estar vazio.');
             }
 
-            $res = produtos_adicionar($conn, $nome, $qtd, $usuario['id']);
+            $res = produtos_adicionar(
+                $conn,
+                $nome,
+                $qtd,
+                $usuario['id'] ?? null
+            );
+
             json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
             break;
 
         case 'remover_produto':
             $produto_id = (int)($body['produto_id'] ?? $body['id'] ?? 0);
-            $res = produtos_remover($conn, $produto_id, $usuario['id']);
+
+            $res = produtos_remover(
+                $conn,
+                $produto_id,
+                $usuario['id'] ?? null
+            );
+
             json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
             break;
 
@@ -154,7 +168,7 @@ try {
                 $produto_id,
                 $tipo,
                 $quantidade,
-                $usuario['id']
+                $usuario['id'] ?? null
             );
 
             json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
@@ -172,7 +186,6 @@ try {
 
 } catch (Throwable $e) {
 
-    // 🚨 LOG CORRETO (sem array)
     logError(
         'actions',
         'Erro fatal',
