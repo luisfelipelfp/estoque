@@ -17,12 +17,12 @@ date_default_timezone_set('America/Sao_Paulo');
 initLog('relatorios');
 
 /**
- * Gera relatório de movimentações
+ * Gera relatório de movimentações (com filtros, paginação e totalizadores)
  */
 function relatorio(mysqli $conn, array $filtros): array
 {
     $pagina = max(1, (int)($filtros['pagina'] ?? 1));
-    $limite = max(1, min(100, (int)($filtros['limite'] ?? 50)));
+    $limite = max(1, min(200, (int)($filtros['limite'] ?? 50)));
     $offset = ($pagina - 1) * $limite;
 
     $where  = [];
@@ -63,9 +63,8 @@ function relatorio(mysqli $conn, array $filtros): array
     $whereSql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
 
     try {
-
         // =====================================================
-        // 🔹 TOTAL
+        // 🔹 TOTAL (registros)
         // =====================================================
         $stmtT = $conn->prepare(
             "SELECT COUNT(*) AS total FROM movimentacoes m $whereSql"
@@ -80,6 +79,28 @@ function relatorio(mysqli $conn, array $filtros): array
         $stmtT->close();
 
         // =====================================================
+        // 🔹 TOTALIZADORES (qtd e valor)
+        // =====================================================
+        $stmtTot = $conn->prepare(
+            "SELECT
+                COALESCE(SUM(m.quantidade), 0) AS total_qtd,
+                COALESCE(SUM(m.quantidade * COALESCE(m.valor_unitario,0)), 0) AS total_valor
+             FROM movimentacoes m
+             $whereSql"
+        );
+
+        if ($types) {
+            $stmtTot->bind_param($types, ...$params);
+        }
+
+        $stmtTot->execute();
+        $totRow = $stmtTot->get_result()->fetch_assoc() ?: ['total_qtd' => 0, 'total_valor' => 0];
+        $stmtTot->close();
+
+        $total_qtd   = (int)($totRow['total_qtd'] ?? 0);
+        $total_valor = (float)($totRow['total_valor'] ?? 0);
+
+        // =====================================================
         // 🔹 LISTAGEM
         // =====================================================
         $sql = "
@@ -88,6 +109,8 @@ function relatorio(mysqli $conn, array $filtros): array
                 COALESCE(p.nome, m.produto_nome, '[Produto removido]') AS produto_nome,
                 m.tipo,
                 m.quantidade,
+                m.valor_unitario,
+                (m.quantidade * COALESCE(m.valor_unitario,0)) AS valor_total,
                 m.data,
                 COALESCE(u.nome, 'Sistema') AS usuario
             FROM movimentacoes m
@@ -113,43 +136,17 @@ function relatorio(mysqli $conn, array $filtros): array
         $dados = [];
         while ($r = $res->fetch_assoc()) {
             $dados[] = [
-                'id'           => (int)$r['id'],
-                'produto_nome' => $r['produto_nome'],
-                'tipo'         => $r['tipo'],
-                'quantidade'   => (int)$r['quantidade'],
-                'data'         => date('d/m/Y H:i', strtotime($r['data'])),
-                'usuario'      => $r['usuario']
+                'id'            => (int)$r['id'],
+                'produto_nome'  => $r['produto_nome'],
+                'tipo'          => $r['tipo'],
+                'quantidade'    => (int)$r['quantidade'],
+                'valor_unitario'=> $r['valor_unitario'] !== null ? (float)$r['valor_unitario'] : null,
+                'valor_total'   => (float)$r['valor_total'],
+                'data'          => date('d/m/Y H:i', strtotime($r['data'])),
+                'usuario'       => $r['usuario']
             ];
         }
         $stmt->close();
-
-        // =====================================================
-        // 🔹 DADOS PARA GRÁFICO
-        // =====================================================
-        $stmtG = $conn->prepare(
-            "SELECT tipo, COUNT(*) AS total FROM movimentacoes m $whereSql GROUP BY tipo"
-        );
-
-        if ($types) {
-            $stmtG->bind_param($types, ...$params);
-        }
-
-        $stmtG->execute();
-        $resG = $stmtG->get_result();
-
-        $grafico = [
-            'entrada' => 0,
-            'saida'   => 0,
-            'remocao' => 0
-        ];
-
-        while ($g = $resG->fetch_assoc()) {
-            $tipo = $g['tipo'];
-            if (isset($grafico[$tipo])) {
-                $grafico[$tipo] = (int)$g['total'];
-            }
-        }
-        $stmtG->close();
 
         logInfo('relatorios', 'Relatório gerado', [
             'total'  => $total,
@@ -163,12 +160,14 @@ function relatorio(mysqli $conn, array $filtros): array
             'limite'  => $limite,
             'paginas' => (int)ceil($total / $limite),
             'dados'   => $dados,
-            'grafico' => $grafico
+            'totais'  => [
+                'total_qtd'   => $total_qtd,
+                'total_valor' => $total_valor
+            ]
         ]);
 
     } catch (Throwable $e) {
 
-        // ✅ assinatura correta do logError
         logError('relatorios', 'Erro ao gerar relatório', [
             'arquivo' => $e->getFile(),
             'linha'   => $e->getLine(),
