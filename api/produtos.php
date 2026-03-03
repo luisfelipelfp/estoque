@@ -6,8 +6,9 @@ require_once __DIR__ . '/log.php';
 function produtos_listar(mysqli $conn): array
 {
     try {
+        // ✅ Ajustado para a tabela real: id, nome, quantidade, ativo
         $sql = "
-            SELECT id, nome, quantidade, criado_em
+            SELECT id, nome, quantidade, ativo
             FROM produtos
             ORDER BY nome
         ";
@@ -22,13 +23,12 @@ function produtos_listar(mysqli $conn): array
 
     } catch (Throwable $e) {
 
-        logError(
-            'produtos',
-            'Erro ao listar produtos',
-            $e->getFile(),
-            $e->getLine(),
-            $e->getMessage()
-        );
+        // ✅ logError com assinatura correta (contexto, mensagem, array)
+        logError('produtos', 'Erro ao listar produtos', [
+            'arquivo' => $e->getFile(),
+            'linha'   => $e->getLine(),
+            'erro'    => $e->getMessage()
+        ]);
 
         return [
             'sucesso'  => false,
@@ -46,17 +46,12 @@ function produtos_adicionar(
 ): array {
     try {
 
+        // ✅ Ajustado: sua tabela não tem criado_por, então não insere isso
         $stmt = $conn->prepare(
-            'INSERT INTO produtos (nome, quantidade, criado_por) VALUES (?, ?, ?)'
+            'INSERT INTO produtos (nome, quantidade, ativo) VALUES (?, ?, 1)'
         );
 
-        // SEMPRE 3 parâmetros
-        $stmt->bind_param(
-            'sii',
-            $nome,
-            $quantidade,
-            $usuario_id
-        );
+        $stmt->bind_param('si', $nome, $quantidade);
 
         $stmt->execute();
         $id = $stmt->insert_id;
@@ -70,13 +65,14 @@ function produtos_adicionar(
 
     } catch (Throwable $e) {
 
-        logError(
-            'produtos',
-            'Erro ao adicionar produto',
-            $e->getFile(),
-            $e->getLine(),
-            $e->getMessage()
-        );
+        logError('produtos', 'Erro ao adicionar produto', [
+            'arquivo' => $e->getFile(),
+            'linha'   => $e->getLine(),
+            'erro'    => $e->getMessage(),
+            'nome'    => $nome,
+            'qtd'     => $quantidade,
+            'usuario' => $usuario_id
+        ]);
 
         return [
             'sucesso'  => false,
@@ -93,11 +89,9 @@ function produtos_remover(
 ): array {
     try {
 
-        $stmt = $conn->prepare(
-            'DELETE FROM produtos WHERE id = ?'
-        );
-
+        $stmt = $conn->prepare('DELETE FROM produtos WHERE id = ?');
         $stmt->bind_param('i', $produto_id);
+
         $stmt->execute();
         $stmt->close();
 
@@ -109,13 +103,13 @@ function produtos_remover(
 
     } catch (Throwable $e) {
 
-        logError(
-            'produtos',
-            'Erro ao remover produto',
-            $e->getFile(),
-            $e->getLine(),
-            $e->getMessage()
-        );
+        logError('produtos', 'Erro ao remover produto', [
+            'arquivo'    => $e->getFile(),
+            'linha'      => $e->getLine(),
+            'erro'       => $e->getMessage(),
+            'produto_id' => $produto_id,
+            'usuario'    => $usuario_id
+        ]);
 
         return [
             'sucesso'  => false,
