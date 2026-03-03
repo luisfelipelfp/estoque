@@ -18,6 +18,7 @@ initLog('relatorios');
 
 /**
  * Gera relatório de movimentações (com filtros, paginação e totalizadores)
+ * + gráfico temporal (quantidade por dia)
  */
 function relatorio(mysqli $conn, array $filtros): array
 {
@@ -136,17 +137,72 @@ function relatorio(mysqli $conn, array $filtros): array
         $dados = [];
         while ($r = $res->fetch_assoc()) {
             $dados[] = [
-                'id'            => (int)$r['id'],
-                'produto_nome'  => $r['produto_nome'],
-                'tipo'          => $r['tipo'],
-                'quantidade'    => (int)$r['quantidade'],
-                'valor_unitario'=> $r['valor_unitario'] !== null ? (float)$r['valor_unitario'] : null,
-                'valor_total'   => (float)$r['valor_total'],
-                'data'          => date('d/m/Y H:i', strtotime($r['data'])),
-                'usuario'       => $r['usuario']
+                'id'             => (int)$r['id'],
+                'produto_nome'   => $r['produto_nome'],
+                'tipo'           => $r['tipo'],
+                'quantidade'     => (int)$r['quantidade'],
+                'valor_unitario' => $r['valor_unitario'] !== null ? (float)$r['valor_unitario'] : null,
+                'valor_total'    => (float)$r['valor_total'],
+                'data'           => date('d/m/Y H:i', strtotime($r['data'])),
+                'usuario'        => $r['usuario']
             ];
         }
         $stmt->close();
+
+        // =====================================================
+        // 🔹 GRÁFICO TEMPORAL (quantidade por dia e tipo)
+        // =====================================================
+        $stmtGT = $conn->prepare(
+            "SELECT
+                DATE(m.data) AS dia,
+                m.tipo,
+                COALESCE(SUM(m.quantidade),0) AS qtd
+             FROM movimentacoes m
+             $whereSql
+             GROUP BY DATE(m.data), m.tipo
+             ORDER BY dia ASC"
+        );
+
+        if ($types) {
+            $stmtGT->bind_param($types, ...$params);
+        }
+
+        $stmtGT->execute();
+        $resGT = $stmtGT->get_result();
+
+        $map = []; // dia => ['entrada'=>x,'saida'=>y,'remocao'=>z]
+        while ($row = $resGT->fetch_assoc()) {
+            $dia  = $row['dia'];     // YYYY-MM-DD
+            $tipo = $row['tipo'];    // entrada/saida/remocao
+            $qtd  = (int)$row['qtd'];
+
+            if (!isset($map[$dia])) {
+                $map[$dia] = ['entrada' => 0, 'saida' => 0, 'remocao' => 0];
+            }
+
+            if (isset($map[$dia][$tipo])) {
+                $map[$dia][$tipo] = $qtd;
+            }
+        }
+        $stmtGT->close();
+
+        $labels = array_keys($map);
+        $entrada = [];
+        $saida   = [];
+        $remocao = [];
+
+        foreach ($labels as $d) {
+            $entrada[] = $map[$d]['entrada'] ?? 0;
+            $saida[]   = $map[$d]['saida'] ?? 0;
+            $remocao[] = $map[$d]['remocao'] ?? 0;
+        }
+
+        $grafico_temporal = [
+            'labels' => $labels,
+            'entrada' => $entrada,
+            'saida' => $saida,
+            'remocao' => $remocao
+        ];
 
         logInfo('relatorios', 'Relatório gerado', [
             'total'  => $total,
@@ -163,7 +219,8 @@ function relatorio(mysqli $conn, array $filtros): array
             'totais'  => [
                 'total_qtd'   => $total_qtd,
                 'total_valor' => $total_valor
-            ]
+            ],
+            'grafico_temporal' => $grafico_temporal
         ]);
 
     } catch (Throwable $e) {
