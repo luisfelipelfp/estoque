@@ -100,14 +100,12 @@ function relatorio(mysqli $conn, array $filtros): array
 
         $stmt = $conn->prepare($sql);
 
-        $paramsPage = $params;
-        $typesPage  = $types . 'ii';
+        $paramsPage   = $params;
+        $typesPage    = $types . 'ii';
         $paramsPage[] = $limite;
         $paramsPage[] = $offset;
 
-        if ($typesPage) {
-            $stmt->bind_param($typesPage, ...$paramsPage);
-        }
+        $stmt->bind_param($typesPage, ...$paramsPage);
 
         $stmt->execute();
         $res = $stmt->get_result();
@@ -146,7 +144,10 @@ function relatorio(mysqli $conn, array $filtros): array
         ];
 
         while ($g = $resG->fetch_assoc()) {
-            $grafico[$g['tipo']] = (int)$g['total'];
+            $tipo = $g['tipo'];
+            if (isset($grafico[$tipo])) {
+                $grafico[$tipo] = (int)$g['total'];
+            }
         }
         $stmtG->close();
 
@@ -167,13 +168,12 @@ function relatorio(mysqli $conn, array $filtros): array
 
     } catch (Throwable $e) {
 
-        logError(
-            'relatorios',
-            'Erro ao gerar relatório',
-            $e->getFile(),
-            $e->getLine(),
-            $e->getMessage()
-        );
+        // ✅ assinatura correta do logError
+        logError('relatorios', 'Erro ao gerar relatório', [
+            'arquivo' => $e->getFile(),
+            'linha'   => $e->getLine(),
+            'erro'    => $e->getMessage()
+        ]);
 
         return resposta(false, 'Erro interno ao gerar relatório.');
     }
