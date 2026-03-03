@@ -8,9 +8,10 @@ function db(): mysqli
 {
     initLog('db');
 
+    // CONFIGURAÇÕES DO BANCO
     $host   = '192.168.15.100';
-    $user   = 'root';
-    $pass   = '#Shakka01';
+    $user   = 'estoque_app';
+    $pass   = 'senha_estoque';
     $dbname = 'estoque';
 
     mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
