@@ -20,7 +20,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
         'lifetime' => 0,
         'path'     => '/',
-        'secure'   => false,
+        'secure'   => false, // em HTTPS real, colocar true
         'httponly' => true,
         'samesite' => 'Lax'
     ]);
@@ -95,6 +95,7 @@ try {
         case 'listar_produtos': {
             require_auth();
             $res = produtos_listar($conn);
+
             json_response(
                 $res['sucesso'],
                 $res['mensagem'] ?? '',
@@ -138,6 +139,8 @@ try {
         case 'listar_movimentacoes': {
             require_auth();
             $res = mov_listar($conn, $_GET);
+
+            // ✅ aqui devolvemos o payload completo (com paginação)
             json_response(
                 $res['sucesso'] ?? true,
                 $res['mensagem'] ?? '',
@@ -149,9 +152,14 @@ try {
         case 'registrar_movimentacao': {
             $usuario = require_auth();
 
-            $produto_id = (int)($body['produto_id'] ?? 0);
-            $tipo       = $body['tipo'] ?? '';
-            $quantidade = (int)($body['quantidade'] ?? 0);
+            $produto_id     = (int)($body['produto_id'] ?? 0);
+            $tipo           = (string)($body['tipo'] ?? '');
+            $quantidade     = (int)($body['quantidade'] ?? 0);
+
+            // ✅ Sprint 2: campo opcional para valor (se vier, ok)
+            $valor_unitario = isset($body['valor_unitario']) && $body['valor_unitario'] !== ''
+                ? (float)$body['valor_unitario']
+                : null;
 
             if (
                 $produto_id <= 0 ||
@@ -162,6 +170,8 @@ try {
                 exit;
             }
 
+            // ✅ Se você ainda não alterou mov_registrar pra receber valor_unitario, ignoramos aqui por enquanto.
+            // Quando formos para Sprint 2 etapa de valor na movimentação, a gente atualiza a assinatura.
             $res = mov_registrar(
                 $conn,
                 $produto_id,
@@ -175,10 +185,17 @@ try {
         }
 
         // ================= RELATÓRIOS =================
-
+        // ✅ aliases para não bater cabeça
+        case 'relatorio':
+        case 'relatorios':
         case 'relatorio_movimentacoes': {
             require_auth();
-            $res = relatorio($conn, array_merge($_GET, $body));
+
+            // filtros podem vir por GET e/ou JSON
+            $filtros = array_merge($_GET, $body);
+
+            $res = relatorio($conn, $filtros);
+
             json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
             exit;
         }
