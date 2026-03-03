@@ -2,6 +2,12 @@
 import { apiRequest } from "./api.js";
 import { logJsError } from "./logger.js";
 
+/**
+ * Base do app (para rodar em subpasta /estoque)
+ * Se no futuro você mudar para subdomínio (estoque.local), isso continua funcionando.
+ */
+const APP_BASE = "/estoque";
+
 document.addEventListener("DOMContentLoaded", () => {
   const formLogin = document.getElementById("formLogin");
   const msgErro = document.getElementById("msgErro");
@@ -9,7 +15,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (!formLogin) {
     logJsError({
       origem: "login.js",
-      mensagem: "Formulário #formLogin não encontrado"
+      mensagem: "Formulário #formLogin não encontrado",
     });
     return;
   }
@@ -32,29 +38,23 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       console.log("🔐 Enviando login...");
 
+      // Importante: apiRequest precisa apontar para /estoque/api/...
+      // Esse ajuste principal será feito no api.js (já já).
       const resp = await apiRequest("login", { login, senha }, "POST");
 
       console.log("📥 Resposta login:", resp);
 
-      if (resp && resp.sucesso === true) {
-        // 🔑 sessão já está criada no backend
-        // não dependemos de dados.usuario para redirecionar
-
+      if (resp?.sucesso === true) {
         if (resp.dados?.usuario) {
-          localStorage.setItem(
-            "usuario",
-            JSON.stringify(resp.dados.usuario)
-          );
+          localStorage.setItem("usuario", JSON.stringify(resp.dados.usuario));
         }
 
-        // ✅ REDIRECIONA
-        window.location.replace("/index.html");
+        // ✅ Redireciona para dentro do /estoque
+        window.location.replace(`${APP_BASE}/index.html`);
         return;
       }
 
-      msgErro.textContent =
-        resp?.mensagem || "Usuário ou senha inválidos.";
-
+      msgErro.textContent = resp?.mensagem || "Usuário ou senha inválidos.";
     } catch (err) {
       console.error("Erro inesperado no login:", err);
 
@@ -62,8 +62,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       logJsError({
         origem: "login.js",
-        mensagem: err.message,
-        stack: err.stack
+        mensagem: err?.message || String(err),
+        stack: err?.stack,
       });
     }
   });

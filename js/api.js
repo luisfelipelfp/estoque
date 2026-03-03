@@ -1,7 +1,15 @@
 // js/api.js
 
-// Base da API (NGINX root: /var/www/estoque/public)
-const BASE_URL = "/api";
+/**
+ * Base do app (onde os arquivos HTML/JS/CSS estão publicados)
+ * Como você está usando: https://IP/estoque/...
+ */
+const APP_BASE = "/estoque";
+
+/**
+ * Base da API (pasta api dentro do app)
+ */
+const BASE_URL = `${APP_BASE}/api`;
 const API_URL = `${BASE_URL}/actions.php`;
 const AUTH_URL = BASE_URL;
 
@@ -23,7 +31,7 @@ export async function apiRequest(acao, dados = null, metodo = "GET") {
 
   const options = {
     method: metodo,
-    credentials: "include", // 🔐 ESSENCIAL para sessão PHP
+    credentials: "include", // 🔐 Essencial para sessão PHP
     headers: {}
   };
 
@@ -47,10 +55,14 @@ export async function apiRequest(acao, dados = null, metodo = "GET") {
     const resp = await fetch(url, options);
 
     const contentType = resp.headers.get("content-type") || "";
-
     let payload = null;
+
     if (contentType.includes("application/json")) {
       payload = await resp.json();
+    } else {
+      // Ajuda muito no debug quando o PHP retorna HTML de erro
+      const text = await resp.text();
+      payload = { sucesso: false, mensagem: text || "Resposta não-JSON da API." };
     }
 
     if (!resp.ok) {
