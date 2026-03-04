@@ -16,16 +16,12 @@ initLog('estoque_atual');
 header('Content-Type: application/json; charset=utf-8');
 
 try {
-    // Se seu db.php já expõe $conn, aproveita.
-    // Se não existir, troque para sua função de conexão.
-    if (isset($conn) && $conn instanceof mysqli) {
-        $db = $conn;
-    } else {
-        // ✅ ajuste se o seu db.php tiver outro nome de função
-        $db = dbConnect();
+    // ✅ padrão do projeto: db.php deve expor $conn (mysqli)
+    if (!isset($conn) || !($conn instanceof mysqli)) {
+        throw new RuntimeException('Conexão com banco ($conn) não encontrada no db.php');
     }
 
-    // ⚠️ Se não existir coluna "ativo" em produtos, remova o WHERE ativo = 1
+    // ⚠️ Se sua tabela produtos NÃO tiver coluna ativo, remova o WHERE.
     $sql = "
         SELECT
             id,
@@ -38,9 +34,9 @@ try {
         ORDER BY nome
     ";
 
-    $res = $db->query($sql);
+    $res = $conn->query($sql);
     if (!$res) {
-        throw new RuntimeException('Falha na query: ' . $db->error);
+        throw new RuntimeException('Falha na query: ' . $conn->error);
     }
 
     $itens = [];
@@ -56,11 +52,11 @@ try {
         $total_valor += $val;
 
         $itens[] = [
-            'id'            => (int)$r['id'],
-            'nome'          => (string)$r['nome'],
-            'quantidade'    => $qtd,
-            'preco_custo'   => $pc,
-            'valor_estimado'=> $val,
+            'id'             => (int)$r['id'],
+            'nome'           => (string)$r['nome'],
+            'quantidade'     => $qtd,
+            'preco_custo'    => $pc,
+            'valor_estimado' => $val,
         ];
     }
 
