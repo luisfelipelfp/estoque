@@ -5,34 +5,63 @@ import { logJsInfo, logJsError } from "./logger.js";
 const inflight = new Set();
 
 /**
+ * Normaliza resposta da API para um array de produtos
+ */
+function extrairListaProdutos(resp) {
+  // formatos possíveis:
+  // 1) { sucesso:true, dados:[...] }
+  // 2) { sucesso:true, dados:{produtos:[...]} }
+  // 3) [...]
+  if (Array.isArray(resp?.dados?.produtos)) return resp.dados.produtos;
+  if (Array.isArray(resp?.dados)) return resp.dados;
+  if (Array.isArray(resp)) return resp;
+  return [];
+}
+
+/**
  * Lista produtos
  */
 async function listarProdutos() {
+  const tbody = document.getElementById("tabelaProdutos"); // ✅ seu HTML usa o ID no <tbody>
+  if (!tbody) {
+    logJsError({
+      origem: "produtos.js",
+      mensagem: "Elemento #tabelaProdutos (tbody) não encontrado no DOM"
+    });
+    return;
+  }
+
+  // estado inicial
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="4" class="text-center text-muted">Carregando...</td>
+    </tr>
+  `;
+
   try {
     const resp = await apiRequest("listar_produtos", null, "GET");
-
-    const produtos =
-      Array.isArray(resp?.dados?.produtos) ? resp.dados.produtos :
-      Array.isArray(resp?.dados) ? resp.dados :
-      Array.isArray(resp) ? resp :
-      [];
-
-    const tbody = document.querySelector("#tabelaProdutos tbody");
-    if (!tbody) return;
+    const produtos = extrairListaProdutos(resp);
 
     tbody.innerHTML = "";
 
     if (!produtos.length) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="4" class="text-center">
+          <td colspan="4" class="text-center text-muted">
             Nenhum produto encontrado
           </td>
-        </tr>`;
+        </tr>
+      `;
+      logJsInfo({
+        origem: "produtos.js",
+        mensagem: "Nenhum produto retornado pela API"
+      });
       return;
     }
 
-    produtos.forEach(p => {
+    produtos.forEach((p) => {
+      const id = Number(p?.id ?? 0);
+
       const nome =
         p?.nome?.trim?.() ||
         p?.produto_nome?.trim?.() ||
@@ -43,16 +72,27 @@ async function listarProdutos() {
       const quantidade = Number(p?.quantidade ?? p?.qtd ?? 0);
 
       const tr = document.createElement("tr");
+
+      // ✅ coloca um atributo pra facilitar desabilitar só os botões dessa linha
+      tr.setAttribute("data-produto-id", String(id));
+
       tr.innerHTML = `
-        <td>${p.id ?? "-"}</td>
+        <td>${id || "-"}</td>
         <td>${nome}</td>
-        <td>${quantidade}</td>
-        <td class="d-flex gap-2">
-          <button class="btn btn-success btn-sm" onclick="entrada(${p.id})">Entrada</button>
-          <button class="btn btn-warning btn-sm" onclick="saida(${p.id})">Saída</button>
-          <button class="btn btn-danger btn-sm" onclick="remover(${p.id})">Remover</button>
+        <td>${Number.isFinite(quantidade) ? quantidade : 0}</td>
+        <td class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-success btn-sm" onclick="entrada(${id})" ${id ? "" : "disabled"}>
+            Entrada
+          </button>
+          <button class="btn btn-warning btn-sm" onclick="saida(${id})" ${id ? "" : "disabled"}>
+            Saída
+          </button>
+          <button class="btn btn-danger btn-sm" onclick="remover(${id})" ${id ? "" : "disabled"}>
+            Remover
+          </button>
         </td>
       `;
+
       tbody.appendChild(tr);
     });
 
@@ -72,8 +112,26 @@ async function listarProdutos() {
       stack: err.stack
     });
 
-    alert("Erro ao carregar produtos. Verifique o servidor.");
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="4" class="text-center text-danger">
+          Erro ao carregar produtos. Verifique o servidor.
+        </td>
+      </tr>
+    `;
   }
+}
+
+/**
+ * Helper: desabilita/habilita botões somente da linha do produto
+ */
+function setRowButtonsDisabled(produtoId, disabled) {
+  const row = document.querySelector(`tr[data-produto-id="${produtoId}"]`);
+  if (!row) return;
+
+  row.querySelectorAll("button").forEach((b) => {
+    b.disabled = !!disabled;
+  });
 }
 
 /**
@@ -86,9 +144,7 @@ async function execAcao(acao, id, quantidade = null) {
   }
 
   inflight.add(key);
-
-  const rowBtns = document.querySelectorAll(`button[onclick*="(${id})"]`);
-  rowBtns.forEach(b => (b.disabled = true));
+  setRowButtonsDisabled(id, true);
 
   try {
     if (acao === "entrada" || acao === "saida") {
@@ -124,7 +180,7 @@ async function execAcao(acao, id, quantidade = null) {
 
   } finally {
     inflight.delete(key);
-    rowBtns.forEach(b => (b.disabled = false));
+    setRowButtonsDisabled(id, false);
   }
 }
 
@@ -223,6 +279,8 @@ document.querySelector("#formAdicionarProduto")
         this.reset();
         alert(resp.mensagem || "Produto adicionado com sucesso.");
         await listarProdutos();
+
+        // se existir no seu relatorios.js
         if (typeof window.preencherFiltroProdutos === "function") {
           await window.preencherFiltroProdutos();
         }
