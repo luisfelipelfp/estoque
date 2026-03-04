@@ -17,30 +17,75 @@ date_default_timezone_set('America/Sao_Paulo');
 initLog('relatorios');
 
 /**
+ * Remove acentos (simples, sem depender de ext/intl)
+ */
+function removeAcentos(string $s): string
+{
+    return str_replace(
+        ['á','à','ã','â','ä','é','ê','ë','í','î','ï','ó','ô','õ','ö','ú','û','ü','ç',
+         'Á','À','Ã','Â','Ä','É','Ê','Ë','Í','Î','Ï','Ó','Ô','Õ','Ö','Ú','Û','Ü','Ç'],
+        ['a','a','a','a','a','e','e','e','i','i','i','o','o','o','o','u','u','u','c',
+         'a','a','a','a','a','e','e','e','i','i','i','o','o','o','o','u','u','u','c'],
+        $s
+    );
+}
+
+/**
  * Normaliza o tipo vindo do banco para chaves padronizadas do sistema:
  * entrada / saida / remocao
+ *
+ * Aceita variações comuns:
+ * - "Saída", "saida ", "SAIDA"
+ * - "Remoção", "remover", "delete", "deletar"
+ * - "Retirada", "venda", "consumo" -> saida
+ * - abreviações: "e", "s", "r"
  */
 function normalizaTipoMov(?string $tipo): string
 {
     $t = strtolower(trim((string)$tipo));
+    $t = removeAcentos($t);
 
-    // Normaliza acentos mais comuns (sem depender de extensão)
-    $t = str_replace(
-        ['á','à','ã','â','ä','é','ê','ë','í','î','ï','ó','ô','õ','ö','ú','û','ü','ç'],
-        ['a','a','a','a','a','e','e','e','i','i','i','o','o','o','o','u','u','u','c'],
-        $t
-    );
+    // limpa separadores comuns
+    $t = str_replace(['-', '_', '.', '/', '\\'], ' ', $t);
+    $t = preg_replace('/\s+/', ' ', $t) ?: $t;
 
-    // Sinônimos/variações (se existirem registros antigos)
-    if ($t === 'saida' || $t === 'saidas') return 'saida';
-    if ($t === 'entrada' || $t === 'entradas') return 'entrada';
+    // abreviações
+    if ($t === 'e') return 'entrada';
+    if ($t === 's') return 'saida';
+    if ($t === 'r') return 'remocao';
 
-    if ($t === 'remocao' || $t === 'remocoes' || $t === 'remover' || $t === 'remove' || $t === 'deletar' || $t === 'delete') {
-        return 'remocao';
+    // match exato
+    if ($t === 'entrada' || $t === 'saida' || $t === 'remocao') return $t;
+
+    // plural
+    if ($t === 'entradas') return 'entrada';
+    if ($t === 'saidas') return 'saida';
+    if ($t === 'remocoes') return 'remocao';
+
+    // heurísticas por conteúdo
+    if (str_contains($t, 'entr')) return 'entrada';
+
+    // saída / retirada / consumo / venda
+    if (
+        str_contains($t, 'sai') ||
+        str_contains($t, 'retir') ||
+        str_contains($t, 'consum') ||
+        str_contains($t, 'vend') ||
+        str_contains($t, 'baixa')
+    ) {
+        return 'saida';
     }
 
-    // Se já estiver certo, mantém
-    if ($t === 'entrada' || $t === 'saida' || $t === 'remocao') return $t;
+    // remoção / delete
+    if (
+        str_contains($t, 'remo') ||
+        str_contains($t, 'excl') ||
+        str_contains($t, 'apag') ||
+        str_contains($t, 'delet') ||
+        str_contains($t, 'delete')
+    ) {
+        return 'remocao';
+    }
 
     return ''; // desconhecido
 }
@@ -61,8 +106,6 @@ function relatorio(mysqli $conn, array $filtros): array
 
     // 🔹 Filtros dinâmicos
     if (!empty($filtros['tipo']) && in_array($filtros['tipo'], ['entrada', 'saida', 'remocao'], true)) {
-        // OBS: Em collation unicode_ci, "saída" costuma comparar igual a "saida",
-        // mas mantemos o filtro simples e normalizamos no gráfico.
         $where[]  = 'm.tipo = ?';
         $params[] = $filtros['tipo'];
         $types   .= 's';
@@ -186,7 +229,7 @@ function relatorio(mysqli $conn, array $filtros): array
         $stmtGT = $conn->prepare(
             "SELECT
                 DATE(m.data) AS dia,
-                m.tipo,
+                m.tipo AS tipo_raw,
                 COALESCE(SUM(m.quantidade),0) AS qtd
              FROM movimentacoes m
              $whereSql
@@ -201,49 +244,68 @@ function relatorio(mysqli $conn, array $filtros): array
         $stmtGT->execute();
         $resGT = $stmtGT->get_result();
 
-        $map = []; // dia => ['entrada'=>x,'saida'=>y,'remocao'=>z]
+        $map = []; // dia => ['entrada'=>x,'saida'=>y,'remocao'=>z,'outros'=>w]
         $tiposDesconhecidos = 0;
 
+        // debug: conta tipos crus (pra você enxergar o que está vindo)
+        $rawCount = [];
+
         while ($row = $resGT->fetch_assoc()) {
-            $dia  = (string)$row['dia'];     // YYYY-MM-DD
-            $tipoRaw = $row['tipo'];        // pode vir com acento/variação
-            $tipo = normalizaTipoMov(is_string($tipoRaw) ? $tipoRaw : (string)$tipoRaw);
-            $qtd  = (int)$row['qtd'];
+            $dia     = (string)$row['dia'];       // YYYY-MM-DD
+            $tipoRaw = (string)$row['tipo_raw'];  // pode vir variado
+            $qtd     = (int)$row['qtd'];
+
+            $rawKey = trim($tipoRaw);
+            if ($rawKey !== '') {
+                $rawCount[$rawKey] = ($rawCount[$rawKey] ?? 0) + 1;
+            }
+
+            $tipo = normalizaTipoMov($tipoRaw);
 
             if (!isset($map[$dia])) {
-                $map[$dia] = ['entrada' => 0, 'saida' => 0, 'remocao' => 0];
+                $map[$dia] = ['entrada' => 0, 'saida' => 0, 'remocao' => 0, 'outros' => 0];
             }
 
             if ($tipo !== '') {
-                $map[$dia][$tipo] = $qtd;
+                // soma por segurança
+                $map[$dia][$tipo] = ($map[$dia][$tipo] ?? 0) + $qtd;
             } else {
+                $map[$dia]['outros'] += $qtd;
                 $tiposDesconhecidos++;
             }
         }
         $stmtGT->close();
 
         if ($tiposDesconhecidos > 0) {
+            arsort($rawCount);
             logInfo('relatorios', 'Aviso: tipos desconhecidos no gráfico (normalização)', [
-                'qtd_tipos_desconhecidos' => $tiposDesconhecidos
+                'qtd_tipos_desconhecidos' => $tiposDesconhecidos,
+                'top_tipos_raw' => array_slice($rawCount, 0, 10, true)
             ]);
         }
 
-        $labels = array_keys($map);
+        $labels  = array_keys($map);
         $entrada = [];
         $saida   = [];
         $remocao = [];
+        $outros  = [];
 
         foreach ($labels as $d) {
             $entrada[] = $map[$d]['entrada'] ?? 0;
             $saida[]   = $map[$d]['saida'] ?? 0;
             $remocao[] = $map[$d]['remocao'] ?? 0;
+            $outros[]  = $map[$d]['outros'] ?? 0;
         }
 
         $grafico_temporal = [
             'labels'  => $labels,
             'entrada' => $entrada,
             'saida'   => $saida,
-            'remocao' => $remocao
+            'remocao' => $remocao,
+            'outros'  => $outros, // não quebra o front (ele ignora se não usar)
+            'meta'    => [
+                'tipos_desconhecidos' => $tiposDesconhecidos
+            ]
         ];
 
         logInfo('relatorios', 'Relatório gerado', [
