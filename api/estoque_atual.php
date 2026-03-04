@@ -16,12 +16,9 @@ initLog('estoque_atual');
 header('Content-Type: application/json; charset=utf-8');
 
 try {
-    // ✅ padrão do projeto: db.php deve expor $conn (mysqli)
-    if (!isset($conn) || !($conn instanceof mysqli)) {
-        throw new RuntimeException('Conexão com banco ($conn) não encontrada no db.php');
-    }
+    $conn = db(); // ✅ padrão do seu projeto
 
-    // ⚠️ Se sua tabela produtos NÃO tiver coluna ativo, remova o WHERE.
+    // Se sua tabela produtos NÃO tiver coluna ativo, remova o WHERE ativo = 1.
     $sql = "
         SELECT
             id,
@@ -35,9 +32,6 @@ try {
     ";
 
     $res = $conn->query($sql);
-    if (!$res) {
-        throw new RuntimeException('Falha na query: ' . $conn->error);
-    }
 
     $itens = [];
     $total_qtd = 0;
@@ -56,23 +50,22 @@ try {
             'nome'           => (string)$r['nome'],
             'quantidade'     => $qtd,
             'preco_custo'    => $pc,
-            'valor_estimado' => $val,
+            'valor_estimado' => $val
         ];
     }
 
-    logInfo('estoque_atual', 'Estoque atual gerado', [
-        'itens' => count($itens),
-        'total_qtd' => $total_qtd,
-        'total_valor' => $total_valor
-    ]);
+    $conn->close();
 
-    echo json_encode(resposta(true, 'Estoque atual gerado com sucesso.', [
-        'itens' => $itens,
-        'totais' => [
-            'total_qtd' => $total_qtd,
-            'total_valor' => $total_valor
-        ]
-    ]), JSON_UNESCAPED_UNICODE);
+    echo json_encode(
+        resposta(true, 'Estoque atual gerado com sucesso.', [
+            'itens' => $itens,
+            'totais' => [
+                'total_qtd' => $total_qtd,
+                'total_valor' => $total_valor
+            ]
+        ]),
+        JSON_UNESCAPED_UNICODE
+    );
 
 } catch (Throwable $e) {
     logError('estoque_atual', 'Erro ao gerar estoque atual', [
