@@ -8,21 +8,20 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <!-- CSS -->
-  <link rel="stylesheet" href="/estoque/css/base.css">
+  <link rel="stylesheet" href="css/base.css">
 </head>
 <body class="container py-4">
 
   <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark rounded mb-4 px-3">
-    <a class="navbar-brand fw-bold text-white" href="/estoque/index.html">📦 Estoque</a>
+    <a class="navbar-brand fw-bold text-white" href="index.html">📦 Estoque</a>
     <div class="collapse navbar-collapse">
       <ul class="navbar-nav me-auto">
         <li class="nav-item">
-          <a class="nav-link" href="/estoque/index.html">Estoque</a>
+          <a class="nav-link" href="index.html">Estoque</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link active" href="/estoque/relatorios.html">Relatórios</a>
+          <a class="nav-link active" href="relatorios.html">Relatórios</a>
         </li>
       </ul>
       <div>
@@ -32,13 +31,80 @@
     </div>
   </nav>
 
-  <h1 class="mb-4">📊 Relatórios</h1>
+  <h1 class="mb-3">📊 Relatórios</h1>
+
+  <!-- Filtros -->
+  <div class="card p-3 mb-4">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label">Data Início</label>
+        <input type="date" id="dataInicio" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Data Fim</label>
+        <input type="date" id="dataFim" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Tipo</label>
+        <select id="tipo" class="form-select">
+          <option value="">Todos</option>
+          <option value="entrada">Entrada</option>
+          <option value="saida">Saída</option>
+          <option value="remocao">Remoção</option>
+        </select>
+      </div>
+      <div class="col-md-3 d-grid">
+        <button id="btnAplicarFiltros" class="btn btn-primary">Aplicar filtros</button>
+      </div>
+    </div>
+
+    <div class="row g-3 mt-2">
+      <div class="col-md-6">
+        <div class="alert alert-secondary mb-0">
+          <strong>Total Quantidade:</strong> <span id="totalQtd">0</span>
+          &nbsp;&nbsp;|&nbsp;&nbsp;
+          <strong>Total Valor:</strong> R$ <span id="totalValor">0,00</span>
+        </div>
+      </div>
+      <div class="col-md-6 text-end">
+        <small class="text-muted">* Valor = quantidade × valor_unitario (quando existir)</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gráfico -->
+  <div class="card p-3 mb-4">
+    <h5 class="mb-3">Evolução temporal (quantidade)</h5>
+    <canvas id="graficoTemporal" height="90"></canvas>
+  </div>
+
+  <!-- Tabela -->
+  <div class="card p-3">
+    <h5 class="mb-3">Movimentações</h5>
+    <div class="table-responsive">
+      <table class="table table-striped table-bordered align-middle mb-0">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Produto</th>
+            <th>Tipo</th>
+            <th>Qtd</th>
+            <th>Valor Unit.</th>
+            <th>Valor Total</th>
+            <th>Data</th>
+            <th>Usuário</th>
+          </tr>
+        </thead>
+        <tbody id="tabelaMov"></tbody>
+      </table>
+    </div>
+  </div>
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-  <script type="module" src="/estoque/js/api.js"></script>
-  <script type="module" src="/estoque/js/logout.js"></script>
-  <script type="module" src="/estoque/js/relatorios.js"></script>
+  <script type="module" src="js/api.js"></script>
+  <script type="module" src="js/logout.js"></script>
+  <script type="module" src="js/relatorios.js"></script>
 </body>
 </html>

@@ -2,321 +2,216 @@
 import { apiRequest } from "./api.js";
 import { logJsInfo, logJsError } from "./logger.js";
 
-let filtrosAtuais = {};
-let graficoBarras = null;
-let graficoPizza = null;
+let graficoTemporal = null;
 
-/**
- * ==========================
- * Carregar usuários
- * ==========================
- */
-async function carregarUsuarios() {
-  try {
-    const resp = await apiRequest("listar_usuarios", null, "GET");
-    const select = document.getElementById("usuario");
-    if (!select) return;
-
-    select.innerHTML = `<option value="">Todos</option>`;
-
-    if (resp?.sucesso && Array.isArray(resp?.dados)) {
-      resp.dados.forEach(u => {
-        if (u?.id && u?.nome) {
-          select.insertAdjacentHTML(
-            "beforeend",
-            `<option value="${u.id}">${u.nome}</option>`
-          );
-        }
-      });
-    }
-
-    logJsInfo({
-      origem: "relatorios.js",
-      mensagem: "Usuários carregados",
-      total: resp?.dados?.length || 0
-    });
-
-  } catch (err) {
-    logJsError({
-      origem: "relatorios.js",
-      mensagem: "Erro ao carregar usuários",
-      detalhe: err.message,
-      stack: err.stack
-    });
-  }
+function formatBRL(valor) {
+  const n = Number(valor || 0);
+  return n.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
 }
 
-/**
- * ==========================
- * Carregar produtos
- * ==========================
- */
-async function carregarProdutos() {
-  try {
-    const resp = await apiRequest("listar_produtos", null, "GET");
-    const select = document.getElementById("produto");
-    if (!select) return;
-
-    select.innerHTML = `<option value="">Todos</option>`;
-
-    if (resp?.sucesso && Array.isArray(resp?.dados)) {
-      resp.dados.forEach(p => {
-        const id = p?.id ?? "";
-        const nome =
-          p?.nome?.trim?.() ||
-          p?.nome_produto?.trim?.() ||
-          p?.produto?.trim?.() ||
-          "[Sem nome]";
-
-        select.insertAdjacentHTML(
-          "beforeend",
-          `<option value="${id}">${nome}</option>`
-        );
-      });
-    }
-
-    logJsInfo({
-      origem: "relatorios.js",
-      mensagem: "Produtos carregados",
-      total: resp?.dados?.length || 0
-    });
-
-  } catch (err) {
-    logJsError({
-      origem: "relatorios.js",
-      mensagem: "Erro ao carregar produtos",
-      detalhe: err.message,
-      stack: err.stack
-    });
-  }
-}
-
-/**
- * ==========================
- * Carregar relatório
- * ==========================
- */
-async function carregarRelatorio(pagina = 1) {
-  filtrosAtuais = {
+function getFiltros() {
+  return {
     data_inicio: document.getElementById("dataInicio")?.value || "",
     data_fim: document.getElementById("dataFim")?.value || "",
-    usuario_id: document.getElementById("usuario")?.value || "",
-    produto_id: document.getElementById("produto")?.value || "",
     tipo: document.getElementById("tipo")?.value || "",
-    pagina,
-    limite: 50
+    pagina: 1,
+    limite: 200
   };
+}
 
-  const tbody = document.querySelector("#tabelaRelatorios tbody");
+function renderTotais(totais) {
+  const elQtd = document.getElementById("totalQtd");
+  const elValor = document.getElementById("totalValor");
+
+  const totalQtd = totais?.total_qtd ?? 0;
+  const totalValor = totais?.total_valor ?? 0;
+
+  if (elQtd) elQtd.textContent = String(totalQtd);
+  if (elValor) elValor.textContent = formatBRL(totalValor);
+}
+
+function renderTabela(dados = []) {
+  const tbody = document.getElementById("tabelaMov");
   if (!tbody) return;
 
-  tbody.innerHTML = `
-    <tr>
-      <td colspan="6" class="text-center text-muted">
-        Carregando...
-      </td>
-    </tr>`;
+  if (!Array.isArray(dados) || dados.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="text-center text-muted">
+          Nenhum registro encontrado com os filtros aplicados.
+        </td>
+      </tr>`;
+    return;
+  }
+
+  tbody.innerHTML = "";
+
+  for (const item of dados) {
+    const tipo = item?.tipo || "-";
+    const tipoBadge =
+      tipo === "entrada"
+        ? `<span class="badge bg-success">entrada</span>`
+        : tipo === "saida"
+        ? `<span class="badge bg-danger">saída</span>`
+        : `<span class="badge bg-secondary">${tipo}</span>`;
+
+    const valorUnit =
+      item?.valor_unitario === null || item?.valor_unitario === undefined
+        ? "-"
+        : `R$ ${formatBRL(item.valor_unitario)}`;
+
+    const valorTot =
+      item?.valor_total === null || item?.valor_total === undefined
+        ? "-"
+        : `R$ ${formatBRL(item.valor_total)}`;
+
+    tbody.insertAdjacentHTML(
+      "beforeend",
+      `
+      <tr>
+        <td>${item?.id ?? "-"}</td>
+        <td>${item?.produto_nome ?? "-"}</td>
+        <td>${tipoBadge}</td>
+        <td>${item?.quantidade ?? 0}</td>
+        <td>${valorUnit}</td>
+        <td>${valorTot}</td>
+        <td>${item?.data ?? "-"}</td>
+        <td>${item?.usuario ?? "Sistema"}</td>
+      </tr>
+      `
+    );
+  }
+}
+
+function renderGraficoTemporal(graf) {
+  const canvas = document.getElementById("graficoTemporal");
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+  const Chart = window.Chart;
+
+  const labels = Array.isArray(graf?.labels) ? graf.labels : [];
+  const entrada = Array.isArray(graf?.entrada) ? graf.entrada : [];
+  const saida = Array.isArray(graf?.saida) ? graf.saida : [];
+  const remocao = Array.isArray(graf?.remocao) ? graf.remocao : [];
+
+  // Se não tiver nada, destrói gráfico antigo e mostra vazio
+  if (!labels.length) {
+    if (graficoTemporal) {
+      graficoTemporal.destroy();
+      graficoTemporal = null;
+    }
+    return;
+  }
+
+  if (graficoTemporal) {
+    graficoTemporal.destroy();
+  }
+
+  graficoTemporal = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Entrada (Qtd)",
+          data: entrada
+        },
+        {
+          label: "Saída (Qtd)",
+          data: saida
+        },
+        {
+          label: "Remoção (Qtd)",
+          data: remocao
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: "bottom" }
+      },
+      scales: {
+        y: { beginAtZero: true }
+      }
+    }
+  });
+}
+
+async function carregarRelatorio() {
+  const filtros = getFiltros();
+
+  // carrega estado "loading" na tabela
+  const tbody = document.getElementById("tabelaMov");
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="text-center text-muted">
+          Carregando...
+        </td>
+      </tr>`;
+  }
 
   try {
-    const resp = await apiRequest(
-      "relatorio_movimentacoes",
-      filtrosAtuais,
-      "GET"
-    );
+    const resp = await apiRequest("relatorio_movimentacoes", filtros, "GET");
 
-    tbody.innerHTML = "";
+    if (!resp?.sucesso) {
+      renderTotais({ total_qtd: 0, total_valor: 0 });
+      renderTabela([]);
+      renderGraficoTemporal({ labels: [], entrada: [], saida: [], remocao: [] });
 
-    if (!resp?.sucesso || !Array.isArray(resp?.dados) || !resp.dados.length) {
-      tbody.innerHTML = `
-        <tr>
-          <td colspan="6" class="text-center text-muted">
-            Nenhum registro encontrado com os filtros aplicados.
-          </td>
-        </tr>`;
-      atualizarGraficos({});
-      atualizarPaginacao(1, 1);
+      logJsError({
+        origem: "relatorios.js",
+        mensagem: resp?.mensagem || "Falha ao carregar relatório",
+        filtros
+      });
       return;
     }
 
-    resp.dados.forEach(item => {
-      const tipoClass =
-        item.tipo === "entrada"
-          ? "text-success"
-          : item.tipo === "saida"
-          ? "text-danger"
-          : "text-secondary";
+    // ✅ Importante: sua API retorna { sucesso, mensagem, dados: {...} }
+    const payload = resp?.dados || {};
 
-      tbody.insertAdjacentHTML(
-        "beforeend",
-        `
-        <tr>
-          <td>${item.id}</td>
-          <td>${item.data}</td>
-          <td>${item.produto_nome ?? item.produto ?? "-"}</td>
-          <td class="${tipoClass} fw-bold">${item.tipo}</td>
-          <td>${item.quantidade}</td>
-          <td>${item.usuario ?? "Sistema"}</td>
-        </tr>`
-      );
-    });
-
-    atualizarGraficos(resp.grafico || {});
-    atualizarPaginacao(resp.pagina || 1, resp.paginas || 1);
+    renderTotais(payload?.totais);
+    renderTabela(payload?.dados);
+    renderGraficoTemporal(payload?.grafico_temporal);
 
     logJsInfo({
       origem: "relatorios.js",
       mensagem: "Relatório carregado",
-      total: resp.dados.length,
-      filtros: filtrosAtuais
+      filtros,
+      total: payload?.total ?? 0
     });
-
   } catch (err) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="6" class="text-center text-danger">
-          Erro ao carregar relatório
-        </td>
-      </tr>`;
+    renderTotais({ total_qtd: 0, total_valor: 0 });
+    renderTabela([]);
+    renderGraficoTemporal({ labels: [], entrada: [], saida: [], remocao: [] });
 
     logJsError({
       origem: "relatorios.js",
-      mensagem: "Falha ao carregar relatório",
+      mensagem: "Erro inesperado ao carregar relatório",
       detalhe: err.message,
-      stack: err.stack,
-      filtros: filtrosAtuais
+      stack: err.stack
     });
   }
 }
 
-/**
- * ==========================
- * Paginação
- * ==========================
- */
-function atualizarPaginacao(pagina, paginas) {
-  const div = document.getElementById("paginacao");
-  if (!div) return;
+function bindEventos() {
+  document
+    .getElementById("btnAplicarFiltros")
+    ?.addEventListener("click", () => carregarRelatorio());
 
-  div.innerHTML = "";
-  if (paginas <= 1) return;
-
-  if (pagina > 1) {
-    div.insertAdjacentHTML(
-      "beforeend",
-      `<button class="btn btn-secondary me-2" onclick="carregarRelatorio(${pagina - 1})">
-        Anterior
-      </button>`
-    );
-  }
-
-  div.insertAdjacentHTML(
-    "beforeend",
-    `<span class="fw-bold">Página ${pagina} de ${paginas}</span>`
-  );
-
-  if (pagina < paginas) {
-    div.insertAdjacentHTML(
-      "beforeend",
-      `<button class="btn btn-secondary ms-2" onclick="carregarRelatorio(${pagina + 1})">
-        Próxima
-      </button>`
-    );
-  }
+  // opcional: aplicar automaticamente ao mudar filtros
+  document.getElementById("dataInicio")?.addEventListener("change", carregarRelatorio);
+  document.getElementById("dataFim")?.addEventListener("change", carregarRelatorio);
+  document.getElementById("tipo")?.addEventListener("change", carregarRelatorio);
 }
 
-/**
- * ==========================
- * Gráficos
- * ==========================
- */
-function atualizarGraficos(data = {}) {
-  const ctxB = document.getElementById("graficoBarras")?.getContext("2d");
-  const ctxP = document.getElementById("graficoPizza")?.getContext("2d");
-  if (!ctxB || !ctxP) return;
-
-  const tipos = ["entrada", "saida", "remocao"];
-  const valores = tipos.map(t => data[t] ?? 0);
-
-  if (graficoBarras) graficoBarras.destroy();
-  graficoBarras = new Chart(ctxB, {
-    type: "bar",
-    data: {
-      labels: ["Entrada", "Saída", "Remoção"],
-      datasets: [{
-        data: valores,
-        backgroundColor: ["#0d6efd", "#dc3545", "#6c757d"]
-      }]
-    },
-    options: {
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true } }
-    }
-  });
-
-  if (graficoPizza) graficoPizza.destroy();
-  graficoPizza = new Chart(ctxP, {
-    type: "pie",
-    data: {
-      labels: ["Entrada", "Saída", "Remoção"],
-      datasets: [{
-        data: valores,
-        backgroundColor: ["#0d6efd", "#dc3545", "#6c757d"]
-      }]
-    },
-    options: { plugins: { legend: { position: "bottom" } } }
-  });
-}
-
-/**
- * ==========================
- * Botões
- * ==========================
- */
-document.getElementById("btn-filtrar")
-  ?.addEventListener("click", () => carregarRelatorio(1));
-
-document.getElementById("btn-limpar")
-  ?.addEventListener("click", () => {
-    ["dataInicio", "dataFim", "usuario", "produto", "tipo"].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.value = "";
-    });
-
-    document.querySelector("#tabelaRelatorios tbody").innerHTML = `
-      <tr>
-        <td colspan="6" class="text-center text-muted">
-          Use os filtros para buscar movimentações
-        </td>
-      </tr>`;
-
-    atualizarGraficos({});
-    atualizarPaginacao(1, 1);
-  });
-
-document.getElementById("btn-pdf")
-  ?.addEventListener("click", () => {
-    const q = new URLSearchParams(filtrosAtuais).toString();
-    window.open(`api/exportar.php?tipo=pdf&${q}`, "_blank");
-  });
-
-document.getElementById("btn-excel")
-  ?.addEventListener("click", () => {
-    const q = new URLSearchParams(filtrosAtuais).toString();
-    window.open(`api/exportar.php?tipo=excel&${q}`, "_blank");
-  });
-
-/**
- * ==========================
- * Inicialização
- * ==========================
- */
 document.addEventListener("DOMContentLoaded", () => {
-  carregarUsuarios();
-  carregarProdutos();
-  carregarRelatorio(1);
+  bindEventos();
+  carregarRelatorio();
 });
-
-/**
- * 🔑 Exposição mínima (onclick da paginação)
- */
-window.carregarRelatorio = carregarRelatorio;
