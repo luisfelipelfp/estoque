@@ -17,6 +17,35 @@ date_default_timezone_set('America/Sao_Paulo');
 initLog('relatorios');
 
 /**
+ * Normaliza o tipo vindo do banco para chaves padronizadas do sistema:
+ * entrada / saida / remocao
+ */
+function normalizaTipoMov(?string $tipo): string
+{
+    $t = strtolower(trim((string)$tipo));
+
+    // Normaliza acentos mais comuns (sem depender de extensão)
+    $t = str_replace(
+        ['á','à','ã','â','ä','é','ê','ë','í','î','ï','ó','ô','õ','ö','ú','û','ü','ç'],
+        ['a','a','a','a','a','e','e','e','i','i','i','o','o','o','o','u','u','u','c'],
+        $t
+    );
+
+    // Sinônimos/variações (se existirem registros antigos)
+    if ($t === 'saida' || $t === 'saidas') return 'saida';
+    if ($t === 'entrada' || $t === 'entradas') return 'entrada';
+
+    if ($t === 'remocao' || $t === 'remocoes' || $t === 'remover' || $t === 'remove' || $t === 'deletar' || $t === 'delete') {
+        return 'remocao';
+    }
+
+    // Se já estiver certo, mantém
+    if ($t === 'entrada' || $t === 'saida' || $t === 'remocao') return $t;
+
+    return ''; // desconhecido
+}
+
+/**
  * Gera relatório de movimentações (com filtros, paginação e totalizadores)
  * + gráfico temporal (quantidade por dia)
  */
@@ -32,6 +61,8 @@ function relatorio(mysqli $conn, array $filtros): array
 
     // 🔹 Filtros dinâmicos
     if (!empty($filtros['tipo']) && in_array($filtros['tipo'], ['entrada', 'saida', 'remocao'], true)) {
+        // OBS: Em collation unicode_ci, "saída" costuma comparar igual a "saida",
+        // mas mantemos o filtro simples e normalizamos no gráfico.
         $where[]  = 'm.tipo = ?';
         $params[] = $filtros['tipo'];
         $types   .= 's';
@@ -171,20 +202,31 @@ function relatorio(mysqli $conn, array $filtros): array
         $resGT = $stmtGT->get_result();
 
         $map = []; // dia => ['entrada'=>x,'saida'=>y,'remocao'=>z]
+        $tiposDesconhecidos = 0;
+
         while ($row = $resGT->fetch_assoc()) {
-            $dia  = $row['dia'];     // YYYY-MM-DD
-            $tipo = $row['tipo'];    // entrada/saida/remocao
+            $dia  = (string)$row['dia'];     // YYYY-MM-DD
+            $tipoRaw = $row['tipo'];        // pode vir com acento/variação
+            $tipo = normalizaTipoMov(is_string($tipoRaw) ? $tipoRaw : (string)$tipoRaw);
             $qtd  = (int)$row['qtd'];
 
             if (!isset($map[$dia])) {
                 $map[$dia] = ['entrada' => 0, 'saida' => 0, 'remocao' => 0];
             }
 
-            if (isset($map[$dia][$tipo])) {
+            if ($tipo !== '') {
                 $map[$dia][$tipo] = $qtd;
+            } else {
+                $tiposDesconhecidos++;
             }
         }
         $stmtGT->close();
+
+        if ($tiposDesconhecidos > 0) {
+            logInfo('relatorios', 'Aviso: tipos desconhecidos no gráfico (normalização)', [
+                'qtd_tipos_desconhecidos' => $tiposDesconhecidos
+            ]);
+        }
 
         $labels = array_keys($map);
         $entrada = [];
@@ -198,9 +240,9 @@ function relatorio(mysqli $conn, array $filtros): array
         }
 
         $grafico_temporal = [
-            'labels' => $labels,
+            'labels'  => $labels,
             'entrada' => $entrada,
-            'saida' => $saida,
+            'saida'   => $saida,
             'remocao' => $remocao
         ];
 
