@@ -124,7 +124,7 @@ function renderTabela(dados = []) {
 
 /**
  * Agrega arrays por blocos quando há pontos demais.
- * Mantém o "shape" do gráfico e reduz drasticamente o custo de render.
+ * Mantém o "shape" do gráfico e reduz o custo de render.
  */
 function downsampleGrafico({ labels, entrada, saida, remocao }, maxPoints) {
   const n = labels.length;
@@ -160,20 +160,35 @@ function downsampleGrafico({ labels, entrada, saida, remocao }, maxPoints) {
 }
 
 /**
- * ✅ NORMALIZA as séries para sempre baterem com labels:
- * - garante mesmo tamanho
- * - converte string/null/undefined -> número (ou 0)
+ * ✅ NORMALIZA as séries para baterem com labels.
+ * Aceita 2 formatos vindos da API:
+ * 1) Array:   [10, 5, 0, ...] (mesmo índice das labels)
+ * 2) Objeto:  { "2025-07-02": 10, "2025-07-03": 5, ... } (por data/label)
  */
-function normalizeSeries(series, len) {
-  const arr = Array.isArray(series) ? series : [];
-  const out = new Array(len);
-
-  for (let i = 0; i < len; i++) {
-    const v = arr[i];
-    const n = Number(v);
-    out[i] = Number.isFinite(n) ? n : 0;
+function normalizeSeries(series, labels) {
+  // Formato 1: array
+  if (Array.isArray(series)) {
+    const out = new Array(labels.length);
+    for (let i = 0; i < labels.length; i++) {
+      const n = Number(series[i]);
+      out[i] = Number.isFinite(n) ? n : 0;
+    }
+    return out;
   }
-  return out;
+
+  // Formato 2: objeto por label/data
+  if (series && typeof series === "object") {
+    const out = new Array(labels.length);
+    for (let i = 0; i < labels.length; i++) {
+      const key = labels[i];
+      const n = Number(series[key]);
+      out[i] = Number.isFinite(n) ? n : 0;
+    }
+    return out;
+  }
+
+  // Qualquer outro formato: zeros
+  return new Array(labels.length).fill(0);
 }
 
 function renderGraficoTemporal(graf) {
@@ -194,11 +209,11 @@ function renderGraficoTemporal(graf) {
     return;
   }
 
-  // ✅ aqui é o ponto que estava faltando:
-  // garante arrays sempre alinhados com labels
-  let entrada = normalizeSeries(graf?.entrada, labels.length);
-  let saida = normalizeSeries(graf?.saida, labels.length);
-  let remocao = normalizeSeries(graf?.remocao, labels.length);
+  // ✅ aqui é o ponto crítico:
+  // garante séries alinhadas com labels (mesmo se vierem como objeto)
+  let entrada = normalizeSeries(graf?.entrada, labels);
+  let saida = normalizeSeries(graf?.saida, labels);
+  let remocao = normalizeSeries(graf?.remocao, labels);
 
   // Se tiver MUITOS pontos, agrega para não travar o navegador
   if (labels.length > MAX_POINTS_CHART) {
