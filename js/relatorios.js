@@ -56,6 +56,12 @@ function buildQuery(params) {
   return usp.toString();
 }
 
+function setBtnLoading(id, loading) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  btn.disabled = !!loading;
+}
+
 function exportarCSV() {
   const filtros = getFiltros();
   delete filtros.pagina;
@@ -63,21 +69,55 @@ function exportarCSV() {
 
   const qs = buildQuery(filtros);
   const url = `api/exportar_csv.php${qs ? `?${qs}` : ""}`;
+
+  setBtnLoading("btnExportarCSV", true);
+  setTimeout(() => setBtnLoading("btnExportarCSV", false), 1500);
+
   window.location.href = url;
 }
 
 function exportarPDF() {
-  // Se você já criou api/exportar_pdf.php e quer usar endpoint:
-  // const filtros = getFiltros(); delete filtros.pagina; delete filtros.limite;
-  // const qs = buildQuery(filtros);
-  // window.location.href = `api/exportar_pdf.php${qs ? `?${qs}` : ""}`;
-  //
-  // Caso contrário, mantém print:
-  window.print();
+  // ✅ preferir endpoint (você disse que api/exportar_pdf.php já existe)
+  const filtros = getFiltros();
+  delete filtros.pagina;
+  delete filtros.limite;
+
+  const qs = buildQuery(filtros);
+  const url = `api/exportar_pdf.php${qs ? `?${qs}` : ""}`;
+
+  setBtnLoading("btnExportarPDF", true);
+  setTimeout(() => setBtnLoading("btnExportarPDF", false), 1500);
+
+  // Se o endpoint estiver OK, baixa PDF
+  // Se der erro no endpoint, você ainda pode usar o print como fallback
+  window.location.href = url;
 }
 
 /* =========================
-   ESTOQUE ATUAL (NOVO)
+   LIMPAR FILTROS (NOVO)
+   ========================= */
+
+function limparFiltros() {
+  const elIni = document.getElementById("dataInicio");
+  const elFim = document.getElementById("dataFim");
+  const elTipo = document.getElementById("tipo");
+
+  if (elIni) elIni.value = "";
+  if (elFim) elFim.value = "";
+  if (elTipo) elTipo.value = "";
+
+  // volta pro padrão de 30 dias
+  setDefaultDatesIfEmpty();
+  carregarRelatorio();
+
+  logJsInfo({
+    origem: "relatorios.js",
+    mensagem: "Filtros limpos"
+  });
+}
+
+/* =========================
+   ESTOQUE ATUAL
    ========================= */
 
 function renderEstoqueAtualLoading() {
@@ -431,6 +471,8 @@ function debounce(fn, delay = 350) {
 function bindEventos() {
   // filtros
   document.getElementById("btnAplicarFiltros")?.addEventListener("click", carregarRelatorio);
+  document.getElementById("btnLimparFiltros")?.addEventListener("click", limparFiltros);
+
   const d = debounce(carregarRelatorio, 350);
   document.getElementById("dataInicio")?.addEventListener("change", d);
   document.getElementById("dataFim")?.addEventListener("change", d);
@@ -445,9 +487,9 @@ document.addEventListener("DOMContentLoaded", () => {
   bindEventos();
   setDefaultDatesIfEmpty();
 
-  // ✅ Carrega estoque atual (novo)
+  // Estoque atual
   carregarEstoqueAtual();
 
-  // Relatório de movimentações (já existente)
+  // Relatório movimentações
   carregarRelatorio();
 });
