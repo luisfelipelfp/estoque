@@ -1,90 +1,82 @@
 <?php
 /**
  * api/exportar_csv.php
- * Exporta movimentações em CSV (Excel abre perfeito)
+ * Exporta movimentações em CSV (compatível com Excel)
+ * PHP 8.2+
  */
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/log.php';
-require_once __DIR__ . '/utils.php';
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/utils.php';
+require_once __DIR__ . '/log.php';
 
 date_default_timezone_set('America/Sao_Paulo');
 initLog('exportar_csv');
 
-/**
- * Escape simples para CSV
- */
-function csvCell(string $s): string {
-    // troca CR/LF e aspas
-    $s = str_replace(["\r\n", "\r", "\n"], " ", $s);
-    $s = str_replace('"', '""', $s);
-    return '"' . $s . '"';
-}
-
 try {
-    $conn = dbConn(); // ajuste se seu db.php usa outro nome (ex: conectar())
-    // se no seu db.php for $conn global, substitua conforme seu projeto
+    $conn = db(); // ✅ no seu projeto a função é db()
 
-    // filtros
-    $tipo = $_GET['tipo'] ?? '';
-    $data_inicio = $_GET['data_inicio'] ?? '';
-    $data_fim = $_GET['data_fim'] ?? '';
-    $produto_id = $_GET['produto_id'] ?? '';
-    $usuario_id = $_GET['usuario_id'] ?? '';
+    // ====== Lê filtros (mesmos nomes do relatorios.js) ======
+    $tipo       = isset($_GET['tipo']) ? trim((string)$_GET['tipo']) : '';
+    $dataInicio = isset($_GET['data_inicio']) ? trim((string)$_GET['data_inicio']) : '';
+    $dataFim    = isset($_GET['data_fim']) ? trim((string)$_GET['data_fim']) : '';
 
-    $where = [];
+    // (opcionais, se você for usar depois)
+    $produtoId  = isset($_GET['produto_id']) ? (int)$_GET['produto_id'] : 0;
+    $usuarioId  = isset($_GET['usuario_id']) ? (int)$_GET['usuario_id'] : 0;
+
+    $where  = [];
     $params = [];
-    $types = '';
+    $types  = '';
 
-    if ($tipo !== '' && in_array($tipo, ['entrada','saida','remocao'], true)) {
-        $where[] = 'm.tipo = ?';
+    if ($tipo !== '' && in_array($tipo, ['entrada', 'saida', 'remocao'], true)) {
+        $where[]  = 'm.tipo = ?';
         $params[] = $tipo;
-        $types .= 's';
+        $types   .= 's';
     }
 
-    if ($produto_id !== '' && ctype_digit((string)$produto_id)) {
-        $where[] = 'm.produto_id = ?';
-        $params[] = (int)$produto_id;
-        $types .= 'i';
+    if ($produtoId > 0) {
+        $where[]  = 'm.produto_id = ?';
+        $params[] = $produtoId;
+        $types   .= 'i';
     }
 
-    if ($usuario_id !== '' && ctype_digit((string)$usuario_id)) {
-        $where[] = 'm.usuario_id = ?';
-        $params[] = (int)$usuario_id;
-        $types .= 'i';
+    if ($usuarioId > 0) {
+        $where[]  = 'm.usuario_id = ?';
+        $params[] = $usuarioId;
+        $types   .= 'i';
     }
 
-    if ($data_inicio !== '') {
-        $where[] = 'm.data >= ?';
-        $params[] = $data_inicio . ' 00:00:00';
-        $types .= 's';
+    if ($dataInicio !== '') {
+        $where[]  = 'm.data >= ?';
+        $params[] = $dataInicio . ' 00:00:00';
+        $types   .= 's';
     }
 
-    if ($data_fim !== '') {
-        $where[] = 'm.data <= ?';
-        $params[] = $data_fim . ' 23:59:59';
-        $types .= 's';
+    if ($dataFim !== '') {
+        $where[]  = 'm.data <= ?';
+        $params[] = $dataFim . ' 23:59:59';
+        $types   .= 's';
     }
 
     $whereSql = $where ? (' WHERE ' . implode(' AND ', $where)) : '';
 
     $sql = "
-      SELECT
-        m.id,
-        COALESCE(p.nome, m.produto_nome, '[Produto removido]') AS produto,
-        m.tipo,
-        m.quantidade,
-        m.valor_unitario,
-        (m.quantidade * COALESCE(m.valor_unitario,0)) AS valor_total,
-        m.data,
-        COALESCE(u.nome, 'Sistema') AS usuario
-      FROM movimentacoes m
-      LEFT JOIN produtos p ON p.id = m.produto_id
-      LEFT JOIN usuarios u ON u.id = m.usuario_id
-      $whereSql
-      ORDER BY m.data DESC, m.id DESC
+        SELECT
+            m.id,
+            COALESCE(p.nome, m.produto_nome, '[Produto removido]') AS produto,
+            m.tipo,
+            m.quantidade,
+            m.valor_unitario,
+            (m.quantidade * COALESCE(m.valor_unitario,0)) AS valor_total,
+            DATE_FORMAT(m.data, '%d/%m/%Y %H:%i') AS data,
+            COALESCE(u.nome, 'Sistema') AS usuario
+        FROM movimentacoes m
+        LEFT JOIN produtos p ON p.id = m.produto_id
+        LEFT JOIN usuarios u ON u.id = m.usuario_id
+        $whereSql
+        ORDER BY m.data DESC, m.id DESC
     ";
 
     $stmt = $conn->prepare($sql);
@@ -94,51 +86,59 @@ try {
     $stmt->execute();
     $res = $stmt->get_result();
 
-    // headers CSV
-    $nomeArquivo = 'relatorio_movimentacoes_' . date('Y-m-d_H-i') . '.csv';
-    header('Content-Type: text/csv; charset=UTF-8');
-    header('Content-Disposition: attachment; filename="' . $nomeArquivo . '"');
+    // ====== Headers do download ======
+    $filename = 'movimentacoes_' . date('Y-m-d_H-i') . '.csv';
+
+    // limpa buffers antes de mandar header
+    while (ob_get_level() > 0) ob_end_clean();
+
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
     header('Pragma: no-cache');
     header('Expires: 0');
 
-    // BOM UTF-8 (Excel ama isso)
-    echo "\xEF\xBB\xBF";
+    $out = fopen('php://output', 'w');
 
-    // cabeçalho
-    echo implode(';', [
-        csvCell('ID'),
-        csvCell('Produto'),
-        csvCell('Tipo'),
-        csvCell('Quantidade'),
-        csvCell('Valor Unitário'),
-        csvCell('Valor Total'),
-        csvCell('Data'),
-        csvCell('Usuário'),
-    ]) . "\n";
+    // BOM UTF-8 (Excel pt-BR agradece)
+    fwrite($out, "\xEF\xBB\xBF");
 
-    while ($r = $res->fetch_assoc()) {
-        $dataFmt = date('d/m/Y H:i', strtotime((string)$r['data']));
-        $vu = $r['valor_unitario'] !== null ? number_format((float)$r['valor_unitario'], 2, ',', '.') : '';
-        $vt = number_format((float)$r['valor_total'], 2, ',', '.');
+    // separador ; (melhor no Excel PT-BR)
+    fputcsv($out, ['ID','Produto','Tipo','Quantidade','Valor Unitário','Valor Total','Data','Usuário'], ';');
 
-        echo implode(';', [
-            csvCell((string)$r['id']),
-            csvCell((string)$r['produto']),
-            csvCell((string)$r['tipo']),
-            csvCell((string)$r['quantidade']),
-            csvCell($vu),
-            csvCell($vt),
-            csvCell($dataFmt),
-            csvCell((string)$r['usuario']),
-        ]) . "\n";
+    while ($row = $res->fetch_assoc()) {
+        // formata dinheiro com vírgula
+        $valorUnit = ($row['valor_unitario'] === null) ? '' : number_format((float)$row['valor_unitario'], 2, ',', '.');
+        $valorTot  = number_format((float)$row['valor_total'], 2, ',', '.');
+
+        fputcsv($out, [
+            $row['id'],
+            $row['produto'],
+            $row['tipo'],
+            $row['quantidade'],
+            $valorUnit,
+            $valorTot,
+            $row['data'],
+            $row['usuario']
+        ], ';');
     }
 
+    fclose($out);
     $stmt->close();
+    $conn->close();
     exit;
 
 } catch (Throwable $e) {
-    // se der erro, devolve texto simples
-    http_response_code(500);
-    echo "Erro ao exportar CSV: " . $e->getMessage();
+    logError('exportar_csv', 'Erro ao exportar CSV', [
+        'arquivo' => $e->getFile(),
+        'linha' => $e->getLine(),
+        'erro' => $e->getMessage()
+    ]);
+
+    // se já mandou header de CSV, não dá pra responder JSON com segurança
+    if (!headers_sent()) {
+        json_response(false, 'Erro ao exportar CSV.', null, 500);
+    }
+
+    echo "Erro ao exportar CSV.";
     exit;
 }
