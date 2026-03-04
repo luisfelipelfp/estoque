@@ -125,7 +125,6 @@ function renderTabela(dados = []) {
 /**
  * Agrega arrays por blocos quando há pontos demais.
  * Mantém o "shape" do gráfico e reduz drasticamente o custo de render.
- * Ex: 800 dias -> 120 pontos (cada ponto = soma de ~6-7 dias).
  */
 function downsampleGrafico({ labels, entrada, saida, remocao }, maxPoints) {
   const n = labels.length;
@@ -148,7 +147,6 @@ function downsampleGrafico({ labels, entrada, saida, remocao }, maxPoints) {
       sumR += Number(remocao[j] || 0);
     }
 
-    // label representativa: "2026-01-01..2026-01-07"
     const first = labels[i];
     const last = labels[jEnd - 1];
     newLabels.push(i === jEnd - 1 ? String(first) : `${first}..${last}`);
@@ -161,6 +159,23 @@ function downsampleGrafico({ labels, entrada, saida, remocao }, maxPoints) {
   return { labels: newLabels, entrada: newEntrada, saida: newSaida, remocao: newRemocao };
 }
 
+/**
+ * ✅ NORMALIZA as séries para sempre baterem com labels:
+ * - garante mesmo tamanho
+ * - converte string/null/undefined -> número (ou 0)
+ */
+function normalizeSeries(series, len) {
+  const arr = Array.isArray(series) ? series : [];
+  const out = new Array(len);
+
+  for (let i = 0; i < len; i++) {
+    const v = arr[i];
+    const n = Number(v);
+    out[i] = Number.isFinite(n) ? n : 0;
+  }
+  return out;
+}
+
 function renderGraficoTemporal(graf) {
   const canvas = document.getElementById("graficoTemporal");
   if (!canvas) return;
@@ -169,9 +184,6 @@ function renderGraficoTemporal(graf) {
   const Chart = window.Chart;
 
   let labels = Array.isArray(graf?.labels) ? graf.labels : [];
-  let entrada = Array.isArray(graf?.entrada) ? graf.entrada : [];
-  let saida = Array.isArray(graf?.saida) ? graf.saida : [];
-  let remocao = Array.isArray(graf?.remocao) ? graf.remocao : [];
 
   // Se não tiver nada, destrói gráfico antigo e sai
   if (!labels.length) {
@@ -181,6 +193,12 @@ function renderGraficoTemporal(graf) {
     }
     return;
   }
+
+  // ✅ aqui é o ponto que estava faltando:
+  // garante arrays sempre alinhados com labels
+  let entrada = normalizeSeries(graf?.entrada, labels.length);
+  let saida = normalizeSeries(graf?.saida, labels.length);
+  let remocao = normalizeSeries(graf?.remocao, labels.length);
 
   // Se tiver MUITOS pontos, agrega para não travar o navegador
   if (labels.length > MAX_POINTS_CHART) {
@@ -217,11 +235,11 @@ function renderGraficoTemporal(graf) {
     }
   };
 
-  // Em vez de destruir e recriar sempre, atualiza se possível (mais leve)
+  // Atualiza sem recriar
   if (graficoTemporal) {
     graficoTemporal.data = data;
     graficoTemporal.options = options;
-    graficoTemporal.update("none"); // update sem animação
+    graficoTemporal.update("none");
     return;
   }
 
@@ -311,9 +329,6 @@ function bindEventos() {
 
 document.addEventListener("DOMContentLoaded", () => {
   bindEventos();
-
-  // ✅ Aqui está o principal: não carrega "tudo" por padrão
   setDefaultDatesIfEmpty();
-
   carregarRelatorio();
 });
