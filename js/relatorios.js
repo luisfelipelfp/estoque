@@ -58,34 +58,147 @@ function buildQuery(params) {
 
 function exportarCSV() {
   const filtros = getFiltros();
-
-  // CSV não deve exportar só a página atual
   delete filtros.pagina;
   delete filtros.limite;
 
   const qs = buildQuery(filtros);
   const url = `api/exportar_csv.php${qs ? `?${qs}` : ""}`;
-
-  // Força download
   window.location.href = url;
 }
 
 function exportarPDF() {
-  const filtros = getFiltros();
-
-  // PDF não deve exportar só a página atual
-  delete filtros.pagina;
-  delete filtros.limite;
-
-  const qs = buildQuery(filtros);
-  const url = `api/exportar_pdf.php${qs ? `?${qs}` : ""}`;
-
-  // Abre em nova aba pra não interromper a tela do relatório
-  window.open(url, "_blank");
+  // Se você já criou api/exportar_pdf.php e quer usar endpoint:
+  // const filtros = getFiltros(); delete filtros.pagina; delete filtros.limite;
+  // const qs = buildQuery(filtros);
+  // window.location.href = `api/exportar_pdf.php${qs ? `?${qs}` : ""}`;
+  //
+  // Caso contrário, mantém print:
+  window.print();
 }
 
 /* =========================
-   RENDER
+   ESTOQUE ATUAL (NOVO)
+   ========================= */
+
+function renderEstoqueAtualLoading() {
+  const tbody = document.getElementById("tabelaEstoqueAtual");
+  if (!tbody) return;
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="5" class="text-center text-muted">Carregando estoque...</td>
+    </tr>`;
+}
+
+function renderEstoqueAtualErro(msg) {
+  const tbody = document.getElementById("tabelaEstoqueAtual");
+  if (!tbody) return;
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="5" class="text-center text-danger">
+        ${msg || "Falha ao carregar estoque atual."}
+      </td>
+    </tr>`;
+}
+
+function renderEstoqueAtual(payload) {
+  const totalQtdEl = document.getElementById("estoqueTotalQtd");
+  const totalValorEl = document.getElementById("estoqueTotalValor");
+  const tbody = document.getElementById("tabelaEstoqueAtual");
+
+  const itens = payload?.itens || [];
+  const totais = payload?.totais || {};
+
+  const totalQtd = Number(totais?.total_qtd ?? 0);
+  const totalValor = Number(totais?.total_valor ?? 0);
+
+  if (totalQtdEl) totalQtdEl.textContent = String(totalQtd);
+  if (totalValorEl) totalValorEl.textContent = formatBRL(totalValor);
+
+  if (!tbody) return;
+
+  if (!Array.isArray(itens) || itens.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" class="text-center text-muted">Nenhum item de estoque encontrado.</td>
+      </tr>`;
+    return;
+  }
+
+  tbody.innerHTML = "";
+
+  for (const item of itens) {
+    const id = item?.id ?? "-";
+    const nome = item?.nome ?? "-";
+    const qtd = Number(item?.quantidade ?? 0);
+
+    const preco = item?.preco_custo === null || item?.preco_custo === undefined
+      ? 0
+      : Number(item.preco_custo);
+
+    const valorEstimado = item?.valor_estimado === null || item?.valor_estimado === undefined
+      ? (qtd * preco)
+      : Number(item.valor_estimado);
+
+    tbody.insertAdjacentHTML(
+      "beforeend",
+      `
+      <tr>
+        <td>${id}</td>
+        <td>${nome}</td>
+        <td>${qtd}</td>
+        <td>R$ ${formatBRL(preco)}</td>
+        <td>R$ ${formatBRL(valorEstimado)}</td>
+      </tr>
+      `
+    );
+  }
+}
+
+async function carregarEstoqueAtual() {
+  renderEstoqueAtualLoading();
+
+  try {
+    const resp = await fetch("api/estoque_atual.php", {
+      method: "GET",
+      headers: { "Accept": "application/json" },
+      cache: "no-store",
+      credentials: "same-origin"
+    });
+
+    if (!resp.ok) {
+      renderEstoqueAtualErro(`Erro HTTP ${resp.status} ao carregar estoque.`);
+      return;
+    }
+
+    const json = await resp.json();
+
+    if (!json?.sucesso) {
+      renderEstoqueAtualErro(json?.mensagem || "Erro ao gerar estoque atual.");
+      return;
+    }
+
+    renderEstoqueAtual(json?.dados);
+
+    logJsInfo({
+      origem: "relatorios.js",
+      mensagem: "Estoque atual carregado",
+      total_itens: json?.dados?.itens?.length ?? 0,
+      total_qtd: json?.dados?.totais?.total_qtd ?? 0
+    });
+
+  } catch (err) {
+    renderEstoqueAtualErro("Erro inesperado ao carregar estoque atual.");
+    logJsError({
+      origem: "relatorios.js",
+      mensagem: "Erro inesperado ao carregar estoque atual",
+      detalhe: err?.message,
+      stack: err?.stack
+    });
+  }
+}
+
+/* =========================
+   RELATÓRIO MOVIMENTAÇÕES
    ========================= */
 
 function renderTotais(totais) {
@@ -186,7 +299,6 @@ function downsample({ labels, entrada, saida, remocao, outros }, maxPoints) {
 }
 
 function resetCanvas(canvas) {
-  // garante que o canvas “zera” de verdade e recalcula tamanho
   const parent = canvas.parentNode;
   const newCanvas = canvas.cloneNode(true);
   parent.replaceChild(newCanvas, canvas);
@@ -223,17 +335,14 @@ function renderGraficoTemporal(graf) {
     labels = r.labels; entrada = r.entrada; saida = r.saida; remocao = r.remocao; outros = r.outros;
   }
 
-  // logs úteis
   const sE = sum(entrada), sS = sum(saida), sR = sum(remocao), sO = sum(outros);
   console.log("[grafico] labels:", labels.length, "sum:", { entrada: sE, saida: sS, remocao: sR, outros: sO });
 
-  // destrói sempre (evita estados ruins/resize)
   if (graficoTemporal) {
     graficoTemporal.destroy();
     graficoTemporal = null;
   }
 
-  // reset do canvas (remove lixo / tamanho bugado)
   canvas = resetCanvas(canvas);
 
   requestAnimationFrame(() => {
@@ -335,5 +444,10 @@ function bindEventos() {
 document.addEventListener("DOMContentLoaded", () => {
   bindEventos();
   setDefaultDatesIfEmpty();
+
+  // ✅ Carrega estoque atual (novo)
+  carregarEstoqueAtual();
+
+  // Relatório de movimentações (já existente)
   carregarRelatorio();
 });
