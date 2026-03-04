@@ -71,8 +71,17 @@ function exportarCSV() {
 }
 
 function exportarPDF() {
-  // PDF via impressão do navegador
-  window.print();
+  const filtros = getFiltros();
+
+  // PDF não deve exportar só a página atual
+  delete filtros.pagina;
+  delete filtros.limite;
+
+  const qs = buildQuery(filtros);
+  const url = `api/exportar_pdf.php${qs ? `?${qs}` : ""}`;
+
+  // Abre em nova aba pra não interromper a tela do relatório
+  window.open(url, "_blank");
 }
 
 /* =========================
@@ -318,7 +327,7 @@ function bindEventos() {
   document.getElementById("dataFim")?.addEventListener("change", d);
   document.getElementById("tipo")?.addEventListener("change", d);
 
-  // ✅ exportação
+  // exportação
   document.getElementById("btnExportarCSV")?.addEventListener("click", exportarCSV);
   document.getElementById("btnExportarPDF")?.addEventListener("click", exportarPDF);
 }
