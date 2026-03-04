@@ -42,6 +42,43 @@ function getFiltros() {
   };
 }
 
+/* =========================
+   EXPORTAÇÃO (CSV/PDF)
+   ========================= */
+
+function buildQuery(params) {
+  const usp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params || {})) {
+    if (v !== undefined && v !== null && String(v).trim() !== "") {
+      usp.append(k, String(v));
+    }
+  }
+  return usp.toString();
+}
+
+function exportarCSV() {
+  const filtros = getFiltros();
+
+  // CSV não deve exportar só a página atual
+  delete filtros.pagina;
+  delete filtros.limite;
+
+  const qs = buildQuery(filtros);
+  const url = `api/exportar_csv.php${qs ? `?${qs}` : ""}`;
+
+  // Força download
+  window.location.href = url;
+}
+
+function exportarPDF() {
+  // PDF via impressão do navegador
+  window.print();
+}
+
+/* =========================
+   RENDER
+   ========================= */
+
 function renderTotais(totais) {
   const elQtd = document.getElementById("totalQtd");
   const elValor = document.getElementById("totalValor");
@@ -140,7 +177,7 @@ function downsample({ labels, entrada, saida, remocao, outros }, maxPoints) {
 }
 
 function resetCanvas(canvas) {
-  // ✅ garante que o canvas “zera” de verdade e recalcula tamanho
+  // garante que o canvas “zera” de verdade e recalcula tamanho
   const parent = canvas.parentNode;
   const newCanvas = canvas.cloneNode(true);
   parent.replaceChild(newCanvas, canvas);
@@ -177,23 +214,19 @@ function renderGraficoTemporal(graf) {
     labels = r.labels; entrada = r.entrada; saida = r.saida; remocao = r.remocao; outros = r.outros;
   }
 
-  // ✅ logs úteis (sem te pedir nada)
+  // logs úteis
   const sE = sum(entrada), sS = sum(saida), sR = sum(remocao), sO = sum(outros);
   console.log("[grafico] labels:", labels.length, "sum:", { entrada: sE, saida: sS, remocao: sR, outros: sO });
 
-  // ✅ se tudo 0, o gráfico desenha “vazio” mesmo. Aí é dado do backend.
-  // Mas vamos desenhar de qualquer forma.
-
-  // ✅ destrói sempre (evita estados ruins/resize)
+  // destrói sempre (evita estados ruins/resize)
   if (graficoTemporal) {
     graficoTemporal.destroy();
     graficoTemporal = null;
   }
 
-  // ✅ reset do canvas (remove lixo / tamanho bugado)
+  // reset do canvas (remove lixo / tamanho bugado)
   canvas = resetCanvas(canvas);
 
-  // ✅ só renderiza depois do layout estar pronto
   requestAnimationFrame(() => {
     const ctx = canvas.getContext("2d");
 
@@ -278,11 +311,16 @@ function debounce(fn, delay = 350) {
 }
 
 function bindEventos() {
+  // filtros
   document.getElementById("btnAplicarFiltros")?.addEventListener("click", carregarRelatorio);
   const d = debounce(carregarRelatorio, 350);
   document.getElementById("dataInicio")?.addEventListener("change", d);
   document.getElementById("dataFim")?.addEventListener("change", d);
   document.getElementById("tipo")?.addEventListener("change", d);
+
+  // ✅ exportação
+  document.getElementById("btnExportarCSV")?.addEventListener("click", exportarCSV);
+  document.getElementById("btnExportarPDF")?.addEventListener("click", exportarPDF);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
