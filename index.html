@@ -8,8 +8,8 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
   <!-- CSS -->
-  <link rel="stylesheet" href="/estoque/css/base.css">
-  <link rel="stylesheet" href="/estoque/css/produtos.css">
+  <link rel="stylesheet" href="/estoque/css/base.css?v=20260304">
+  <link rel="stylesheet" href="/estoque/css/produtos.css?v=20260304">
 </head>
 <body class="container py-4">
 
@@ -27,33 +27,34 @@
       </ul>
       <div class="d-flex align-items-center">
         <span id="usuarioLogado" class="me-3 fw-bold text-info"></span>
-        <button id="btnLogout" class="btn btn-outline-danger btn-sm">Sair</button>
+        <button id="btnLogout" class="btn btn-outline-danger btn-sm" type="button">Sair</button>
       </div>
     </div>
   </nav>
 
   <h1 class="mb-4">📦 Estoque</h1>
 
-  <!-- Formulário: Adicionar Produto -->
-  <form id="formAdicionarProduto" class="mb-4 d-flex gap-2 align-items-stretch">
+  <!-- Barra de ações -->
+  <div class="d-flex gap-2 align-items-stretch mb-3">
     <input
       type="text"
-      id="nomeProduto"
+      id="buscaProduto"
       class="form-control"
       placeholder="Digite o nome do produto..."
       autocomplete="off"
-      required
     >
 
     <button
-      type="submit"
+      id="btnAbrirModalAdicionar"
+      type="button"
       class="btn btn-primary d-flex align-items-center gap-2 px-4 text-nowrap"
       aria-label="Adicionar produto"
+      title="Adicionar produto"
     >
       <span aria-hidden="true">➕</span>
       <span>Adicionar</span>
     </button>
-  </form>
+  </div>
 
   <table class="table table-bordered table-striped">
     <thead>
@@ -67,12 +68,127 @@
     <tbody id="tabelaProdutos"></tbody>
   </table>
 
+  <!-- ✅ Modal: Adicionar Produto -->
+  <div class="modal fade" id="modalAdicionarProduto" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Adicionar Produto</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="row g-3">
+            <!-- Produto (autocomplete) -->
+            <div class="col-12 col-lg-8">
+              <label class="form-label">Produto <span class="text-danger">*</span></label>
+
+              <div class="dropdown w-100">
+                <div class="input-group">
+                  <span class="input-group-text">🔎</span>
+                  <input id="apProdutoBusca" class="form-control" placeholder="Digite para buscar..." autocomplete="off">
+                  <button class="btn btn-outline-secondary" type="button" id="apLimparProduto" title="Limpar">✕</button>
+                </div>
+
+                <!-- lista de sugestões -->
+                <div id="apSugestoes" class="ap-sugestoes dropdown-menu show w-100" style="display:none;"></div>
+              </div>
+
+              <div class="mt-2 small text-muted" id="apProdutoInfo"></div>
+
+              <div class="mt-2">
+                <button id="apCriarProduto" class="btn btn-link p-0" type="button">
+                  ➕ Criar produto
+                </button>
+              </div>
+            </div>
+
+            <!-- Últimas movimentações -->
+            <div class="col-12 col-lg-4">
+              <div class="card">
+                <div class="card-body">
+                  <div class="fw-bold mb-2">Últimas Movimentações</div>
+                  <div id="apUltimasMov" class="small text-muted">Selecione um produto…</div>
+                  <div class="mt-2">
+                    <button id="apVerHistorico" class="btn btn-sm btn-outline-primary" type="button" disabled>
+                      Ver histórico completo
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Estoque atual / alerta -->
+            <div class="col-12">
+              <div class="alert alert-light border mb-0">
+                <div class="d-flex flex-wrap gap-3 align-items-center">
+                  <div>📦 <strong>Estoque atual:</strong> <span id="apEstoqueAtual">-</span></div>
+                  <div id="apAlertaEstoque" class="text-danger fw-bold"></div>
+                  <div class="ms-auto small text-muted">
+                    <strong>Data:</strong> <span id="apDataAgora">-</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tipo: Entrada / Saída -->
+            <div class="col-12 col-lg-6">
+              <label class="form-label">Tipo</label>
+              <div class="btn-group w-100" role="group" aria-label="Tipo de movimentação">
+                <input type="radio" class="btn-check" name="apTipo" id="apTipoEntrada" value="entrada" checked>
+                <label class="btn btn-outline-success" for="apTipoEntrada">Entrada</label>
+
+                <input type="radio" class="btn-check" name="apTipo" id="apTipoSaida" value="saida">
+                <label class="btn btn-outline-danger" for="apTipoSaida">Saída</label>
+              </div>
+            </div>
+
+            <!-- Quantidade (stepper) -->
+            <div class="col-12 col-lg-6">
+              <label class="form-label">Quantidade</label>
+              <div class="input-group">
+                <button class="btn btn-outline-secondary" type="button" id="apQtdMenos">−</button>
+                <input id="apQuantidade" type="number" class="form-control text-center" value="1" min="1" step="1">
+                <button class="btn btn-outline-secondary" type="button" id="apQtdMais">+</button>
+              </div>
+            </div>
+
+            <!-- Preço custo (opcional) -->
+            <div class="col-12 col-lg-6">
+              <label class="form-label">Preço custo (opcional)</label>
+              <div class="input-group">
+                <span class="input-group-text">R$</span>
+                <input id="apPrecoCusto" type="number" class="form-control" value="" min="0" step="0.01" placeholder="0,00">
+              </div>
+              <div class="form-text">Se informado, pode atualizar o custo do produto.</div>
+            </div>
+
+            <!-- Observação -->
+            <div class="col-12 col-lg-6">
+              <label class="form-label">Observação (opcional)</label>
+              <input id="apObs" class="form-control" placeholder="Ex.: compra, ajuste, consumo…">
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <div class="me-auto small text-muted" id="apStatus"></div>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="apSalvar">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-  <script type="module" src="/estoque/js/api.js"></script>
-  <script type="module" src="/estoque/js/logout.js"></script>
-  <script type="module" src="/estoque/js/main.js"></script>
-  <script type="module" src="/estoque/js/produtos.js"></script>
+  <script type="module" src="/estoque/js/api.js?v=20260304"></script>
+  <script type="module" src="/estoque/js/logout.js?v=20260304"></script>
+  <script type="module" src="/estoque/js/main.js?v=20260304"></script>
+  <script type="module" src="/estoque/js/produtos.js?v=20260304"></script>
+
+  <!-- ✅ Modal -->
+  <script type="module" src="/estoque/js/modal_adicionar_produto.js?v=20260304"></script>
 </body>
 </html>
