@@ -50,3 +50,45 @@ h1 {
 .table th, .table td {
   vertical-align: middle;
 }
+
+/* =========================
+   Impressão (PDF via print)
+   ========================= */
+@media print {
+  body {
+    background: #fff !important;
+    padding: 0 !important;
+  }
+
+  /* some com navbar e botões */
+  nav, #btnLogout, #btnAplicarFiltros, #btnExportarCSV, #btnExportarPDF {
+    display: none !important;
+  }
+
+  /* título mais limpo */
+  h1 {
+    background: none !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 0 12px 0 !important;
+    text-align: left !important;
+  }
+
+  .card {
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .table-responsive {
+    overflow: visible !important;
+  }
+
+  table {
+    font-size: 12px !important;
+  }
+
+  tr, td, th {
+    page-break-inside: avoid !important;
+  }
+}
