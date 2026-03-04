@@ -33,12 +33,6 @@ function removeAcentos(string $s): string
 /**
  * Normaliza o tipo vindo do banco para chaves padronizadas do sistema:
  * entrada / saida / remocao
- *
- * Aceita variações comuns:
- * - "Saída", "saida ", "SAIDA"
- * - "Remoção", "remover", "delete", "deletar"
- * - "Retirada", "venda", "consumo" -> saida
- * - abreviações: "e", "s", "r"
  */
 function normalizaTipoMov(?string $tipo): string
 {
@@ -141,14 +135,8 @@ function relatorio(mysqli $conn, array $filtros): array
         // =====================================================
         // 🔹 TOTAL (registros)
         // =====================================================
-        $stmtT = $conn->prepare(
-            "SELECT COUNT(*) AS total FROM movimentacoes m $whereSql"
-        );
-
-        if ($types) {
-            $stmtT->bind_param($types, ...$params);
-        }
-
+        $stmtT = $conn->prepare("SELECT COUNT(*) AS total FROM movimentacoes m $whereSql");
+        if ($types) $stmtT->bind_param($types, ...$params);
         $stmtT->execute();
         $total = (int)($stmtT->get_result()->fetch_assoc()['total'] ?? 0);
         $stmtT->close();
@@ -163,11 +151,7 @@ function relatorio(mysqli $conn, array $filtros): array
              FROM movimentacoes m
              $whereSql"
         );
-
-        if ($types) {
-            $stmtTot->bind_param($types, ...$params);
-        }
-
+        if ($types) $stmtTot->bind_param($types, ...$params);
         $stmtTot->execute();
         $totRow = $stmtTot->get_result()->fetch_assoc() ?: ['total_qtd' => 0, 'total_valor' => 0];
         $stmtTot->close();
@@ -197,12 +181,10 @@ function relatorio(mysqli $conn, array $filtros): array
         ";
 
         $stmt = $conn->prepare($sql);
-
         $paramsPage   = $params;
         $typesPage    = $types . 'ii';
         $paramsPage[] = $limite;
         $paramsPage[] = $offset;
-
         $stmt->bind_param($typesPage, ...$paramsPage);
 
         $stmt->execute();
@@ -224,7 +206,7 @@ function relatorio(mysqli $conn, array $filtros): array
         $stmt->close();
 
         // =====================================================
-        // 🔹 GRÁFICO TEMPORAL (quantidade por dia e tipo)
+        // 🔹 GRÁFICO TEMPORAL
         // =====================================================
         $stmtGT = $conn->prepare(
             "SELECT
@@ -236,29 +218,17 @@ function relatorio(mysqli $conn, array $filtros): array
              GROUP BY DATE(m.data), m.tipo
              ORDER BY dia ASC"
         );
-
-        if ($types) {
-            $stmtGT->bind_param($types, ...$params);
-        }
-
+        if ($types) $stmtGT->bind_param($types, ...$params);
         $stmtGT->execute();
         $resGT = $stmtGT->get_result();
 
         $map = []; // dia => ['entrada'=>x,'saida'=>y,'remocao'=>z,'outros'=>w]
         $tiposDesconhecidos = 0;
 
-        // debug: conta tipos crus (pra você enxergar o que está vindo)
-        $rawCount = [];
-
         while ($row = $resGT->fetch_assoc()) {
-            $dia     = (string)$row['dia'];       // YYYY-MM-DD
-            $tipoRaw = (string)$row['tipo_raw'];  // pode vir variado
+            $dia     = (string)$row['dia'];
+            $tipoRaw = (string)$row['tipo_raw'];
             $qtd     = (int)$row['qtd'];
-
-            $rawKey = trim($tipoRaw);
-            if ($rawKey !== '') {
-                $rawCount[$rawKey] = ($rawCount[$rawKey] ?? 0) + 1;
-            }
 
             $tipo = normalizaTipoMov($tipoRaw);
 
@@ -267,7 +237,6 @@ function relatorio(mysqli $conn, array $filtros): array
             }
 
             if ($tipo !== '') {
-                // soma por segurança
                 $map[$dia][$tipo] = ($map[$dia][$tipo] ?? 0) + $qtd;
             } else {
                 $map[$dia]['outros'] += $qtd;
@@ -276,14 +245,6 @@ function relatorio(mysqli $conn, array $filtros): array
         }
         $stmtGT->close();
 
-        if ($tiposDesconhecidos > 0) {
-            arsort($rawCount);
-            logInfo('relatorios', 'Aviso: tipos desconhecidos no gráfico (normalização)', [
-                'qtd_tipos_desconhecidos' => $tiposDesconhecidos,
-                'top_tipos_raw' => array_slice($rawCount, 0, 10, true)
-            ]);
-        }
-
         $labels  = array_keys($map);
         $entrada = [];
         $saida   = [];
@@ -291,20 +252,32 @@ function relatorio(mysqli $conn, array $filtros): array
         $outros  = [];
 
         foreach ($labels as $d) {
-            $entrada[] = $map[$d]['entrada'] ?? 0;
-            $saida[]   = $map[$d]['saida'] ?? 0;
-            $remocao[] = $map[$d]['remocao'] ?? 0;
-            $outros[]  = $map[$d]['outros'] ?? 0;
+            $entrada[] = (int)($map[$d]['entrada'] ?? 0);
+            $saida[]   = (int)($map[$d]['saida'] ?? 0);
+            $remocao[] = (int)($map[$d]['remocao'] ?? 0);
+            $outros[]  = (int)($map[$d]['outros'] ?? 0);
         }
+
+        // ✅ DEBUG REAL (se isso vier 0, o problema é na query ou cache)
+        $sumEntrada = array_sum($entrada);
+        $sumSaida   = array_sum($saida);
+        $sumRemocao = array_sum($remocao);
+        $sumOutros  = array_sum($outros);
 
         $grafico_temporal = [
             'labels'  => $labels,
             'entrada' => $entrada,
             'saida'   => $saida,
             'remocao' => $remocao,
-            'outros'  => $outros, // não quebra o front (ele ignora se não usar)
+            'outros'  => $outros,
             'meta'    => [
-                'tipos_desconhecidos' => $tiposDesconhecidos
+                'tipos_desconhecidos' => $tiposDesconhecidos,
+                'sum_entrada' => $sumEntrada,
+                'sum_saida' => $sumSaida,
+                'sum_remocao' => $sumRemocao,
+                'sum_outros' => $sumOutros,
+                'sum_total_grafico' => ($sumEntrada + $sumSaida + $sumRemocao + $sumOutros),
+                'debug_version' => 'relatorios.php-2026-03-04-02'
             ]
         ];
 

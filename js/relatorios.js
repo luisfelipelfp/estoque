@@ -4,41 +4,25 @@ import { logJsInfo, logJsError } from "./logger.js";
 
 let graficoTemporal = null;
 
-// ======= AJUSTES PRINCIPAIS (você pode alterar) =======
-const DEFAULT_RANGE_DAYS = 30;     // ao abrir sem datas, usa últimos 30 dias
-const MAX_POINTS_CHART = 120;      // máximo de labels no gráfico (acima disso, agrega)
-const DEFAULT_LIMITE_TABELA = 200; // mantém seu padrão
-// ======================================================
+const DEFAULT_RANGE_DAYS = 30;
+const MAX_POINTS_CHART = 120;
+const DEFAULT_LIMITE_TABELA = 200;
 
 function formatBRL(valor) {
   const n = Number(valor || 0);
-  return n.toLocaleString("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function pad2(n) {
-  return String(n).padStart(2, "0");
-}
-
+function pad2(n) { return String(n).padStart(2, "0"); }
 function toYMD(dateObj) {
-  const y = dateObj.getFullYear();
-  const m = pad2(dateObj.getMonth() + 1);
-  const d = pad2(dateObj.getDate());
-  return `${y}-${m}-${d}`;
+  return `${dateObj.getFullYear()}-${pad2(dateObj.getMonth() + 1)}-${pad2(dateObj.getDate())}`;
 }
 
 function setDefaultDatesIfEmpty() {
   const elIni = document.getElementById("dataInicio");
   const elFim = document.getElementById("dataFim");
   if (!elIni || !elFim) return;
-
-  const hasIni = !!elIni.value;
-  const hasFim = !!elFim.value;
-
-  // Se usuário já preencheu algo, não mexe
-  if (hasIni || hasFim) return;
+  if (elIni.value || elFim.value) return;
 
   const hoje = new Date();
   const ini = new Date();
@@ -61,12 +45,8 @@ function getFiltros() {
 function renderTotais(totais) {
   const elQtd = document.getElementById("totalQtd");
   const elValor = document.getElementById("totalValor");
-
-  const totalQtd = totais?.total_qtd ?? 0;
-  const totalValor = totais?.total_valor ?? 0;
-
-  if (elQtd) elQtd.textContent = String(totalQtd);
-  if (elValor) elValor.textContent = formatBRL(totalValor);
+  if (elQtd) elQtd.textContent = String(totais?.total_qtd ?? 0);
+  if (elValor) elValor.textContent = formatBRL(totais?.total_valor ?? 0);
 }
 
 function renderTabela(dados = []) {
@@ -75,11 +55,9 @@ function renderTabela(dados = []) {
 
   if (!Array.isArray(dados) || dados.length === 0) {
     tbody.innerHTML = `
-      <tr>
-        <td colspan="8" class="text-center text-muted">
-          Nenhum registro encontrado com os filtros aplicados.
-        </td>
-      </tr>`;
+      <tr><td colspan="8" class="text-center text-muted">
+        Nenhum registro encontrado com os filtros aplicados.
+      </td></tr>`;
     return;
   }
 
@@ -92,6 +70,8 @@ function renderTabela(dados = []) {
         ? `<span class="badge bg-success">entrada</span>`
         : tipo === "saida"
         ? `<span class="badge bg-danger">saída</span>`
+        : tipo === "remocao"
+        ? `<span class="badge bg-warning text-dark">remoção</span>`
         : `<span class="badge bg-secondary">${tipo}</span>`;
 
     const valorUnit =
@@ -122,85 +102,63 @@ function renderTabela(dados = []) {
   }
 }
 
-/**
- * Agrega arrays por blocos quando há pontos demais.
- * Mantém o "shape" do gráfico e reduz o custo de render.
- */
-function downsampleGrafico({ labels, entrada, saida, remocao }, maxPoints) {
+function toNumArray(arr, len) {
+  const out = new Array(len);
+  for (let i = 0; i < len; i++) {
+    const n = Number(arr?.[i]);
+    out[i] = Number.isFinite(n) ? n : 0;
+  }
+  return out;
+}
+
+function downsample({ labels, entrada, saida, remocao, outros }, maxPoints) {
   const n = labels.length;
-  if (n <= maxPoints) return { labels, entrada, saida, remocao };
+  if (n <= maxPoints) return { labels, entrada, saida, remocao, outros };
 
-  const bucketSize = Math.ceil(n / maxPoints);
+  const bucket = Math.ceil(n / maxPoints);
+  const L = [], E = [], S = [], R = [], O = [];
 
-  const newLabels = [];
-  const newEntrada = [];
-  const newSaida = [];
-  const newRemocao = [];
+  for (let i = 0; i < n; i += bucket) {
+    const end = Math.min(i + bucket, n);
+    let se = 0, ss = 0, sr = 0, so = 0;
 
-  for (let i = 0; i < n; i += bucketSize) {
-    const jEnd = Math.min(i + bucketSize, n);
-
-    let sumE = 0, sumS = 0, sumR = 0;
-    for (let j = i; j < jEnd; j++) {
-      sumE += Number(entrada[j] || 0);
-      sumS += Number(saida[j] || 0);
-      sumR += Number(remocao[j] || 0);
+    for (let j = i; j < end; j++) {
+      se += entrada[j] || 0;
+      ss += saida[j] || 0;
+      sr += remocao[j] || 0;
+      so += outros[j] || 0;
     }
 
     const first = labels[i];
-    const last = labels[jEnd - 1];
-    newLabels.push(i === jEnd - 1 ? String(first) : `${first}..${last}`);
+    const last = labels[end - 1];
+    L.push(i === end - 1 ? String(first) : `${first}..${last}`);
 
-    newEntrada.push(sumE);
-    newSaida.push(sumS);
-    newRemocao.push(sumR);
+    E.push(se); S.push(ss); R.push(sr); O.push(so);
   }
 
-  return { labels: newLabels, entrada: newEntrada, saida: newSaida, remocao: newRemocao };
+  return { labels: L, entrada: E, saida: S, remocao: R, outros: O };
 }
 
-/**
- * ✅ NORMALIZA as séries para baterem com labels.
- * Aceita 2 formatos vindos da API:
- * 1) Array:   [10, 5, 0, ...] (mesmo índice das labels)
- * 2) Objeto:  { "2025-07-02": 10, "2025-07-03": 5, ... } (por data/label)
- */
-function normalizeSeries(series, labels) {
-  // Formato 1: array
-  if (Array.isArray(series)) {
-    const out = new Array(labels.length);
-    for (let i = 0; i < labels.length; i++) {
-      const n = Number(series[i]);
-      out[i] = Number.isFinite(n) ? n : 0;
-    }
-    return out;
-  }
+function resetCanvas(canvas) {
+  // ✅ garante que o canvas “zera” de verdade e recalcula tamanho
+  const parent = canvas.parentNode;
+  const newCanvas = canvas.cloneNode(true);
+  parent.replaceChild(newCanvas, canvas);
+  return newCanvas;
+}
 
-  // Formato 2: objeto por label/data
-  if (series && typeof series === "object") {
-    const out = new Array(labels.length);
-    for (let i = 0; i < labels.length; i++) {
-      const key = labels[i];
-      const n = Number(series[key]);
-      out[i] = Number.isFinite(n) ? n : 0;
-    }
-    return out;
-  }
-
-  // Qualquer outro formato: zeros
-  return new Array(labels.length).fill(0);
+function sum(arr) {
+  return Array.isArray(arr) ? arr.reduce((a, b) => a + (Number(b) || 0), 0) : 0;
 }
 
 function renderGraficoTemporal(graf) {
-  const canvas = document.getElementById("graficoTemporal");
+  let canvas = document.getElementById("graficoTemporal");
   if (!canvas) return;
 
-  const ctx = canvas.getContext("2d");
   const Chart = window.Chart;
+  if (!Chart) return;
 
   let labels = Array.isArray(graf?.labels) ? graf.labels : [];
-
-  // Se não tiver nada, destrói gráfico antigo e sai
   if (!labels.length) {
     if (graficoTemporal) {
       graficoTemporal.destroy();
@@ -209,97 +167,87 @@ function renderGraficoTemporal(graf) {
     return;
   }
 
-  // ✅ aqui é o ponto crítico:
-  // garante séries alinhadas com labels (mesmo se vierem como objeto)
-  let entrada = normalizeSeries(graf?.entrada, labels);
-  let saida = normalizeSeries(graf?.saida, labels);
-  let remocao = normalizeSeries(graf?.remocao, labels);
+  let entrada = toNumArray(graf?.entrada, labels.length);
+  let saida   = toNumArray(graf?.saida, labels.length);
+  let remocao = toNumArray(graf?.remocao, labels.length);
+  let outros  = toNumArray(graf?.outros, labels.length);
 
-  // Se tiver MUITOS pontos, agrega para não travar o navegador
   if (labels.length > MAX_POINTS_CHART) {
-    const reduced = downsampleGrafico({ labels, entrada, saida, remocao }, MAX_POINTS_CHART);
-    labels = reduced.labels;
-    entrada = reduced.entrada;
-    saida = reduced.saida;
-    remocao = reduced.remocao;
+    const r = downsample({ labels, entrada, saida, remocao, outros }, MAX_POINTS_CHART);
+    labels = r.labels; entrada = r.entrada; saida = r.saida; remocao = r.remocao; outros = r.outros;
   }
 
-  const data = {
-    labels,
-    datasets: [
-      { label: "Entrada (Qtd)", data: entrada },
-      { label: "Saída (Qtd)", data: saida },
-      { label: "Remoção (Qtd)", data: remocao }
-    ]
-  };
+  // ✅ logs úteis (sem te pedir nada)
+  const sE = sum(entrada), sS = sum(saida), sR = sum(remocao), sO = sum(outros);
+  console.log("[grafico] labels:", labels.length, "sum:", { entrada: sE, saida: sS, remocao: sR, outros: sO });
 
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    // PERFORMANCE
-    animation: false,
-    parsing: false,
-    normalized: true,
-    plugins: {
-      legend: { position: "bottom" },
-      tooltip: { mode: "index", intersect: false }
-    },
-    interaction: { mode: "index", intersect: false },
-    scales: {
-      y: { beginAtZero: true }
-    }
-  };
+  // ✅ se tudo 0, o gráfico desenha “vazio” mesmo. Aí é dado do backend.
+  // Mas vamos desenhar de qualquer forma.
 
-  // Atualiza sem recriar
+  // ✅ destrói sempre (evita estados ruins/resize)
   if (graficoTemporal) {
-    graficoTemporal.data = data;
-    graficoTemporal.options = options;
-    graficoTemporal.update("none");
-    return;
+    graficoTemporal.destroy();
+    graficoTemporal = null;
   }
 
-  graficoTemporal = new Chart(ctx, {
-    type: "bar",
-    data,
-    options
+  // ✅ reset do canvas (remove lixo / tamanho bugado)
+  canvas = resetCanvas(canvas);
+
+  // ✅ só renderiza depois do layout estar pronto
+  requestAnimationFrame(() => {
+    const ctx = canvas.getContext("2d");
+
+    const data = {
+      labels,
+      datasets: [
+        { label: "Entrada (Qtd)", data: entrada },
+        { label: "Saída (Qtd)", data: saida },
+        { label: "Remoção (Qtd)", data: remocao },
+        { label: "Outros (Qtd)", data: outros }
+      ]
+    };
+
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { position: "bottom" },
+        tooltip: { mode: "index", intersect: false }
+      },
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        y: { beginAtZero: true }
+      }
+    };
+
+    graficoTemporal = new Chart(ctx, { type: "bar", data, options });
   });
 }
 
 async function carregarRelatorio() {
   const filtros = getFiltros();
 
-  // loading na tabela
   const tbody = document.getElementById("tabelaMov");
   if (tbody) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="8" class="text-center text-muted">
-          Carregando...
-        </td>
-      </tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted">Carregando...</td></tr>`;
   }
 
   try {
     const resp = await apiRequest("relatorio_movimentacoes", filtros, "GET");
-
     if (!resp?.sucesso) {
       renderTotais({ total_qtd: 0, total_valor: 0 });
       renderTabela([]);
-      renderGraficoTemporal({ labels: [], entrada: [], saida: [], remocao: [] });
-
-      logJsError({
-        origem: "relatorios.js",
-        mensagem: resp?.mensagem || "Falha ao carregar relatório",
-        filtros
-      });
+      renderGraficoTemporal({ labels: [], entrada: [], saida: [], remocao: [], outros: [] });
       return;
     }
 
     const payload = resp?.dados || {};
-
     renderTotais(payload?.totais);
     renderTabela(payload?.dados);
     renderGraficoTemporal(payload?.grafico_temporal);
+
+    console.log("grafico_temporal.meta:", payload?.grafico_temporal?.meta);
 
     logJsInfo({
       origem: "relatorios.js",
@@ -310,7 +258,7 @@ async function carregarRelatorio() {
   } catch (err) {
     renderTotais({ total_qtd: 0, total_valor: 0 });
     renderTabela([]);
-    renderGraficoTemporal({ labels: [], entrada: [], saida: [], remocao: [] });
+    renderGraficoTemporal({ labels: [], entrada: [], saida: [], remocao: [], outros: [] });
 
     logJsError({
       origem: "relatorios.js",
@@ -321,7 +269,6 @@ async function carregarRelatorio() {
   }
 }
 
-// Debounce para evitar várias chamadas seguidas em change/input
 function debounce(fn, delay = 350) {
   let t = null;
   return (...args) => {
@@ -331,15 +278,11 @@ function debounce(fn, delay = 350) {
 }
 
 function bindEventos() {
-  const btn = document.getElementById("btnAplicarFiltros");
-  if (btn) btn.addEventListener("click", () => carregarRelatorio());
-
-  const carregarDebounced = debounce(carregarRelatorio, 350);
-
-  // aplicar automaticamente ao mudar filtros (com debounce)
-  document.getElementById("dataInicio")?.addEventListener("change", carregarDebounced);
-  document.getElementById("dataFim")?.addEventListener("change", carregarDebounced);
-  document.getElementById("tipo")?.addEventListener("change", carregarDebounced);
+  document.getElementById("btnAplicarFiltros")?.addEventListener("click", carregarRelatorio);
+  const d = debounce(carregarRelatorio, 350);
+  document.getElementById("dataInicio")?.addEventListener("change", d);
+  document.getElementById("dataFim")?.addEventListener("change", d);
+  document.getElementById("tipo")?.addEventListener("change", d);
 }
 
 document.addEventListener("DOMContentLoaded", () => {

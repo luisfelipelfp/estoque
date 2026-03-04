@@ -8,9 +8,7 @@ body, h1, h2, h3, p, table {
 /* Corpo */
 body {
   background-color: #f8f9fa;
-  /* REMOVIDO: padding: 20px; 
-     Você já usa Bootstrap: body.container.py-4
-     Isso evita espaço extra e empurrar conteúdo */
+  padding: 20px;
 }
 
 /* Títulos */
@@ -29,13 +27,13 @@ h1 {
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
-/* ====== Relatórios: gráfico pequeno e estável ====== */
+/* ✅ Gráfico pequeno e estável (sem “rolagem infinita”) */
 .chart-box {
-  height: 240px;       /* ajuste aqui: 200, 240, 280... */
+  height: 240px;
   max-height: 240px;
   width: 100%;
-  position: relative;  /* importante para Chart.js responsivo */
-  overflow: hidden;    /* garante que não “estoure” */
+  position: relative;
+  overflow: hidden;
 }
 
 #graficoTemporal {
@@ -43,4 +41,12 @@ h1 {
   height: 100% !important;
   display: block;
 }
-/* ================================================ */
+
+/* Pequenos ajustes visuais opcionais (seguros) */
+.card {
+  border-radius: 12px;
+}
+
+.table th, .table td {
+  vertical-align: middle;
+}
