@@ -34,9 +34,25 @@
 
   <h1 class="mb-4">📦 Estoque</h1>
 
-  <form id="formAdicionarProduto" class="mb-4 d-flex gap-2">
-    <input type="text" id="nomeProduto" class="form-control" required>
-    <button type="submit" class="btn btn-primary">➕ Adicionar</button>
+  <!-- Formulário: Adicionar Produto -->
+  <form id="formAdicionarProduto" class="mb-4 d-flex gap-2 align-items-stretch">
+    <input
+      type="text"
+      id="nomeProduto"
+      class="form-control"
+      placeholder="Digite o nome do produto..."
+      autocomplete="off"
+      required
+    >
+
+    <button
+      type="submit"
+      class="btn btn-primary d-flex align-items-center gap-2 px-4 text-nowrap"
+      aria-label="Adicionar produto"
+    >
+      <span aria-hidden="true">➕</span>
+      <span>Adicionar</span>
+    </button>
   </form>
 
   <table class="table table-bordered table-striped">
