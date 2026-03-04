@@ -75,7 +75,11 @@
   <!-- Gráfico -->
   <div class="card p-3 mb-4">
     <h5 class="mb-3">Evolução temporal (quantidade)</h5>
-    <canvas id="graficoTemporal" height="90"></canvas>
+
+    <!-- wrapper com altura fixa (gráfico pequeno e sem rolagem gigante) -->
+    <div class="chart-box">
+      <canvas id="graficoTemporal"></canvas>
+    </div>
   </div>
 
   <!-- Tabela -->

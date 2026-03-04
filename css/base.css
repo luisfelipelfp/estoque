@@ -1,28 +1,46 @@
 /* Reset básico */
 body, h1, h2, h3, p, table {
-    margin: 0;
-    padding: 0;
-    font-family: Verdana, sans-serif;
+  margin: 0;
+  padding: 0;
+  font-family: Verdana, sans-serif;
 }
 
 /* Corpo */
 body {
-    background-color: #f8f9fa;
-    padding: 20px;
+  background-color: #f8f9fa;
+  /* REMOVIDO: padding: 20px; 
+     Você já usa Bootstrap: body.container.py-4
+     Isso evita espaço extra e empurrar conteúdo */
 }
 
 /* Títulos */
 h1, h2 {
-    margin-bottom: 20px;
-    font-weight: bold;
+  margin-bottom: 20px;
+  font-weight: bold;
 }
 
 h1 {
-    background-color: #0d6efd;
-    color: white;
-    padding: 20px;
-    border-radius: 10px;
-    font-size: 1.8rem;
-    text-align: center;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  background-color: #0d6efd;
+  color: white;
+  padding: 20px;
+  border-radius: 10px;
+  font-size: 1.8rem;
+  text-align: center;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
+
+/* ====== Relatórios: gráfico pequeno e estável ====== */
+.chart-box {
+  height: 240px;       /* ajuste aqui: 200, 240, 280... */
+  max-height: 240px;
+  width: 100%;
+  position: relative;  /* importante para Chart.js responsivo */
+  overflow: hidden;    /* garante que não “estoure” */
+}
+
+#graficoTemporal {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+/* ================================================ */
