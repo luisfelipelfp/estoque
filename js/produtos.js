@@ -1,318 +1,199 @@
-// js/produtos.js
-import { apiRequest } from "./api.js";
-import { logJsInfo, logJsError } from "./logger.js";
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Estoque da Gordinha e do Careca</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
-const inflight = new Set();
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
-/**
- * Normaliza resposta da API para um array de produtos
- */
-function extrairListaProdutos(resp) {
-  // formatos possíveis:
-  // 1) { sucesso:true, dados:[...] }
-  // 2) { sucesso:true, dados:{produtos:[...]} }
-  // 3) [...]
-  if (Array.isArray(resp?.dados?.produtos)) return resp.dados.produtos;
-  if (Array.isArray(resp?.dados)) return resp.dados;
-  if (Array.isArray(resp)) return resp;
-  return [];
-}
+  <!-- CSS -->
+  <link rel="stylesheet" href="/estoque/css/base.css?v=20260304">
+  <link rel="stylesheet" href="/estoque/css/produtos.css?v=20260304">
+</head>
+<body class="container py-4">
 
-/**
- * Lista produtos
- */
-async function listarProdutos() {
-  const tbody = document.getElementById("tabelaProdutos"); // ✅ seu HTML usa o ID no <tbody>
-  if (!tbody) {
-    logJsError({
-      origem: "produtos.js",
-      mensagem: "Elemento #tabelaProdutos (tbody) não encontrado no DOM"
-    });
-    return;
-  }
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark rounded mb-4 px-3">
+    <a class="navbar-brand fw-bold text-white" href="/estoque/index.html">📦 Estoque</a>
+    <div class="collapse navbar-collapse">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item">
+          <a class="nav-link active" href="/estoque/index.html">Estoque</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="/estoque/relatorios.html">Relatórios</a>
+        </li>
+      </ul>
+      <div class="d-flex align-items-center">
+        <span id="usuarioLogado" class="me-3 fw-bold text-info"></span>
+        <button id="btnLogout" class="btn btn-outline-danger btn-sm" type="button">Sair</button>
+      </div>
+    </div>
+  </nav>
 
-  // estado inicial
-  tbody.innerHTML = `
-    <tr>
-      <td colspan="4" class="text-center text-muted">Carregando...</td>
-    </tr>
-  `;
+  <h1 class="mb-4">📦 Estoque</h1>
 
-  try {
-    const resp = await apiRequest("listar_produtos", null, "GET");
-    const produtos = extrairListaProdutos(resp);
+  <!-- Barra de ações -->
+  <div class="d-flex gap-2 align-items-stretch mb-3">
+    <input
+      type="text"
+      id="buscaProduto"
+      class="form-control"
+      placeholder="Digite o nome do produto..."
+      autocomplete="off"
+    >
 
-    tbody.innerHTML = "";
+    <button
+      id="btnAbrirModalAdicionar"
+      type="button"
+      class="btn btn-primary d-flex align-items-center gap-2 px-4 text-nowrap"
+      aria-label="Adicionar produto"
+      title="Adicionar produto"
+    >
+      <span aria-hidden="true">➕</span>
+      <span>Adicionar</span>
+    </button>
+  </div>
 
-    if (!produtos.length) {
-      tbody.innerHTML = `
-        <tr>
-          <td colspan="4" class="text-center text-muted">
-            Nenhum produto encontrado
-          </td>
-        </tr>
-      `;
-      logJsInfo({
-        origem: "produtos.js",
-        mensagem: "Nenhum produto retornado pela API"
-      });
-      return;
-    }
-
-    produtos.forEach((p) => {
-      const id = Number(p?.id ?? 0);
-
-      const nome =
-        p?.nome?.trim?.() ||
-        p?.produto_nome?.trim?.() ||
-        p?.nome_produto?.trim?.() ||
-        p?.produto?.trim?.() ||
-        "[Sem nome]";
-
-      const quantidade = Number(p?.quantidade ?? p?.qtd ?? 0);
-
-      const tr = document.createElement("tr");
-
-      // ✅ coloca um atributo pra facilitar desabilitar só os botões dessa linha
-      tr.setAttribute("data-produto-id", String(id));
-
-      tr.innerHTML = `
-        <td>${id || "-"}</td>
-        <td>${nome}</td>
-        <td>${Number.isFinite(quantidade) ? quantidade : 0}</td>
-        <td class="d-flex gap-2 flex-wrap">
-          <button class="btn btn-success btn-sm" onclick="entrada(${id})" ${id ? "" : "disabled"}>
-            Entrada
-          </button>
-          <button class="btn btn-warning btn-sm" onclick="saida(${id})" ${id ? "" : "disabled"}>
-            Saída
-          </button>
-          <button class="btn btn-danger btn-sm" onclick="remover(${id})" ${id ? "" : "disabled"}>
-            Remover
-          </button>
-        </td>
-      `;
-
-      tbody.appendChild(tr);
-    });
-
-    logJsInfo({
-      origem: "produtos.js",
-      mensagem: "Produtos listados",
-      total: produtos.length
-    });
-
-  } catch (err) {
-    console.error("Erro ao listar produtos:", err);
-
-    logJsError({
-      origem: "produtos.js",
-      mensagem: "Falha ao listar produtos",
-      detalhe: err.message,
-      stack: err.stack
-    });
-
-    tbody.innerHTML = `
+  <table class="table table-bordered table-striped">
+    <thead>
       <tr>
-        <td colspan="4" class="text-center text-danger">
-          Erro ao carregar produtos. Verifique o servidor.
-        </td>
+        <th>ID</th>
+        <th>Nome</th>
+        <th>Qtd</th>
+        <th>Ações</th>
       </tr>
-    `;
-  }
-}
+    </thead>
+    <tbody id="tabelaProdutos"></tbody>
+  </table>
 
-/**
- * Helper: desabilita/habilita botões somente da linha do produto
- */
-function setRowButtonsDisabled(produtoId, disabled) {
-  const row = document.querySelector(`tr[data-produto-id="${produtoId}"]`);
-  if (!row) return;
+  <!-- ✅ Modal: Adicionar Produto -->
+  <div class="modal fade" id="modalAdicionarProduto" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Adicionar Produto</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
 
-  row.querySelectorAll("button").forEach((b) => {
-    b.disabled = !!disabled;
-  });
-}
+        <div class="modal-body">
+          <div class="row g-3">
+            <!-- Produto (autocomplete) -->
+            <div class="col-12 col-lg-8">
+              <label class="form-label">Produto <span class="text-danger">*</span></label>
 
-/**
- * Executa ação (entrada, saída, remover)
- */
-async function execAcao(acao, id, quantidade = null) {
-  const key = `${acao}-${id}`;
-  if (inflight.has(key)) {
-    return { sucesso: false, mensagem: "Aguarde a conclusão da ação anterior." };
-  }
+              <div class="dropdown w-100">
+                <div class="input-group">
+                  <span class="input-group-text">🔎</span>
+                  <input id="apProdutoBusca" class="form-control" placeholder="Digite para buscar..." autocomplete="off">
+                  <button class="btn btn-outline-secondary" type="button" id="apLimparProduto" title="Limpar">✕</button>
+                </div>
 
-  inflight.add(key);
-  setRowButtonsDisabled(id, true);
+                <!-- ✅ guarda o ID do produto selecionado (opcional, mas ok manter) -->
+                <input type="hidden" id="apProdutoId" value="">
 
-  try {
-    if (acao === "entrada" || acao === "saida") {
-      return await apiRequest(
-        "registrar_movimentacao",
-        { produto_id: id, tipo: acao, quantidade },
-        "POST"
-      );
-    }
+                <!-- lista de sugestões -->
+                <div id="apSugestoes" class="ap-sugestoes dropdown-menu w-100" style="display:none;"></div>
+              </div>
 
-    if (acao === "remover") {
-      return await apiRequest(
-        "remover_produto",
-        { produto_id: id },
-        "POST"
-      );
-    }
+              <div class="mt-2 small text-muted" id="apProdutoInfo"></div>
 
-    return { sucesso: false, mensagem: "Ação inválida." };
+              <div class="mt-2">
+                <button id="apCriarProduto" class="btn btn-link p-0" type="button">
+                  ➕ Criar produto
+                </button>
+              </div>
+            </div>
 
-  } catch (err) {
-    console.error(`Erro em ${acao}:`, err);
+            <!-- Últimas movimentações -->
+            <div class="col-12 col-lg-4">
+              <div class="card">
+                <div class="card-body">
+                  <div class="fw-bold mb-2">Últimas Movimentações</div>
+                  <div id="apUltimasMov" class="small text-muted">Selecione um produto…</div>
+                  <div class="mt-2">
+                    <button id="apVerHistorico" class="btn btn-sm btn-outline-primary" type="button" disabled>
+                      Ver histórico completo
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-    logJsError({
-      origem: "produtos.js",
-      mensagem: `Falha na ação ${acao}`,
-      detalhe: err.message,
-      stack: err.stack,
-      produto_id: id
-    });
+            <!-- Estoque atual / alerta -->
+            <div class="col-12">
+              <div class="alert alert-light border mb-0">
+                <div class="d-flex flex-wrap gap-3 align-items-center">
+                  <div>📦 <strong>Estoque atual:</strong> <span id="apEstoqueAtual">-</span></div>
+                  <div id="apAlertaEstoque" class="text-danger fw-bold"></div>
+                  <div class="ms-auto small text-muted">
+                    <strong>Data:</strong> <span id="apDataAgora">-</span>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-    return { sucesso: false, mensagem: "Erro de comunicação com o servidor." };
+            <!-- Tipo: Entrada / Saída -->
+            <div class="col-12 col-lg-6">
+              <label class="form-label">Tipo</label>
+              <div class="btn-group w-100" role="group" aria-label="Tipo de movimentação">
+                <input type="radio" class="btn-check" name="apTipo" id="apTipoEntrada" value="entrada" checked>
+                <label class="btn btn-outline-success" for="apTipoEntrada">Entrada</label>
 
-  } finally {
-    inflight.delete(key);
-    setRowButtonsDisabled(id, false);
-  }
-}
+                <input type="radio" class="btn-check" name="apTipo" id="apTipoSaida" value="saida">
+                <label class="btn btn-outline-danger" for="apTipoSaida">Saída</label>
+              </div>
+            </div>
 
-/**
- * Entrada de produto
- */
-async function entrada(id) {
-  const qtd = prompt("Quantidade de entrada:");
-  if (qtd === null) return;
+            <!-- Quantidade (stepper) -->
+            <div class="col-12 col-lg-6">
+              <label class="form-label">Quantidade</label>
+              <div class="input-group">
+                <button class="btn btn-outline-secondary" type="button" id="apQtdMenos">−</button>
+                <input id="apQuantidade" type="number" class="form-control text-center" value="1" min="1" step="1">
+                <button class="btn btn-outline-secondary" type="button" id="apQtdMais">+</button>
+              </div>
+            </div>
 
-  const quantidade = Number(qtd);
-  if (!Number.isFinite(quantidade) || quantidade <= 0) {
-    alert("Quantidade inválida.");
-    return;
-  }
+            <!-- Preço custo (opcional) -->
+            <div class="col-12 col-lg-6">
+              <label class="form-label">Preço custo (opcional)</label>
+              <div class="input-group">
+                <span class="input-group-text">R$</span>
+                <input id="apPrecoCusto" type="number" class="form-control" value="" min="0" step="0.01" placeholder="0,00">
+              </div>
+              <div class="form-text">Se informado, pode atualizar o custo do produto.</div>
+            </div>
 
-  const resp = await execAcao("entrada", id, quantidade);
+            <!-- Observação -->
+            <div class="col-12 col-lg-6">
+              <label class="form-label">Observação (opcional)</label>
+              <input id="apObs" class="form-control" placeholder="Ex.: compra, ajuste, consumo…">
+            </div>
+          </div>
+        </div>
 
-  if (resp?.sucesso) {
-    alert(resp.mensagem || "Entrada registrada com sucesso.");
-    await listarProdutos();
-    if (typeof window.listarMovimentacoes === "function") {
-      await window.listarMovimentacoes();
-    }
-  } else {
-    alert(resp?.mensagem || "Erro ao registrar entrada.");
-  }
-}
+        <div class="modal-footer">
+          <div class="me-auto small text-muted" id="apStatus"></div>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="apSalvar">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-/**
- * Saída de produto
- */
-async function saida(id) {
-  const qtd = prompt("Quantidade de saída:");
-  if (qtd === null) return;
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-  const quantidade = Number(qtd);
-  if (!Number.isFinite(quantidade) || quantidade <= 0) {
-    alert("Quantidade inválida.");
-    return;
-  }
+  <script type="module" src="/estoque/js/api.js?v=20260304"></script>
+  <script type="module" src="/estoque/js/logout.js?v=20260304"></script>
+  <script type="module" src="/estoque/js/main.js?v=20260304"></script>
 
-  const resp = await execAcao("saida", id, quantidade);
+  <!-- ✅ Lista do Estoque (tabela + busca + abre modal em Entrada/Saída) -->
+  <script type="module" src="/estoque/js/produtos.js?v=20260304"></script>
 
-  if (resp?.sucesso) {
-    alert(resp.mensagem || "Saída registrada com sucesso.");
-    await listarProdutos();
-    if (typeof window.listarMovimentacoes === "function") {
-      await window.listarMovimentacoes();
-    }
-  } else {
-    alert(resp?.mensagem || "Erro ao registrar saída.");
-  }
-}
-
-/**
- * Remover produto
- */
-async function remover(id) {
-  if (!confirm("Tem certeza que deseja remover este produto?")) return;
-
-  const resp = await execAcao("remover", id);
-
-  if (resp?.sucesso) {
-    alert(resp.mensagem || "Produto removido com sucesso.");
-    await listarProdutos();
-    if (typeof window.listarMovimentacoes === "function") {
-      await window.listarMovimentacoes();
-    }
-  } else {
-    alert(resp?.mensagem || "Erro ao remover produto.");
-  }
-}
-
-/**
- * Formulário: adicionar produto
- */
-document.querySelector("#formAdicionarProduto")
-  ?.addEventListener("submit", async function (e) {
-    e.preventDefault();
-
-    const nome = (document.querySelector("#nomeProduto")?.value || "").trim();
-    if (!nome) {
-      alert("Informe o nome do produto.");
-      return;
-    }
-
-    try {
-      const resp = await apiRequest(
-        "adicionar_produto",
-        { nome, quantidade: 0 },
-        "POST"
-      );
-
-      if (resp?.sucesso) {
-        this.reset();
-        alert(resp.mensagem || "Produto adicionado com sucesso.");
-        await listarProdutos();
-
-        // se existir no seu relatorios.js
-        if (typeof window.preencherFiltroProdutos === "function") {
-          await window.preencherFiltroProdutos();
-        }
-      } else {
-        alert(resp?.mensagem || "Erro ao adicionar produto.");
-      }
-
-    } catch (err) {
-      console.error("Erro ao adicionar produto:", err);
-
-      logJsError({
-        origem: "produtos.js",
-        mensagem: "Falha ao adicionar produto",
-        detalhe: err.message,
-        stack: err.stack
-      });
-
-      alert("Erro de comunicação com o servidor.");
-    }
-  });
-
-/**
- * Inicialização
- */
-document.addEventListener("DOMContentLoaded", () => {
-  listarProdutos();
-});
-
-/**
- * 🔑 Exposição mínima necessária (HTML inline)
- */
-window.listarProdutos = listarProdutos;
-window.entrada = entrada;
-window.saida = saida;
-window.remover = remover;
+  <!-- ✅ Modal -->
+  <script type="module" src="/estoque/js/modal_adicionar_produto.js?v=20260304"></script>
+</body>
+</html>
