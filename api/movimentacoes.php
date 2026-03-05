@@ -2,27 +2,58 @@
 /**
  * api/movimentacoes.php
  * CRUD de movimentações de estoque
- * Compatível com PHP 8.2+ / 8.5
+ * PHP 8.2+ / 8.5
  */
 
 declare(strict_types=1);
 
 require_once __DIR__ . '/log.php';
 require_once __DIR__ . '/utils.php';
-require_once __DIR__ . '/db.php';
 
-// Inicializa log específico
 initLog('movimentacoes');
 
+function coluna_existe_mov(mysqli $conn, string $tabela, string $coluna): bool
+{
+    static $cache = [];
+    $db = $conn->query("SELECT DATABASE() AS db")->fetch_assoc()['db'] ?? '';
+    $key = $db . '|' . $tabela . '|' . $coluna;
+
+    if (array_key_exists($key, $cache)) {
+        return (bool)$cache[$key];
+    }
+
+    $sql = "
+        SELECT 1
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = ?
+          AND COLUMN_NAME = ?
+        LIMIT 1
+    ";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param('ss', $tabela, $coluna);
+    $stmt->execute();
+    $ok = (bool)$stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    $cache[$key] = $ok;
+    return $ok;
+}
+
 /**
- * Registrar movimentação (entrada, saída ou remoção)
+ * Registrar movimentação:
+ * - compatível com versão antiga
+ * - agora aceita opcionais: preco_custo, valor_unitario, observacao
  */
 function mov_registrar(
     mysqli $conn,
     int $produto_id,
     string $tipo,
     int $quantidade,
-    ?int $usuario_id
+    ?int $usuario_id,
+    ?float $preco_custo = null,
+    ?float $valor_unitario = null,
+    ?string $observacao = null
 ): array {
 
     if ($produto_id <= 0 || $quantidade <= 0) {
@@ -35,25 +66,18 @@ function mov_registrar(
     }
 
     if (!in_array($tipo, ['entrada', 'saida', 'remocao'], true)) {
-        logWarning('movimentacoes', 'Tipo de movimentação inválido', [
-            'tipo' => $tipo
-        ]);
+        logWarning('movimentacoes', 'Tipo de movimentação inválido', ['tipo' => $tipo]);
         return resposta(false, 'Tipo de movimentação inválido.');
     }
 
-    // Inicia transação
     $conn->begin_transaction();
 
     try {
 
-        // 🔹 Busca produto com lock
+        // Lock do produto
         $stmt = $conn->prepare(
-            'SELECT nome, quantidade
-             FROM produtos
-             WHERE id = ?
-             FOR UPDATE'
+            'SELECT nome, quantidade FROM produtos WHERE id = ? FOR UPDATE'
         );
-
         $stmt->bind_param('i', $produto_id);
         $stmt->execute();
         $produto = $stmt->get_result()->fetch_assoc();
@@ -61,23 +85,14 @@ function mov_registrar(
 
         if (!$produto) {
             $conn->rollback();
-            logWarning('movimentacoes', 'Produto não encontrado', [
-                'produto_id' => $produto_id
-            ]);
+            logWarning('movimentacoes', 'Produto não encontrado', ['produto_id' => $produto_id]);
             return resposta(false, 'Produto não encontrado.');
         }
 
-        // 🔹 Regra de estoque
+        // regra de estoque
         if ($tipo === 'entrada') {
-
-            $sqlUpdate = '
-                UPDATE produtos
-                SET quantidade = quantidade + ?
-                WHERE id = ?
-            ';
-
+            $sqlUpdate = 'UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?';
         } else {
-
             if ((int)$produto['quantidade'] < $quantidade) {
                 $conn->rollback();
                 logWarning('movimentacoes', 'Estoque insuficiente', [
@@ -87,50 +102,73 @@ function mov_registrar(
                 ]);
                 return resposta(false, 'Quantidade insuficiente em estoque.');
             }
-
-            $sqlUpdate = '
-                UPDATE produtos
-                SET quantidade = quantidade - ?
-                WHERE id = ?
-            ';
+            $sqlUpdate = 'UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?';
         }
 
-        // 🔹 Atualiza estoque
         $stmtUpd = $conn->prepare($sqlUpdate);
         $stmtUpd->bind_param('ii', $quantidade, $produto_id);
         $stmtUpd->execute();
         $stmtUpd->close();
 
-        // 🔹 Registra movimentação
-        $stmtMov = $conn->prepare(
-            'INSERT INTO movimentacoes
-                (produto_id, produto_nome, tipo, quantidade, usuario_id, data)
-             VALUES (?, ?, ?, ?, ?, NOW())'
-        );
+        // ✅ atualiza preco_custo no produto (se coluna existir e se veio no request)
+        if ($preco_custo !== null && $preco_custo >= 0 && coluna_existe_mov($conn, 'produtos', 'preco_custo')) {
+            $stmtC = $conn->prepare('UPDATE produtos SET preco_custo = ? WHERE id = ?');
+            $stmtC->bind_param('di', $preco_custo, $produto_id);
+            $stmtC->execute();
+            $stmtC->close();
+        }
 
         $nomeProduto = (string)$produto['nome'];
 
-        // usuário pode ser NULL
-        $stmtMov->bind_param(
-            'issii',
-            $produto_id,
-            $nomeProduto,
-            $tipo,
-            $quantidade,
-            $usuario_id
-        );
+        // ✅ Insert adaptativo (não quebra se colunas não existirem)
+        $hasValorUnit = coluna_existe_mov($conn, 'movimentacoes', 'valor_unitario');
+        $hasValorTot  = coluna_existe_mov($conn, 'movimentacoes', 'valor_total');
+        $hasObs       = coluna_existe_mov($conn, 'movimentacoes', 'observacao');
 
+        $cols = ['produto_id', 'produto_nome', 'tipo', 'quantidade', 'usuario_id', 'data'];
+        $vals = ['?', '?', '?', '?', '?', 'NOW()'];
+        $types = 'issii';
+        $bind = [$produto_id, $nomeProduto, $tipo, $quantidade, $usuario_id];
+
+        if ($hasValorUnit) {
+            $cols[] = 'valor_unitario';
+            $vals[] = '?';
+            $types .= 'd';
+            $bind[] = (float)($valor_unitario ?? 0.0);
+        }
+
+        if ($hasValorTot) {
+            $cols[] = 'valor_total';
+            $vals[] = '?';
+            $types .= 'd';
+            $bind[] = (float)($quantidade * (float)($valor_unitario ?? 0.0));
+        }
+
+        if ($hasObs) {
+            $cols[] = 'observacao';
+            $vals[] = '?';
+            $types .= 's';
+            $bind[] = (string)($observacao ?? '');
+        }
+
+        $sqlIns = 'INSERT INTO movimentacoes (' . implode(',', $cols) . ') VALUES (' . implode(',', $vals) . ')';
+        $stmtMov = $conn->prepare($sqlIns);
+
+        // bind_param com spread seguro
+        $stmtMov->bind_param($types, ...$bind);
         $stmtMov->execute();
         $stmtMov->close();
 
-        // Commit
         $conn->commit();
 
         logInfo('movimentacoes', 'Movimentação registrada', [
             'produto_id' => $produto_id,
             'tipo'       => $tipo,
             'quantidade' => $quantidade,
-            'usuario_id' => $usuario_id
+            'usuario_id' => $usuario_id,
+            'preco_custo'=> $preco_custo,
+            'valor_unitario' => $valor_unitario,
+            'observacao' => $observacao
         ]);
 
         return resposta(true, 'Movimentação registrada com sucesso.');
@@ -139,7 +177,6 @@ function mov_registrar(
 
         $conn->rollback();
 
-        // ✅ assinatura correta do logError
         logError('movimentacoes', 'Erro ao registrar movimentação', [
             'arquivo'    => $e->getFile(),
             'linha'      => $e->getLine(),
@@ -167,7 +204,6 @@ function mov_listar(mysqli $conn, array $f): array
     $params = [];
     $types  = '';
 
-    // 🔹 Filtros
     if (!empty($f['produto_id'])) {
         $where[]  = 'm.produto_id = ?';
         $params[] = (int)$f['produto_id'];
@@ -195,20 +231,12 @@ function mov_listar(mysqli $conn, array $f): array
     $whereSql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
 
     try {
-        // 🔹 Total
-        $stmtT = $conn->prepare(
-            "SELECT COUNT(*) AS total FROM movimentacoes m $whereSql"
-        );
-
-        if ($types) {
-            $stmtT->bind_param($types, ...$params);
-        }
-
+        $stmtT = $conn->prepare("SELECT COUNT(*) AS total FROM movimentacoes m $whereSql");
+        if ($types) $stmtT->bind_param($types, ...$params);
         $stmtT->execute();
         $total = (int)($stmtT->get_result()->fetch_assoc()['total'] ?? 0);
         $stmtT->close();
 
-        // 🔹 Dados
         $sql = "
             SELECT
                 m.id,
@@ -242,11 +270,11 @@ function mov_listar(mysqli $conn, array $f): array
             $dados[] = [
                 'id'           => (int)$row['id'],
                 'produto_id'   => (int)$row['produto_id'],
-                'produto_nome' => $row['produto_nome'],
-                'tipo'         => $row['tipo'],
+                'produto_nome' => (string)$row['produto_nome'],
+                'tipo'         => (string)$row['tipo'],
                 'quantidade'   => (int)$row['quantidade'],
-                'data'         => $row['data'],
-                'usuario'      => $row['usuario']
+                'data'         => (string)$row['data'],
+                'usuario'      => (string)$row['usuario']
             ];
         }
 

@@ -20,7 +20,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
         'lifetime' => 0,
         'path'     => '/',
-        'secure'   => false, // em HTTPS real, colocar true (mas seu nginx está forçando https local)
+        'secure'   => false, // em HTTPS real, colocar true
         'httponly' => true,
         'samesite' => 'Lax'
     ]);
@@ -48,7 +48,7 @@ header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Headers: Content-Type');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 
-// CORS com allowlist (credenciais exigem origem explícita)
+// CORS allowlist (credenciais exigem origem explícita)
 function set_cors_origin(): void
 {
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
@@ -60,7 +60,7 @@ function set_cors_origin(): void
     if ($origin && in_array($origin, $allowed, true)) {
         header("Access-Control-Allow-Origin: {$origin}");
     } else {
-        // fallback seguro (mesma origem)
+        // fallback (mesma origem)
         header('Access-Control-Allow-Origin: https://192.168.15.100');
     }
 }
@@ -90,45 +90,6 @@ function require_auth(): array
     return $_SESSION['usuario'];
 }
 
-/**
- * Chama mov_registrar sem quebrar versões antigas:
- * - Se sua função tiver 5 params: (conn, produto_id, tipo, qtd, usuario_id)
- * - Se tiver 6+: adiciona valor_unitario
- * - Se tiver 7+: adiciona observacao
- */
-function call_mov_registrar(mysqli $conn, int $produto_id, string $tipo, int $quantidade, int $usuario_id, ?float $valor_unitario, ?string $observacao): array
-{
-    if (!function_exists('mov_registrar')) {
-        return ['sucesso' => false, 'mensagem' => 'Função mov_registrar não encontrada.'];
-    }
-
-    try {
-        $rf = new ReflectionFunction('mov_registrar');
-        $n  = $rf->getNumberOfParameters();
-
-        if ($n <= 5) {
-            // versão antiga
-            return mov_registrar($conn, $produto_id, $tipo, $quantidade, $usuario_id);
-        }
-
-        if ($n === 6) {
-            // versão com valor_unitario
-            return mov_registrar($conn, $produto_id, $tipo, $quantidade, $usuario_id, $valor_unitario);
-        }
-
-        // 7 ou mais
-        return mov_registrar($conn, $produto_id, $tipo, $quantidade, $usuario_id, $valor_unitario, $observacao);
-
-    } catch (Throwable $e) {
-        logError('actions', 'Falha ao chamar mov_registrar via Reflection', [
-            'erro' => $e->getMessage(),
-            'arquivo' => $e->getFile(),
-            'linha' => $e->getLine(),
-        ]);
-        return ['sucesso' => false, 'mensagem' => 'Erro interno ao registrar movimentação.'];
-    }
-}
-
 // =====================================================
 // EXECUÇÃO
 // =====================================================
@@ -153,7 +114,7 @@ try {
             $res = produtos_listar($conn);
 
             json_response(
-                $res['sucesso'],
+                $res['sucesso'] ?? false,
                 $res['mensagem'] ?? '',
                 $res['dados'] ?? []
             );
@@ -163,7 +124,7 @@ try {
         case 'adicionar_produto': {
             $usuario = require_auth();
 
-            $nome = trim($body['nome'] ?? '');
+            $nome = trim((string)($body['nome'] ?? ''));
             $qtd  = (int)($body['quantidade'] ?? 0);
 
             if ($nome === '') {
@@ -171,25 +132,25 @@ try {
                 exit;
             }
 
-            $res = produtos_adicionar($conn, $nome, $qtd, $usuario['id']);
-            json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
+            $res = produtos_adicionar($conn, $nome, $qtd, (int)$usuario['id']);
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
             exit;
         }
 
-        // ✅ alias pro modal (botão "Criar produto")
+        // ✅ usado pelo modal (Criar produto)
         case 'criar_produto': {
             $usuario = require_auth();
 
-            $nome = trim($body['nome'] ?? '');
+            $nome = trim((string)($body['nome'] ?? ''));
             if ($nome === '') {
                 json_response(false, 'Nome do produto obrigatório.');
                 exit;
             }
 
             $qtd = (int)($body['quantidade'] ?? 0); // default 0
-            $res = produtos_adicionar($conn, $nome, $qtd, $usuario['id']);
+            $res = produtos_adicionar($conn, $nome, $qtd, (int)$usuario['id']);
 
-            json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
             exit;
         }
 
@@ -202,8 +163,8 @@ try {
                 exit;
             }
 
-            $res = produtos_remover($conn, $produto_id, $usuario['id']);
-            json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
+            $res = produtos_remover($conn, $produto_id, (int)$usuario['id']);
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
             exit;
         }
 
@@ -215,37 +176,12 @@ try {
             $limit = (int)($_GET['limit'] ?? $body['limit'] ?? 10);
             $limit = max(1, min(25, $limit));
 
-            // Busca simples e rápida
-            $like = '%' . $q . '%';
-
-            $stmt = $conn->prepare("
-                SELECT id, nome, quantidade,
-                       COALESCE(preco_custo, 0) AS preco_custo
-                FROM produtos
-                WHERE nome LIKE ?
-                ORDER BY nome ASC
-                LIMIT ?
-            ");
-            $stmt->bind_param('si', $like, $limit);
-            $stmt->execute();
-            $res = $stmt->get_result();
-
-            $itens = [];
-            while ($r = $res->fetch_assoc()) {
-                $itens[] = [
-                    'id'         => (int)$r['id'],
-                    'nome'       => (string)$r['nome'],
-                    'quantidade' => (int)$r['quantidade'],
-                    'preco_custo'=> (float)$r['preco_custo'],
-                ];
-            }
-            $stmt->close();
-
-            json_response(true, 'OK', ['itens' => $itens]);
+            $res = produtos_buscar($conn, $q, $limit);
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
             exit;
         }
 
-        // ✅ resumo do produto pro modal (estoque atual + últimas movimentações)
+        // ✅ resumo do produto pro modal
         case 'produto_resumo': {
             require_auth();
 
@@ -255,64 +191,8 @@ try {
                 exit;
             }
 
-            // produto
-            $stmtP = $conn->prepare("
-                SELECT id, nome, quantidade, COALESCE(preco_custo,0) AS preco_custo
-                FROM produtos
-                WHERE id = ?
-                LIMIT 1
-            ");
-            $stmtP->bind_param('i', $produto_id);
-            $stmtP->execute();
-            $prod = $stmtP->get_result()->fetch_assoc();
-            $stmtP->close();
-
-            if (!$prod) {
-                json_response(false, 'Produto não encontrado.');
-                exit;
-            }
-
-            // últimas movimentações (10)
-            $stmtM = $conn->prepare("
-                SELECT
-                    m.id,
-                    m.tipo,
-                    m.quantidade,
-                    m.data,
-                    COALESCE(u.nome, 'Sistema') AS usuario
-                FROM movimentacoes m
-                LEFT JOIN usuarios u ON u.id = m.usuario_id
-                WHERE m.produto_id = ?
-                ORDER BY m.data DESC, m.id DESC
-                LIMIT 10
-            ");
-            $stmtM->bind_param('i', $produto_id);
-            $stmtM->execute();
-            $resM = $stmtM->get_result();
-
-            $movs = [];
-            while ($r = $resM->fetch_assoc()) {
-                $movs[] = [
-                    'id'         => (int)$r['id'],
-                    'tipo'       => (string)$r['tipo'],
-                    'quantidade' => (int)$r['quantidade'],
-                    'data'       => date('d/m/Y H:i', strtotime((string)$r['data'])),
-                    'usuario'    => (string)$r['usuario'],
-                ];
-            }
-            $stmtM->close();
-
-            $payload = [
-                'produto' => [
-                    'id'         => (int)$prod['id'],
-                    'nome'       => (string)$prod['nome'],
-                    'quantidade' => (int)$prod['quantidade'],
-                    'preco_custo'=> (float)$prod['preco_custo'],
-                ],
-                'ultimas_movimentacoes' => $movs
-            ];
-
-            json_response(true, 'OK', $payload);
+            $res = produto_resumo($conn, $produto_id);
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
             exit;
         }
 
@@ -320,10 +200,11 @@ try {
 
         case 'listar_movimentacoes': {
             require_auth();
+
             $res = mov_listar($conn, $_GET);
 
             json_response(
-                $res['sucesso'] ?? true,
+                $res['sucesso'] ?? false,
                 $res['mensagem'] ?? '',
                 $res['dados'] ?? []
             );
@@ -337,31 +218,38 @@ try {
             $tipo       = (string)($body['tipo'] ?? '');
             $quantidade = (int)($body['quantidade'] ?? 0);
 
-            // ✅ opcionais (modal)
-            $valor_unitario = isset($body['valor_unitario']) && $body['valor_unitario'] !== ''
-                ? (float)$body['valor_unitario']
+            // opcionais do modal
+            $preco_custo = isset($body['preco_custo']) && $body['preco_custo'] !== ''
+                ? (float)$body['preco_custo']
                 : null;
 
             $observacao = isset($body['observacao']) && trim((string)$body['observacao']) !== ''
                 ? trim((string)$body['observacao'])
                 : null;
 
-            if (
-                $produto_id <= 0 ||
-                $quantidade <= 0 ||
-                !in_array($tipo, ['entrada', 'saida'], true)
-            ) {
+            // compat: se você mandar "valor_unitario" no futuro, também aceitamos
+            $valor_unitario = isset($body['valor_unitario']) && $body['valor_unitario'] !== ''
+                ? (float)$body['valor_unitario']
+                : null;
+
+            if ($produto_id <= 0 || $quantidade <= 0) {
                 json_response(false, 'Dados inválidos.');
                 exit;
             }
 
-            // ✅ chama sem quebrar versões antigas
-            $res = call_mov_registrar(
+            if (!in_array($tipo, ['entrada', 'saida', 'remocao'], true)) {
+                json_response(false, 'Tipo inválido.');
+                exit;
+            }
+
+            $res = mov_registrar(
                 $conn,
                 $produto_id,
                 $tipo,
                 $quantidade,
                 (int)$usuario['id'],
+                // opcionais (o mov_registrar novo aceita, mas é compatível)
+                $preco_custo,
                 $valor_unitario,
                 $observacao
             );
@@ -379,7 +267,7 @@ try {
             $filtros = array_merge($_GET, $body);
             $res = relatorio($conn, $filtros);
 
-            json_response($res['sucesso'], $res['mensagem'], $res['dados'] ?? null);
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
             exit;
         }
 
