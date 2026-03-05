@@ -8,9 +8,10 @@ function getNextUrl() {
   const params = new URLSearchParams(window.location.search);
   const next = params.get("next");
 
-  // segurança básica: só aceita next interno (começando com /)
+  // segurança: só aceita next interno
   if (next && next.startsWith("/")) return next;
 
+  // fallback padrão
   return `${APP_BASE}/pages/estoque.html`;
 }
 
@@ -19,22 +20,19 @@ document.addEventListener("DOMContentLoaded", () => {
   const msgErro = document.getElementById("msgErro");
 
   if (!formLogin) {
-    logJsError({
-      origem: "login.js",
-      mensagem: "Formulário #formLogin não encontrado",
-    });
+    logJsError({ origem: "login.js", mensagem: "Formulário #formLogin não encontrado" });
     return;
   }
 
   formLogin.addEventListener("submit", async (e) => {
     e.preventDefault();
-    msgErro.textContent = "";
+    if (msgErro) msgErro.textContent = "";
 
     const login = (document.getElementById("login")?.value || "").trim();
     const senha = document.getElementById("senha")?.value || "";
 
     if (!login || !senha) {
-      msgErro.textContent = "Preencha login e senha.";
+      if (msgErro) msgErro.textContent = "Preencha login e senha.";
       return;
     }
 
@@ -44,16 +42,13 @@ document.addEventListener("DOMContentLoaded", () => {
       if (resp?.sucesso === true) {
         const usuario = resp?.dados?.usuario || resp?.usuario;
         if (usuario) localStorage.setItem("usuario", JSON.stringify(usuario));
-
-        // ✅ volta para a página pedida
         window.location.replace(getNextUrl());
         return;
       }
 
-      msgErro.textContent = resp?.mensagem || "Usuário ou senha inválidos.";
+      if (msgErro) msgErro.textContent = resp?.mensagem || "Usuário ou senha inválidos.";
     } catch (err) {
-      msgErro.textContent = "Erro de comunicação com o servidor.";
-
+      if (msgErro) msgErro.textContent = "Erro de comunicação com o servidor.";
       logJsError({
         origem: "login.js",
         mensagem: err?.message || String(err),

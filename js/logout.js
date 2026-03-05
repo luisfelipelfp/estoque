@@ -15,7 +15,7 @@ document.addEventListener("DOMContentLoaded", () => {
       logJsError({
         origem: "logout.js",
         mensagem: err?.message || String(err),
-        stack: err?.stack
+        stack: err?.stack,
       });
     } finally {
       localStorage.removeItem("usuario");

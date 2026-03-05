@@ -45,4 +45,4 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const span = document.getElementById("usuarioLogado");
   if (span) span.textContent = `${usuario.nome} (${usuario.nivel})`;
-});
+}); 

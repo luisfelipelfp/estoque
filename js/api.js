@@ -1,5 +1,4 @@
 // js/api.js
-
 const APP_BASE = "/estoque";
 const API_URL = `${APP_BASE}/api/actions.php`;
 
@@ -9,16 +8,14 @@ export async function apiRequest(acao, dados = null, metodo = "GET") {
   const options = {
     method: metodo,
     credentials: "include",
-    headers: {}
+    headers: { Accept: "application/json" }
   };
 
-  // GET → querystring
   if (metodo === "GET" && dados) {
     const query = new URLSearchParams(dados).toString();
-    url += (url.includes("?") ? "&" : "?") + query;
+    url += "&" + query;
   }
 
-  // POST → JSON
   if (metodo === "POST") {
     options.headers["Content-Type"] = "application/json";
     options.body = JSON.stringify(dados || {});
@@ -28,22 +25,16 @@ export async function apiRequest(acao, dados = null, metodo = "GET") {
     const resp = await fetch(url, options);
 
     const contentType = resp.headers.get("content-type") || "";
-    let payload;
+    const payload = contentType.includes("application/json")
+      ? await resp.json()
+      : { sucesso: false, mensagem: await resp.text() };
 
-    if (contentType.includes("application/json")) {
-      payload = await resp.json();
-    } else {
-      const text = await resp.text();
-      payload = { sucesso: false, mensagem: text || "Resposta não-JSON da API." };
-    }
-
-    // mantém o payload mesmo em erro http
-    if (!resp.ok) return payload;
-
+    // NÃO joga exception em 401: devolve payload para o caller decidir
     return payload;
-
   } catch (err) {
-    console.error("Erro em apiRequest:", err);
-    return { sucesso: false, mensagem: err.message || "Erro de comunicação com o servidor." };
+    return {
+      sucesso: false,
+      mensagem: err?.message || "Erro de comunicação com o servidor."
+    };
   }
-}
+} 
