@@ -7,8 +7,11 @@ const APP_BASE = "/estoque";
 function getNextUrl() {
   const params = new URLSearchParams(window.location.search);
   const next = params.get("next");
-  if (next && next.startsWith("/")) return next; // simples e seguro
-  return `${APP_BASE}/index.html`;
+
+  // segurança básica: só aceita next interno (começando com /)
+  if (next && next.startsWith("/")) return next;
+
+  return `${APP_BASE}/pages/estoque.html`;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -16,7 +19,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const msgErro = document.getElementById("msgErro");
 
   if (!formLogin) {
-    logJsError({ origem: "login.js", mensagem: "Formulário #formLogin não encontrado" });
+    logJsError({
+      origem: "login.js",
+      mensagem: "Formulário #formLogin não encontrado",
+    });
     return;
   }
 
@@ -25,7 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
     msgErro.textContent = "";
 
     const login = (document.getElementById("login")?.value || "").trim();
-    const senha = (document.getElementById("senha")?.value || "");
+    const senha = document.getElementById("senha")?.value || "";
 
     if (!login || !senha) {
       msgErro.textContent = "Preencha login e senha.";
@@ -35,20 +41,23 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const resp = await apiRequest("login", { login, senha }, "POST");
 
-      if (resp?.sucesso === true && resp?.dados?.usuario) {
-        localStorage.setItem("usuario", JSON.stringify(resp.dados.usuario));
+      if (resp?.sucesso === true) {
+        const usuario = resp?.dados?.usuario || resp?.usuario;
+        if (usuario) localStorage.setItem("usuario", JSON.stringify(usuario));
+
+        // ✅ volta para a página pedida
         window.location.replace(getNextUrl());
         return;
       }
 
       msgErro.textContent = resp?.mensagem || "Usuário ou senha inválidos.";
-
     } catch (err) {
       msgErro.textContent = "Erro de comunicação com o servidor.";
+
       logJsError({
         origem: "login.js",
         mensagem: err?.message || String(err),
-        stack: err?.stack
+        stack: err?.stack,
       });
     }
   });
