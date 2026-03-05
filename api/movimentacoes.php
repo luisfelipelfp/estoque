@@ -1,10 +1,4 @@
 <?php
-/**
- * api/movimentacoes.php
- * CRUD de movimentações de estoque
- * PHP 8.2+ / 8.5
- */
-
 declare(strict_types=1);
 
 require_once __DIR__ . '/log.php';
@@ -15,12 +9,10 @@ initLog('movimentacoes');
 function coluna_existe_mov(mysqli $conn, string $tabela, string $coluna): bool
 {
     static $cache = [];
-    $db = $conn->query("SELECT DATABASE() AS db")->fetch_assoc()['db'] ?? '';
-    $key = $db . '|' . $tabela . '|' . $coluna;
+    $db = (string)(($conn->query("SELECT DATABASE() AS db")->fetch_assoc()['db'] ?? ''));
 
-    if (array_key_exists($key, $cache)) {
-        return (bool)$cache[$key];
-    }
+    $key = $db . '|' . $tabela . '|' . $coluna;
+    if (array_key_exists($key, $cache)) return (bool)$cache[$key];
 
     $sql = "
         SELECT 1
@@ -40,11 +32,6 @@ function coluna_existe_mov(mysqli $conn, string $tabela, string $coluna): bool
     return $ok;
 }
 
-/**
- * Registrar movimentação:
- * - compatível com versão antiga
- * - agora aceita opcionais: preco_custo, valor_unitario, observacao
- */
 function mov_registrar(
     mysqli $conn,
     int $produto_id,
@@ -70,14 +57,14 @@ function mov_registrar(
         return resposta(false, 'Tipo de movimentação inválido.');
     }
 
+    // normaliza
+    if ($preco_custo !== null && $preco_custo < 0) $preco_custo = null;
+    if ($valor_unitario !== null && $valor_unitario < 0) $valor_unitario = null;
+
     $conn->begin_transaction();
 
     try {
-
-        // Lock do produto
-        $stmt = $conn->prepare(
-            'SELECT nome, quantidade FROM produtos WHERE id = ? FOR UPDATE'
-        );
+        $stmt = $conn->prepare('SELECT nome, quantidade FROM produtos WHERE id = ? FOR UPDATE');
         $stmt->bind_param('i', $produto_id);
         $stmt->execute();
         $produto = $stmt->get_result()->fetch_assoc();
@@ -89,7 +76,6 @@ function mov_registrar(
             return resposta(false, 'Produto não encontrado.');
         }
 
-        // regra de estoque
         if ($tipo === 'entrada') {
             $sqlUpdate = 'UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?';
         } else {
@@ -110,8 +96,8 @@ function mov_registrar(
         $stmtUpd->execute();
         $stmtUpd->close();
 
-        // ✅ atualiza preco_custo no produto (se coluna existir e se veio no request)
-        if ($preco_custo !== null && $preco_custo >= 0 && coluna_existe_mov($conn, 'produtos', 'preco_custo')) {
+        // atualiza custo do produto
+        if ($preco_custo !== null && coluna_existe_mov($conn, 'produtos', 'preco_custo')) {
             $stmtC = $conn->prepare('UPDATE produtos SET preco_custo = ? WHERE id = ?');
             $stmtC->bind_param('di', $preco_custo, $produto_id);
             $stmtC->execute();
@@ -120,28 +106,20 @@ function mov_registrar(
 
         $nomeProduto = (string)$produto['nome'];
 
-        // ✅ Insert adaptativo (não quebra se colunas não existirem)
         $hasValorUnit = coluna_existe_mov($conn, 'movimentacoes', 'valor_unitario');
-        $hasValorTot  = coluna_existe_mov($conn, 'movimentacoes', 'valor_total');
         $hasObs       = coluna_existe_mov($conn, 'movimentacoes', 'observacao');
 
-        $cols = ['produto_id', 'produto_nome', 'tipo', 'quantidade', 'usuario_id', 'data'];
-        $vals = ['?', '?', '?', '?', '?', 'NOW()'];
+        $cols  = ['produto_id', 'produto_nome', 'tipo', 'quantidade', 'usuario_id', 'data'];
+        $vals  = ['?', '?', '?', '?', '?', 'NOW()'];
         $types = 'issii';
-        $bind = [$produto_id, $nomeProduto, $tipo, $quantidade, $usuario_id];
+        $bind  = [$produto_id, $nomeProduto, $tipo, $quantidade, $usuario_id];
 
         if ($hasValorUnit) {
             $cols[] = 'valor_unitario';
             $vals[] = '?';
             $types .= 'd';
+            // se não informou, grava 0? NÃO: melhor refletir "não informado"
             $bind[] = (float)($valor_unitario ?? 0.0);
-        }
-
-        if ($hasValorTot) {
-            $cols[] = 'valor_total';
-            $vals[] = '?';
-            $types .= 'd';
-            $bind[] = (float)($quantidade * (float)($valor_unitario ?? 0.0));
         }
 
         if ($hasObs) {
@@ -153,8 +131,6 @@ function mov_registrar(
 
         $sqlIns = 'INSERT INTO movimentacoes (' . implode(',', $cols) . ') VALUES (' . implode(',', $vals) . ')';
         $stmtMov = $conn->prepare($sqlIns);
-
-        // bind_param com spread seguro
         $stmtMov->bind_param($types, ...$bind);
         $stmtMov->execute();
         $stmtMov->close();
@@ -174,7 +150,6 @@ function mov_registrar(
         return resposta(true, 'Movimentação registrada com sucesso.');
 
     } catch (Throwable $e) {
-
         $conn->rollback();
 
         logError('movimentacoes', 'Erro ao registrar movimentação', [
@@ -191,9 +166,6 @@ function mov_registrar(
     }
 }
 
-/**
- * Listar movimentações com filtros e paginação
- */
 function mov_listar(mysqli $conn, array $f): array
 {
     $pagina = max(1, (int)($f['pagina'] ?? 1));
@@ -289,7 +261,6 @@ function mov_listar(mysqli $conn, array $f): array
         ]);
 
     } catch (Throwable $e) {
-
         logError('movimentacoes', 'Erro ao listar movimentações', [
             'arquivo' => $e->getFile(),
             'linha'   => $e->getLine(),

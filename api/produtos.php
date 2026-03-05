@@ -6,9 +6,10 @@ require_once __DIR__ . '/utils.php';
 
 function coluna_existe(mysqli $conn, string $tabela, string $coluna): bool
 {
-    static $cache = []; // [db][tabela][coluna] => bool
+    static $cache = [];
 
-    $db = $conn->query("SELECT DATABASE() AS db")->fetch_assoc()['db'] ?? '';
+    $dbRow = $conn->query("SELECT DATABASE() AS db")->fetch_assoc();
+    $db = (string)($dbRow['db'] ?? '');
     $key = $db . '|' . $tabela . '|' . $coluna;
 
     if (array_key_exists($key, $cache)) {
@@ -36,7 +37,8 @@ function coluna_existe(mysqli $conn, string $tabela, string $coluna): bool
 function produtos_listar(mysqli $conn): array
 {
     try {
-        $hasPreco = coluna_existe($conn, 'produtos', 'preco_custo');
+        $hasCusto = coluna_existe($conn, 'produtos', 'preco_custo');
+        $hasVenda = coluna_existe($conn, 'produtos', 'preco_venda');
 
         $sql = "
             SELECT
@@ -44,7 +46,8 @@ function produtos_listar(mysqli $conn): array
                 nome,
                 quantidade,
                 ativo
-                " . ($hasPreco ? ", COALESCE(preco_custo,0) AS preco_custo" : ", 0 AS preco_custo") . "
+                " . ($hasCusto ? ", COALESCE(preco_custo,0) AS preco_custo" : ", 0 AS preco_custo") . "
+                " . ($hasVenda ? ", COALESCE(preco_venda,0) AS preco_venda" : ", 0 AS preco_venda") . "
             FROM produtos
             ORDER BY nome
         ";
@@ -58,7 +61,6 @@ function produtos_listar(mysqli $conn): array
         ];
 
     } catch (Throwable $e) {
-
         logError('produtos', 'Erro ao listar produtos', [
             'arquivo' => $e->getFile(),
             'linha'   => $e->getLine(),
@@ -73,17 +75,13 @@ function produtos_listar(mysqli $conn): array
     }
 }
 
-/**
- * Busca para autocomplete (modal)
- * Retorna: dados.itens = [{id,nome,quantidade,preco_custo}]
- */
 function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
 {
     try {
         $q = trim($q);
         $limit = max(1, min(25, $limit));
 
-        $hasPreco = coluna_existe($conn, 'produtos', 'preco_custo');
+        $hasCusto = coluna_existe($conn, 'produtos', 'preco_custo');
 
         $like = '%' . $q . '%';
 
@@ -92,7 +90,7 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
                 id,
                 nome,
                 quantidade
-                " . ($hasPreco ? ", COALESCE(preco_custo,0) AS preco_custo" : ", 0 AS preco_custo") . "
+                " . ($hasCusto ? ", COALESCE(preco_custo,0) AS preco_custo" : ", 0 AS preco_custo") . "
             FROM produtos
             WHERE nome LIKE ?
             ORDER BY nome ASC
@@ -136,22 +134,17 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
     }
 }
 
-/**
- * Resumo do produto para o modal:
- * - produto (id,nome,quantidade,preco_custo)
- * - ultimas_movimentacoes (10)
- */
 function produto_resumo(mysqli $conn, int $produto_id): array
 {
     try {
-        $hasPreco = coluna_existe($conn, 'produtos', 'preco_custo');
+        $hasCusto = coluna_existe($conn, 'produtos', 'preco_custo');
 
         $sqlP = "
             SELECT
                 id,
                 nome,
                 quantidade
-                " . ($hasPreco ? ", COALESCE(preco_custo,0) AS preco_custo" : ", 0 AS preco_custo") . "
+                " . ($hasCusto ? ", COALESCE(preco_custo,0) AS preco_custo" : ", 0 AS preco_custo") . "
             FROM produtos
             WHERE id = ?
             LIMIT 1
@@ -224,14 +217,19 @@ function produtos_adicionar(
     mysqli $conn,
     string $nome,
     int $quantidade,
-    ?int $usuario_id
+    ?int $usuario_id,
+    ?float $preco_custo = null,
+    ?float $preco_venda = null
 ): array {
     try {
-        $stmt = $conn->prepare(
-            'INSERT INTO produtos (nome, quantidade, ativo) VALUES (?, ?, 1)'
-        );
+        // sua tabela tem NOT NULL com default 0.00, mas vamos setar explicitamente
+        $pc = ($preco_custo !== null && $preco_custo >= 0) ? $preco_custo : 0.0;
+        $pv = ($preco_venda !== null && $preco_venda >= 0) ? $preco_venda : 0.0;
 
-        $stmt->bind_param('si', $nome, $quantidade);
+        $stmt = $conn->prepare(
+            'INSERT INTO produtos (nome, quantidade, ativo, preco_custo, preco_venda) VALUES (?, ?, 1, ?, ?)'
+        );
+        $stmt->bind_param('sidd', $nome, $quantidade, $pc, $pv);
 
         $stmt->execute();
         $id = $stmt->insert_id;
@@ -244,14 +242,15 @@ function produtos_adicionar(
         ];
 
     } catch (Throwable $e) {
-
         logError('produtos', 'Erro ao adicionar produto', [
             'arquivo' => $e->getFile(),
             'linha'   => $e->getLine(),
             'erro'    => $e->getMessage(),
             'nome'    => $nome,
             'qtd'     => $quantidade,
-            'usuario' => $usuario_id
+            'usuario' => $usuario_id,
+            'preco_custo' => $preco_custo,
+            'preco_venda' => $preco_venda
         ]);
 
         return [
@@ -268,10 +267,8 @@ function produtos_remover(
     ?int $usuario_id
 ): array {
     try {
-
         $stmt = $conn->prepare('DELETE FROM produtos WHERE id = ?');
         $stmt->bind_param('i', $produto_id);
-
         $stmt->execute();
         $stmt->close();
 
@@ -282,7 +279,6 @@ function produtos_remover(
         ];
 
     } catch (Throwable $e) {
-
         logError('produtos', 'Erro ao remover produto', [
             'arquivo'    => $e->getFile(),
             'linha'      => $e->getLine(),

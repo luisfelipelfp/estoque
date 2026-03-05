@@ -1,35 +1,20 @@
 <?php
-/**
- * api/actions.php
- * Roteador central da API
- * Compatível PHP 8.2+
- */
-
 declare(strict_types=1);
 
-// =====================================================
-// ERROS
-// =====================================================
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 
-// =====================================================
-// SESSÃO
-// =====================================================
 if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
         'lifetime' => 0,
         'path'     => '/',
-        'secure'   => false, // em HTTPS real, colocar true
+        'secure'   => false,
         'httponly' => true,
         'samesite' => 'Lax'
     ]);
     session_start();
 }
 
-// =====================================================
-// DEPENDÊNCIAS
-// =====================================================
 require_once __DIR__ . '/log.php';
 require_once __DIR__ . '/utils.php';
 require_once __DIR__ . '/db.php';
@@ -40,15 +25,11 @@ require_once __DIR__ . '/relatorios.php';
 
 initLog('actions');
 
-// =====================================================
-// HEADERS
-// =====================================================
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Headers: Content-Type');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 
-// CORS allowlist (credenciais exigem origem explícita)
 function set_cors_origin(): void
 {
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
@@ -60,7 +41,6 @@ function set_cors_origin(): void
     if ($origin && in_array($origin, $allowed, true)) {
         header("Access-Control-Allow-Origin: {$origin}");
     } else {
-        // fallback (mesma origem)
         header('Access-Control-Allow-Origin: https://192.168.15.100');
     }
 }
@@ -71,9 +51,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// =====================================================
-// HELPERS
-// =====================================================
 function read_body(): array
 {
     $raw  = file_get_contents('php://input');
@@ -90,11 +67,7 @@ function require_auth(): array
     return $_SESSION['usuario'];
 }
 
-// =====================================================
-// EXECUÇÃO
-// =====================================================
 try {
-
     $conn = db();
     $acao = $_REQUEST['acao'] ?? '';
     $body = read_body();
@@ -107,17 +80,10 @@ try {
 
     switch ($acao) {
 
-        // ================= PRODUTOS =================
-
         case 'listar_produtos': {
             require_auth();
             $res = produtos_listar($conn);
-
-            json_response(
-                $res['sucesso'] ?? false,
-                $res['mensagem'] ?? '',
-                $res['dados'] ?? []
-            );
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
             exit;
         }
 
@@ -137,7 +103,6 @@ try {
             exit;
         }
 
-        // ✅ usado pelo modal (Criar produto)
         case 'criar_produto': {
             $usuario = require_auth();
 
@@ -147,9 +112,17 @@ try {
                 exit;
             }
 
-            $qtd = (int)($body['quantidade'] ?? 0); // default 0
-            $res = produtos_adicionar($conn, $nome, $qtd, (int)$usuario['id']);
+            $qtd = (int)($body['quantidade'] ?? 0);
 
+            $preco_custo = (isset($body['preco_custo']) && $body['preco_custo'] !== '')
+                ? (float)$body['preco_custo']
+                : null;
+
+            $preco_venda = (isset($body['preco_venda']) && $body['preco_venda'] !== '')
+                ? (float)$body['preco_venda']
+                : null;
+
+            $res = produtos_adicionar($conn, $nome, $qtd, (int)$usuario['id'], $preco_custo, $preco_venda);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
             exit;
         }
@@ -168,7 +141,6 @@ try {
             exit;
         }
 
-        // ✅ autocomplete do modal
         case 'buscar_produtos': {
             require_auth();
 
@@ -181,7 +153,6 @@ try {
             exit;
         }
 
-        // ✅ resumo do produto pro modal
         case 'produto_resumo': {
             require_auth();
 
@@ -196,18 +167,11 @@ try {
             exit;
         }
 
-        // ================= MOVIMENTAÇÕES =================
-
         case 'listar_movimentacoes': {
             require_auth();
 
             $res = mov_listar($conn, $_GET);
-
-            json_response(
-                $res['sucesso'] ?? false,
-                $res['mensagem'] ?? '',
-                $res['dados'] ?? []
-            );
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
             exit;
         }
 
@@ -218,18 +182,16 @@ try {
             $tipo       = (string)($body['tipo'] ?? '');
             $quantidade = (int)($body['quantidade'] ?? 0);
 
-            // opcionais do modal
             $preco_custo = isset($body['preco_custo']) && $body['preco_custo'] !== ''
                 ? (float)$body['preco_custo']
                 : null;
 
-            $observacao = isset($body['observacao']) && trim((string)$body['observacao']) !== ''
-                ? trim((string)$body['observacao'])
-                : null;
-
-            // compat: se você mandar "valor_unitario" no futuro, também aceitamos
             $valor_unitario = isset($body['valor_unitario']) && $body['valor_unitario'] !== ''
                 ? (float)$body['valor_unitario']
+                : null;
+
+            $observacao = isset($body['observacao']) && trim((string)$body['observacao']) !== ''
+                ? trim((string)$body['observacao'])
                 : null;
 
             if ($produto_id <= 0 || $quantidade <= 0) {
@@ -242,13 +204,18 @@ try {
                 exit;
             }
 
+            // ✅ fallback: se não mandou valor_unitario, usa preco_custo como valor_unitario
+            if ($valor_unitario === null && $preco_custo !== null) {
+                $valor_unitario = $preco_custo;
+            }
+
+            // ⚠️ ordem precisa bater com mov_registrar(produto_id,tipo,qtd,user, preco_custo, valor_unitario, observacao)
             $res = mov_registrar(
                 $conn,
                 $produto_id,
                 $tipo,
                 $quantidade,
                 (int)$usuario['id'],
-                // opcionais (o mov_registrar novo aceita, mas é compatível)
                 $preco_custo,
                 $valor_unitario,
                 $observacao
@@ -258,7 +225,6 @@ try {
             exit;
         }
 
-        // ================= RELATÓRIOS =================
         case 'relatorio':
         case 'relatorios':
         case 'relatorio_movimentacoes': {
