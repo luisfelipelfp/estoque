@@ -1,70 +1,96 @@
 // js/login.js
 import { apiRequest } from "./api.js";
-import { logJsError } from "./logger.js";
+import { logJsError, logJsInfo } from "./logger.js";
 
-/**
- * Base do app (para rodar em subpasta /estoque)
- * Se no futuro você mudar para subdomínio (estoque.local), isso continua funcionando.
- */
 const APP_BASE = "/estoque";
+const LOGIN_PAGE = `${APP_BASE}/pages/login.html`;
+const HOME_PAGE = `${APP_BASE}/index.html`;
 
-document.addEventListener("DOMContentLoaded", () => {
+function showError(el, msg) {
+  if (!el) return;
+  el.textContent = msg || "Erro";
+  el.classList.remove("d-none");
+}
+
+function hideError(el) {
+  if (!el) return;
+  el.textContent = "";
+  el.classList.add("d-none");
+}
+
+function setLoading(btn, loading) {
+  if (!btn) return;
+  btn.disabled = !!loading;
+  btn.textContent = loading ? "Entrando..." : "Entrar";
+}
+
+async function jaLogadoRedirecionar() {
+  try {
+    const resp = await apiRequest("usuario_atual", null, "GET");
+    const usuario = resp?.usuario || resp?.dados?.usuario || resp?.dados?.dados?.usuario || null;
+
+    if (resp?.sucesso && usuario?.id) {
+      localStorage.setItem("usuario", JSON.stringify(usuario));
+      window.location.replace(HOME_PAGE);
+      return true;
+    }
+  } catch {
+    // silencioso: se falhar, continua na tela de login
+  }
+  return false;
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  // ✅ se já tiver sessão válida, não deixa ficar no login
+  await jaLogadoRedirecionar();
+
   const formLogin = document.getElementById("formLogin");
   const msgErro = document.getElementById("msgErro");
+  const btnEntrar = document.getElementById("btnEntrar");
 
   if (!formLogin) {
-    logJsError({
-      origem: "login.js",
-      mensagem: "Formulário #formLogin não encontrado",
-    });
+    logJsError({ origem: "login.js", mensagem: "Formulário #formLogin não encontrado" });
     return;
   }
 
   formLogin.addEventListener("submit", async (e) => {
     e.preventDefault();
-    msgErro.textContent = "";
+    hideError(msgErro);
 
-    const loginInput = document.getElementById("login");
-    const senhaInput = document.getElementById("senha");
-
-    const login = loginInput?.value.trim();
-    const senha = senhaInput?.value;
+    const login = (document.getElementById("login")?.value || "").trim();
+    const senha = (document.getElementById("senha")?.value || "");
 
     if (!login || !senha) {
-      msgErro.textContent = "Preencha login e senha.";
+      showError(msgErro, "Preencha login e senha.");
       return;
     }
 
     try {
-      console.log("🔐 Enviando login...");
+      setLoading(btnEntrar, true);
 
-      // Importante: apiRequest precisa apontar para /estoque/api/...
-      // Esse ajuste principal será feito no api.js (já já).
+      // ✅ login via actions (apiRequest já deve enviar cookies/sessão)
       const resp = await apiRequest("login", { login, senha }, "POST");
 
-      console.log("📥 Resposta login:", resp);
-
       if (resp?.sucesso === true) {
-        if (resp.dados?.usuario) {
-          localStorage.setItem("usuario", JSON.stringify(resp.dados.usuario));
-        }
+        const usuario = resp?.dados?.usuario || resp?.usuario || null;
+        if (usuario) localStorage.setItem("usuario", JSON.stringify(usuario));
 
-        // ✅ Redireciona para dentro do /estoque
-        window.location.replace(`${APP_BASE}/index.html`);
+        logJsInfo({ origem: "login.js", mensagem: "Login OK", usuario: usuario?.nome || login });
+        window.location.replace(HOME_PAGE);
         return;
       }
 
-      msgErro.textContent = resp?.mensagem || "Usuário ou senha inválidos.";
+      showError(msgErro, resp?.mensagem || "Usuário ou senha inválidos.");
+
     } catch (err) {
-      console.error("Erro inesperado no login:", err);
-
-      msgErro.textContent = "Erro de comunicação com o servidor.";
-
+      showError(msgErro, "Erro de comunicação com o servidor.");
       logJsError({
         origem: "login.js",
         mensagem: err?.message || String(err),
-        stack: err?.stack,
+        stack: err?.stack
       });
+    } finally {
+      setLoading(btnEntrar, false);
     }
   });
 });
