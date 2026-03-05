@@ -4,27 +4,23 @@ declare(strict_types=1);
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 
-// =====================================================
-// SESSÃO (com Secure automático se estiver em HTTPS)
-// =====================================================
+// ======================
+// SESSÃO
+// ======================
 if (session_status() === PHP_SESSION_NONE) {
-    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
-
     session_set_cookie_params([
         'lifetime' => 0,
         'path'     => '/',
-        'secure'   => $isHttps,   // ✅ se estiver em https, cookie Secure
+        'secure'   => false, // em HTTPS real, colocar true
         'httponly' => true,
         'samesite' => 'Lax'
     ]);
-
     session_start();
 }
 
-// =====================================================
+// ======================
 // DEPENDÊNCIAS
-// =====================================================
+// ======================
 require_once __DIR__ . '/log.php';
 require_once __DIR__ . '/utils.php';
 require_once __DIR__ . '/db.php';
@@ -35,14 +31,15 @@ require_once __DIR__ . '/relatorios.php';
 
 initLog('actions');
 
-// =====================================================
-// HEADERS / CORS
-// =====================================================
+// ======================
+// HEADERS
+// ======================
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Headers: Content-Type');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 
+// CORS allowlist (credenciais exigem origem explícita)
 function set_cors_origin(): void
 {
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
@@ -54,7 +51,6 @@ function set_cors_origin(): void
     if ($origin && in_array($origin, $allowed, true)) {
         header("Access-Control-Allow-Origin: {$origin}");
     } else {
-        // fallback (mesma origem)
         header('Access-Control-Allow-Origin: https://192.168.15.100');
     }
 }
@@ -65,9 +61,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// =====================================================
+// ======================
 // HELPERS
-// =====================================================
+// ======================
 function read_body(): array
 {
     $raw  = file_get_contents('php://input');
@@ -84,190 +80,9 @@ function require_auth(): array
     return $_SESSION['usuario'];
 }
 
-function coluna_existe_local(mysqli $conn, string $tabela, string $coluna): bool
-{
-    static $cache = [];
-    $db = $conn->query("SELECT DATABASE() AS db")->fetch_assoc()['db'] ?? '';
-    $key = $db . '|' . $tabela . '|' . $coluna;
-
-    if (array_key_exists($key, $cache)) {
-        return (bool)$cache[$key];
-    }
-
-    $sql = "
-        SELECT 1
-        FROM information_schema.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = ?
-          AND COLUMN_NAME = ?
-        LIMIT 1
-    ";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param('ss', $tabela, $coluna);
-    $stmt->execute();
-    $ok = (bool)$stmt->get_result()->fetch_assoc();
-    $stmt->close();
-
-    $cache[$key] = $ok;
-    return $ok;
-}
-
-/**
- * Chama produtos_adicionar sem quebrar versões antigas:
- * - (conn, nome, qtd, usuario_id)
- * - (conn, nome, qtd, usuario_id, preco_custo)
- * - (conn, nome, qtd, usuario_id, preco_custo, preco_venda)
- */
-function call_produtos_adicionar(
-    mysqli $conn,
-    string $nome,
-    int $quantidade,
-    ?int $usuario_id,
-    ?float $preco_custo,
-    ?float $preco_venda
-): array {
-    if (!function_exists('produtos_adicionar')) {
-        return ['sucesso' => false, 'mensagem' => 'Função produtos_adicionar não encontrada.'];
-    }
-
-    try {
-        $rf = new ReflectionFunction('produtos_adicionar');
-        $n  = $rf->getNumberOfParameters();
-
-        if ($n <= 4) {
-            return produtos_adicionar($conn, $nome, $quantidade, $usuario_id);
-        }
-        if ($n === 5) {
-            return produtos_adicionar($conn, $nome, $quantidade, $usuario_id, $preco_custo);
-        }
-        return produtos_adicionar($conn, $nome, $quantidade, $usuario_id, $preco_custo, $preco_venda);
-
-    } catch (Throwable $e) {
-        logError('actions', 'Falha ao chamar produtos_adicionar via Reflection', [
-            'erro' => $e->getMessage(),
-            'arquivo' => $e->getFile(),
-            'linha' => $e->getLine(),
-        ]);
-        return ['sucesso' => false, 'mensagem' => 'Erro interno ao adicionar produto.'];
-    }
-}
-
-function session_touch(): void
-{
-    // ✅ ajuda a evitar "sessão morre do nada"
-    $_SESSION['LAST_ACTIVITY'] = time();
-}
-
-// =====================================================
-// LOGIN HELPERS (tabela usuarios pode variar)
-// =====================================================
-function usuario_login(mysqli $conn, string $login, string $senha): array
-{
-    $login = trim($login);
-    if ($login === '' || $senha === '') {
-        return ['sucesso' => false, 'mensagem' => 'Informe login e senha.', 'dados' => null];
-    }
-
-    // Detecta colunas comuns
-    $hasEmail     = coluna_existe_local($conn, 'usuarios', 'email');
-    $hasUsuario   = coluna_existe_local($conn, 'usuarios', 'usuario');
-    $hasLoginCol  = coluna_existe_local($conn, 'usuarios', 'login');
-    $hasNome      = coluna_existe_local($conn, 'usuarios', 'nome');
-    $hasNivel     = coluna_existe_local($conn, 'usuarios', 'nivel');
-    $hasTipo      = coluna_existe_local($conn, 'usuarios', 'tipo');
-    $hasAtivo     = coluna_existe_local($conn, 'usuarios', 'ativo');
-
-    // senha pode ser hash
-    $hasSenhaHash = coluna_existe_local($conn, 'usuarios', 'senha_hash');
-    $hasSenhaCol  = coluna_existe_local($conn, 'usuarios', 'senha');
-
-    // Monta WHERE flexível
-    $conds = [];
-    $types = '';
-    $params = [];
-
-    if ($hasEmail) {
-        $conds[] = 'email = ?';
-        $types .= 's';
-        $params[] = $login;
-    }
-    if ($hasUsuario) {
-        $conds[] = 'usuario = ?';
-        $types .= 's';
-        $params[] = $login;
-    }
-    if ($hasLoginCol) {
-        $conds[] = 'login = ?';
-        $types .= 's';
-        $params[] = $login;
-    }
-
-    if (!$conds) {
-        return ['sucesso' => false, 'mensagem' => 'Tabela usuarios sem colunas de login (email/usuario/login).', 'dados' => null];
-    }
-
-    // Select com fallback
-    $selNome  = $hasNome ? 'nome' : ($hasUsuario ? 'usuario' : ($hasLoginCol ? 'login' : "'Usuario'"));
-    $selNivel = $hasNivel ? 'nivel' : ($hasTipo ? 'tipo' : "'usuario'");
-
-    $cols = [
-        'id',
-        "{$selNome} AS nome",
-        "{$selNivel} AS nivel",
-    ];
-
-    if ($hasSenhaHash) $cols[] = 'senha_hash';
-    if ($hasSenhaCol)  $cols[] = 'senha';
-    if ($hasAtivo)     $cols[] = 'ativo';
-
-    $where = '(' . implode(' OR ', $conds) . ')';
-    if ($hasAtivo) {
-        $where .= ' AND ativo = 1';
-    }
-
-    $sql = "SELECT " . implode(',', $cols) . " FROM usuarios WHERE {$where} LIMIT 1";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param($types, ...$params);
-    $stmt->execute();
-    $u = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-
-    if (!$u) {
-        return ['sucesso' => false, 'mensagem' => 'Usuário ou senha inválidos.', 'dados' => null];
-    }
-
-    // Validação da senha
-    $ok = false;
-
-    if ($hasSenhaHash && !empty($u['senha_hash'])) {
-        $ok = password_verify($senha, (string)$u['senha_hash']);
-    } elseif ($hasSenhaCol && array_key_exists('senha', $u)) {
-        // fallback (não recomendado) — mas não quebra seu projeto se estiver assim
-        $ok = hash_equals((string)$u['senha'], (string)$senha);
-    } else {
-        return ['sucesso' => false, 'mensagem' => 'Usuário sem coluna de senha (senha_hash/senha).', 'dados' => null];
-    }
-
-    if (!$ok) {
-        return ['sucesso' => false, 'mensagem' => 'Usuário ou senha inválidos.', 'dados' => null];
-    }
-
-    $usuario = [
-        'id'    => (int)$u['id'],
-        'nome'  => (string)$u['nome'],
-        'nivel' => (string)$u['nivel'],
-    ];
-
-    // salva sessão
-    $_SESSION['usuario'] = $usuario;
-    session_touch();
-
-    return ['sucesso' => true, 'mensagem' => 'Login realizado com sucesso.', 'dados' => ['usuario' => $usuario]];
-}
-
-// =====================================================
+// ======================
 // EXECUÇÃO
-// =====================================================
+// ======================
 try {
     $conn = db();
     $acao = $_REQUEST['acao'] ?? '';
@@ -284,34 +99,72 @@ try {
         // ================= AUTH =================
 
         case 'login': {
-            $login = (string)($body['login'] ?? '');
+            $login = trim((string)($body['login'] ?? ''));
             $senha = (string)($body['senha'] ?? '');
 
-            $res = usuario_login($conn, $login, $senha);
-            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null, ($res['sucesso'] ?? false) ? 200 : 401);
+            if ($login === '' || $senha === '') {
+                json_response(false, 'Informe login e senha.', null, 400);
+                exit;
+            }
+
+            // Seu banco tem: nome, email, senha (hash), nivel
+            // Vamos aceitar login por email OU nome
+            $stmt = $conn->prepare("
+                SELECT id, nome, email, senha, nivel
+                FROM usuarios
+                WHERE email = ? OR nome = ?
+                LIMIT 1
+            ");
+            $stmt->bind_param('ss', $login, $login);
+            $stmt->execute();
+            $user = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+
+            if (!$user) {
+                json_response(false, 'Usuário ou senha inválidos.', null, 401);
+                exit;
+            }
+
+            $hash = (string)$user['senha'];
+            if (!password_verify($senha, $hash)) {
+                json_response(false, 'Usuário ou senha inválidos.', null, 401);
+                exit;
+            }
+
+            // ok: cria sessão
+            $_SESSION['usuario'] = [
+                'id'    => (int)$user['id'],
+                'nome'  => (string)$user['nome'],
+                'email' => (string)$user['email'],
+                'nivel' => (string)$user['nivel'],
+            ];
+            $_SESSION['LAST_ACTIVITY'] = time();
+
+            json_response(true, 'OK', ['usuario' => $_SESSION['usuario']]);
             exit;
         }
 
         case 'usuario_atual': {
-            if (!empty($_SESSION['usuario']) && is_array($_SESSION['usuario'])) {
-                session_touch();
-                json_response(true, 'OK', ['usuario' => $_SESSION['usuario']]);
-                exit;
-            }
-            json_response(false, 'Usuário não autenticado.', null, 401);
+            $u = require_auth();
+            json_response(true, 'OK', ['usuario' => $u]);
             exit;
         }
 
         case 'logout': {
-            session_unset();
+            // encerra sessão
+            $_SESSION = [];
+            if (ini_get("session.use_cookies")) {
+                $params = session_get_cookie_params();
+                setcookie(session_name(), '', time() - 42000,
+                    $params["path"],
+                    $params["domain"] ?? '',
+                    (bool)$params["secure"],
+                    (bool)$params["httponly"]
+                );
+            }
             session_destroy();
 
-            // garante remover cookie
-            if (isset($_COOKIE[session_name()])) {
-                setcookie(session_name(), '', time() - 3600, '/');
-            }
-
-            json_response(true, 'Logout realizado com sucesso.', null);
+            json_response(true, 'OK', null);
             exit;
         }
 
@@ -319,8 +172,6 @@ try {
 
         case 'listar_produtos': {
             require_auth();
-            session_touch();
-
             $res = produtos_listar($conn);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
             exit;
@@ -328,7 +179,6 @@ try {
 
         case 'adicionar_produto': {
             $usuario = require_auth();
-            session_touch();
 
             $nome = trim((string)($body['nome'] ?? ''));
             $qtd  = (int)($body['quantidade'] ?? 0);
@@ -338,15 +188,13 @@ try {
                 exit;
             }
 
-            // mantém compatível com versões antigas do produtos_adicionar()
-            $res = call_produtos_adicionar($conn, $nome, $qtd, (int)$usuario['id'], null, null);
+            $res = produtos_adicionar($conn, $nome, $qtd, (int)$usuario['id']);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
             exit;
         }
 
         case 'criar_produto': {
             $usuario = require_auth();
-            session_touch();
 
             $nome = trim((string)($body['nome'] ?? ''));
             if ($nome === '') {
@@ -364,14 +212,16 @@ try {
                 ? (float)$body['preco_venda']
                 : null;
 
-            $res = call_produtos_adicionar($conn, $nome, $qtd, (int)$usuario['id'], $preco_custo, $preco_venda);
+            // ⚠️ só vai funcionar se sua assinatura de produtos_adicionar aceitar esses params
+            // Se ainda não aceitar, me avisa e eu ajusto seu produtos.php também.
+            $res = produtos_adicionar($conn, $nome, $qtd, (int)$usuario['id'], $preco_custo, $preco_venda);
+
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
             exit;
         }
 
         case 'remover_produto': {
             $usuario = require_auth();
-            session_touch();
 
             $produto_id = (int)($body['produto_id'] ?? 0);
             if ($produto_id <= 0) {
@@ -386,7 +236,6 @@ try {
 
         case 'buscar_produtos': {
             require_auth();
-            session_touch();
 
             $q = trim((string)($_GET['q'] ?? $body['q'] ?? ''));
             $limit = (int)($_GET['limit'] ?? $body['limit'] ?? 10);
@@ -399,7 +248,6 @@ try {
 
         case 'produto_resumo': {
             require_auth();
-            session_touch();
 
             $produto_id = (int)($_GET['produto_id'] ?? $body['produto_id'] ?? 0);
             if ($produto_id <= 0) {
@@ -416,7 +264,6 @@ try {
 
         case 'listar_movimentacoes': {
             require_auth();
-            session_touch();
 
             $res = mov_listar($conn, $_GET);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
@@ -425,7 +272,6 @@ try {
 
         case 'registrar_movimentacao': {
             $usuario = require_auth();
-            session_touch();
 
             $produto_id = (int)($body['produto_id'] ?? 0);
             $tipo       = (string)($body['tipo'] ?? '');
@@ -453,12 +299,11 @@ try {
                 exit;
             }
 
-            // ✅ fallback: se não mandou valor_unitario, usa preco_custo como valor_unitario
+            // fallback: se não mandou valor_unitario, usa preco_custo como valor_unitario
             if ($valor_unitario === null && $preco_custo !== null) {
                 $valor_unitario = $preco_custo;
             }
 
-            // ⚠️ precisa bater com sua mov_registrar(...)
             $res = mov_registrar(
                 $conn,
                 $produto_id,
@@ -480,7 +325,6 @@ try {
         case 'relatorios':
         case 'relatorio_movimentacoes': {
             require_auth();
-            session_touch();
 
             $filtros = array_merge($_GET, $body);
             $res = relatorio($conn, $filtros);

@@ -1,32 +1,17 @@
 // js/logout.js
 import { apiRequest } from "./api.js";
-import { logJsInfo, logJsError } from "./logger.js";
+import { logJsError } from "./logger.js";
 
-const LOGIN_URL = "/estoque/pages/login.html";
+const APP_BASE = "/estoque";
+const LOGIN_PAGE = `${APP_BASE}/pages/login.html`;
 
 document.addEventListener("DOMContentLoaded", () => {
   const btn = document.getElementById("btnLogout");
   if (!btn) return;
 
   btn.addEventListener("click", async () => {
-    // evita double click
-    btn.disabled = true;
-
     try {
-      const resp = await apiRequest("logout", null, "POST");
-
-      if (!resp?.sucesso) {
-        logJsError({
-          origem: "logout.js",
-          mensagem: "Logout retornou falha",
-          detalhe: resp?.mensagem,
-        });
-      } else {
-        logJsInfo({
-          origem: "logout.js",
-          mensagem: "Logout realizado",
-        });
-      }
+      await apiRequest("logout", null, "POST");
     } catch (err) {
       logJsError({
         origem: "logout.js",
@@ -35,8 +20,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     } finally {
       localStorage.removeItem("usuario");
-      // ✅ redireciona pro login real do projeto
-      window.location.replace(LOGIN_URL);
+      window.location.replace(LOGIN_PAGE);
     }
   });
 });

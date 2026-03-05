@@ -5,23 +5,18 @@ import { logJsInfo, logJsError } from "./logger.js";
 const APP_BASE = "/estoque";
 const LOGIN_PAGE = `${APP_BASE}/pages/login.html`;
 
-function redirectToLogin() {
-  // preserva para onde o usuário tentou ir
-  const next = encodeURIComponent(window.location.pathname + window.location.search);
-  window.location.replace(`${LOGIN_PAGE}?next=${next}`);
+function getCurrentPath() {
+  // salva o caminho atual (com query)
+  return window.location.pathname + window.location.search;
 }
 
 async function verificarLogin() {
   try {
     const resp = await apiRequest("usuario_atual", null, "GET");
+    const usuario = resp?.dados?.usuario;
 
-    // aceita formatos:
-    // 1) {sucesso:true, usuario:{...}}
-    // 2) {sucesso:true, dados:{usuario:{...}}}
-    const usuario = resp?.usuario || resp?.dados?.usuario || null;
-
-    if (!resp?.sucesso || !usuario?.id) {
-      redirectToLogin();
+    if (!resp?.sucesso || !usuario) {
+      window.location.replace(`${LOGIN_PAGE}?next=${encodeURIComponent(getCurrentPath())}`);
       return null;
     }
 
@@ -34,7 +29,7 @@ async function verificarLogin() {
       mensagem: err?.message || String(err),
       stack: err?.stack
     });
-    redirectToLogin();
+    window.location.replace(`${LOGIN_PAGE}?next=${encodeURIComponent(getCurrentPath())}`);
     return null;
   }
 }
@@ -50,5 +45,5 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   const span = document.getElementById("usuarioLogado");
-  if (span) span.textContent = `${usuario.nome} (${usuario.nivel || "usuario"})`;
+  if (span) span.textContent = `${usuario.nome} (${usuario.nivel})`;
 });
