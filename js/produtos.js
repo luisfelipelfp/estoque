@@ -25,6 +25,7 @@ function formatBRL(valor) {
 
 let produtosCache = [];
 let modalInstance = null;
+let fornecedoresTemp = [];
 
 async function carregarNavbar() {
   const host = $("navbar");
@@ -76,30 +77,15 @@ function calcularLucro(precoCusto, precoVenda) {
   return Number(precoVenda || 0) - Number(precoCusto || 0);
 }
 
-function calcularMargem(precoCusto, precoVenda) {
+function formatMargem(precoCusto, precoVenda) {
   const venda = Number(precoVenda || 0);
   const lucro = calcularLucro(precoCusto, precoVenda);
-  if (venda <= 0) return 0;
-  return (lucro / venda) * 100;
-}
-
-function atualizarResumoModal() {
-  const precoCusto = Number($("produtoPrecoCusto")?.value || 0);
-  const precoVenda = Number($("produtoPrecoVenda")?.value || 0);
-
-  const lucro = calcularLucro(precoCusto, precoVenda);
-  const margem = calcularMargem(precoCusto, precoVenda);
-
-  if ($("produtoLucroUnitario")) {
-    $("produtoLucroUnitario").textContent = formatBRL(lucro);
-  }
-
-  if ($("produtoMargemEstimada")) {
-    $("produtoMargemEstimada").textContent = `${margem.toLocaleString("pt-BR", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    })}%`;
-  }
+  if (venda <= 0) return "0,00%";
+  const margem = (lucro / venda) * 100;
+  return `${margem.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}%`;
 }
 
 function renderCards(produtos) {
@@ -231,19 +217,165 @@ function getModal() {
   return modalInstance;
 }
 
+function criarFornecedorVazio() {
+  return {
+    nome: "",
+    codigo: "",
+    preco_custo: "",
+    preco_venda: "",
+    observacao: ""
+  };
+}
+
+function atualizarFornecedor(index, campo, valor) {
+  if (!fornecedoresTemp[index]) return;
+  fornecedoresTemp[index][campo] = valor;
+  renderListaFornecedores();
+}
+
+function removerFornecedor(index) {
+  fornecedoresTemp.splice(index, 1);
+  renderListaFornecedores();
+}
+
+function criarFornecedorCard(fornecedor, index) {
+  const precoCusto = Number(fornecedor?.preco_custo || 0);
+  const precoVenda = Number(fornecedor?.preco_venda || 0);
+  const lucro = calcularLucro(precoCusto, precoVenda);
+
+  return `
+    <div class="card border mb-3">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <strong>Fornecedor ${index + 1}</strong>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-danger"
+            data-remover-fornecedor="${index}"
+          >
+            Remover
+          </button>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-12 col-lg-6">
+            <label class="form-label">Nome do fornecedor</label>
+            <input
+              class="form-control"
+              value="${escapeHtml(fornecedor?.nome ?? "")}"
+              data-campo="nome"
+              data-index="${index}"
+              placeholder="Digite o nome do fornecedor..."
+            >
+          </div>
+
+          <div class="col-12 col-lg-6">
+            <label class="form-label">Código do produto no fornecedor</label>
+            <input
+              class="form-control"
+              value="${escapeHtml(fornecedor?.codigo ?? "")}"
+              data-campo="codigo"
+              data-index="${index}"
+              placeholder="Ex.: 83921"
+            >
+          </div>
+
+          <div class="col-12 col-lg-4">
+            <label class="form-label">Preço de custo</label>
+            <div class="input-group">
+              <span class="input-group-text">R$</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                class="form-control"
+                value="${escapeHtml(fornecedor?.preco_custo ?? "")}"
+                data-campo="preco_custo"
+                data-index="${index}"
+                placeholder="0,00"
+              >
+            </div>
+          </div>
+
+          <div class="col-12 col-lg-4">
+            <label class="form-label">Preço de venda</label>
+            <div class="input-group">
+              <span class="input-group-text">R$</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                class="form-control"
+                value="${escapeHtml(fornecedor?.preco_venda ?? "")}"
+                data-campo="preco_venda"
+                data-index="${index}"
+                placeholder="0,00"
+              >
+            </div>
+          </div>
+
+          <div class="col-12 col-lg-4">
+            <label class="form-label">Lucro estimado</label>
+            <input
+              class="form-control"
+              value="${formatBRL(lucro)}"
+              readonly
+            >
+            <div class="form-text">Margem estimada: ${formatMargem(precoCusto, precoVenda)}</div>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Observação</label>
+            <input
+              class="form-control"
+              value="${escapeHtml(fornecedor?.observacao ?? "")}"
+              data-campo="observacao"
+              data-index="${index}"
+              placeholder="Ex.: acabamento fosco, cromado, lote especial..."
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderListaFornecedores() {
+  const lista = $("listaFornecedores");
+  if (!lista) return;
+
+  if (!Array.isArray(fornecedoresTemp) || fornecedoresTemp.length === 0) {
+    lista.innerHTML = `
+      <div class="alert alert-light text-center text-muted mb-0">
+        Nenhum fornecedor adicionado.
+      </div>
+    `;
+    return;
+  }
+
+  lista.innerHTML = fornecedoresTemp
+    .map((fornecedor, index) => criarFornecedorCard(fornecedor, index))
+    .join("");
+}
+
+function adicionarFornecedor() {
+  fornecedoresTemp.push(criarFornecedorVazio());
+  renderListaFornecedores();
+}
+
 function limparModal() {
   if ($("produtoId")) $("produtoId").value = "";
   if ($("produtoNome")) $("produtoNome").value = "";
-  if ($("produtoQuantidade")) $("produtoQuantidade").value = "0";
-  if ($("produtoPrecoCusto")) $("produtoPrecoCusto").value = "0";
-  if ($("produtoPrecoVenda")) $("produtoPrecoVenda").value = "0";
   if ($("produtoStatus")) $("produtoStatus").textContent = "";
   if ($("tituloModalProduto")) $("tituloModalProduto").textContent = "Novo Produto";
-  atualizarResumoModal();
+
+  fornecedoresTemp = [];
+  renderListaFornecedores();
 }
 
 function abrirModalNovoProduto() {
   limparModal();
+  adicionarFornecedor();
   getModal()?.show();
 }
 
@@ -271,21 +403,38 @@ async function abrirModalProdutoExistente(produtoId) {
 
   if ($("produtoId")) $("produtoId").value = String(produto.id ?? "");
   if ($("produtoNome")) $("produtoNome").value = produto.nome ?? "";
-  if ($("produtoQuantidade")) $("produtoQuantidade").value = String(Number(produto.quantidade ?? 0));
-  if ($("produtoPrecoCusto")) $("produtoPrecoCusto").value = String(Number(produto.preco_custo ?? 0));
-  if ($("produtoPrecoVenda")) $("produtoPrecoVenda").value = String(Number(produto.preco_venda ?? 0));
   if ($("tituloModalProduto")) $("tituloModalProduto").textContent = "Cadastro do Produto";
 
-  atualizarResumoModal();
+  // Enquanto ainda não existe tabela de fornecedores no banco,
+  // montamos um fornecedor inicial usando os preços atuais do produto.
+  fornecedoresTemp = [{
+    nome: "",
+    codigo: "",
+    preco_custo: String(Number(produto.preco_custo ?? 0)),
+    preco_venda: String(Number(produto.preco_venda ?? 0)),
+    observacao: ""
+  }];
+
+  renderListaFornecedores();
   getModal()?.show();
+}
+
+function obterPrecoBaseProduto() {
+  if (!Array.isArray(fornecedoresTemp) || fornecedoresTemp.length === 0) {
+    return { preco_custo: 0, preco_venda: 0 };
+  }
+
+  const primeiro = fornecedoresTemp[0] || {};
+
+  return {
+    preco_custo: Number(primeiro.preco_custo || 0),
+    preco_venda: Number(primeiro.preco_venda || 0)
+  };
 }
 
 async function salvarProduto() {
   const produtoId = Number($("produtoId")?.value ?? 0);
   const nome = ($("produtoNome")?.value ?? "").trim();
-  const quantidade = Number($("produtoQuantidade")?.value ?? 0);
-  const precoCusto = Number($("produtoPrecoCusto")?.value ?? 0);
-  const precoVenda = Number($("produtoPrecoVenda")?.value ?? 0);
   const status = $("produtoStatus");
 
   if (status) status.textContent = "";
@@ -295,20 +444,12 @@ async function salvarProduto() {
     return;
   }
 
-  if (!Number.isFinite(quantidade) || quantidade < 0) {
-    if (status) status.textContent = "Informe uma quantidade válida.";
+  if (!Array.isArray(fornecedoresTemp) || fornecedoresTemp.length === 0) {
+    if (status) status.textContent = "Adicione pelo menos um fornecedor.";
     return;
   }
 
-  if (!Number.isFinite(precoCusto) || precoCusto < 0) {
-    if (status) status.textContent = "Informe um preço de custo válido.";
-    return;
-  }
-
-  if (!Number.isFinite(precoVenda) || precoVenda < 0) {
-    if (status) status.textContent = "Informe um preço de venda válido.";
-    return;
-  }
+  const base = obterPrecoBaseProduto();
 
   if (status) {
     status.textContent = produtoId > 0 ? "Atualizando produto..." : "Salvando produto...";
@@ -323,9 +464,9 @@ async function salvarProduto() {
         {
           produto_id: produtoId,
           nome,
-          quantidade,
-          preco_custo: precoCusto,
-          preco_venda: precoVenda
+          quantidade: 0,
+          preco_custo: base.preco_custo,
+          preco_venda: base.preco_venda
         },
         "POST"
       );
@@ -334,9 +475,9 @@ async function salvarProduto() {
         "criar_produto",
         {
           nome,
-          quantidade,
-          preco_custo: precoCusto,
-          preco_venda: precoVenda
+          quantidade: 0,
+          preco_custo: base.preco_custo,
+          preco_venda: base.preco_venda
         },
         "POST"
       );
@@ -364,9 +505,7 @@ async function salvarProduto() {
       mensagem: produtoId > 0 ? "Produto atualizado com sucesso" : "Produto criado com sucesso",
       produto_id: produtoId || (resp?.dados?.id ?? null),
       nome,
-      quantidade,
-      preco_custo: precoCusto,
-      preco_venda: precoVenda
+      fornecedores: fornecedoresTemp.length
     });
   } catch (err) {
     if (status) status.textContent = "Erro inesperado ao salvar produto.";
@@ -401,12 +540,29 @@ function bindBusca() {
 function bindAcoesTopo() {
   $("btnAtualizarProdutos")?.addEventListener("click", carregarProdutos);
   $("btnNovoProduto")?.addEventListener("click", abrirModalNovoProduto);
+  $("btnAdicionarFornecedor")?.addEventListener("click", adicionarFornecedor);
 }
 
 function bindModal() {
-  $("produtoPrecoCusto")?.addEventListener("input", atualizarResumoModal);
-  $("produtoPrecoVenda")?.addEventListener("input", atualizarResumoModal);
   $("btnSalvarProduto")?.addEventListener("click", salvarProduto);
+
+  $("listaFornecedores")?.addEventListener("input", (ev) => {
+    const input = ev.target.closest("[data-campo][data-index]");
+    if (!input) return;
+
+    const index = Number(input.dataset.index || 0);
+    const campo = input.dataset.campo || "";
+
+    atualizarFornecedor(index, campo, input.value);
+  });
+
+  $("listaFornecedores")?.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("[data-remover-fornecedor]");
+    if (!btn) return;
+
+    const index = Number(btn.dataset.removerFornecedor || 0);
+    removerFornecedor(index);
+  });
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -415,5 +571,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindBusca();
   bindAcoesTopo();
   bindModal();
+  renderListaFornecedores();
   carregarProdutos();
 });
