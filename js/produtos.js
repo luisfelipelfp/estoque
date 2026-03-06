@@ -1,5 +1,3 @@
-Vou te mandar o meu js/produtos.js atual para que você possa analisar fazer todos os ajustes necessários e já me devolver de forma completa
-js/produtos.js
 // js/produtos.js
 import { apiRequest } from "./api.js";
 import { logJsInfo, logJsError } from "./logger.js";
@@ -252,17 +250,43 @@ function garantirFornecedorPrincipal() {
   }
 }
 
+function atualizarResumoFornecedorNoDOM(index) {
+  const custoInput = document.querySelector(`[data-campo="preco_custo"][data-index="${index}"]`);
+  const vendaInput = document.querySelector(`[data-campo="preco_venda"][data-index="${index}"]`);
+  const lucroInput = document.querySelector(`[data-lucro-index="${index}"]`);
+  const margemEl = document.querySelector(`[data-margem-index="${index}"]`);
+
+  const precoCusto = Number(custoInput?.value || 0);
+  const precoVenda = Number(vendaInput?.value || 0);
+  const lucro = calcularLucro(precoCusto, precoVenda);
+
+  if (lucroInput) {
+    lucroInput.value = formatBRL(lucro);
+  }
+
+  if (margemEl) {
+    margemEl.textContent = `Margem estimada: ${formatMargem(precoCusto, precoVenda)}`;
+  }
+}
+
 function atualizarFornecedor(index, campo, valor) {
   if (!fornecedoresTemp[index]) return;
+
   fornecedoresTemp[index][campo] = valor;
+
   if (campo === "principal" && Number(valor) === 1) {
     fornecedoresTemp = fornecedoresTemp.map((f, i) => ({
       ...f,
       principal: i === index ? 1 : 0
     }));
+    garantirFornecedorPrincipal();
+    renderListaFornecedores();
+    return;
   }
-  garantirFornecedorPrincipal();
-  renderListaFornecedores();
+
+  if (campo === "preco_custo" || campo === "preco_venda") {
+    atualizarResumoFornecedorNoDOM(index);
+  }
 }
 
 function removerFornecedor(index) {
@@ -367,8 +391,11 @@ function criarFornecedorCard(fornecedor, index) {
               class="form-control"
               value="${formatBRL(lucro)}"
               readonly
+              data-lucro-index="${index}"
             >
-            <div class="form-text">Margem estimada: ${formatMargem(precoCusto, precoVenda)}</div>
+            <div class="form-text" data-margem-index="${index}">
+              Margem estimada: ${formatMargem(precoCusto, precoVenda)}
+            </div>
           </div>
 
           <div class="col-12">
@@ -625,6 +652,14 @@ function bindModal() {
       return;
     }
 
+    const radioPrincipal = ev.target.closest("[data-marcar-principal]");
+    if (radioPrincipal) {
+      const index = Number(radioPrincipal.dataset.marcarPrincipal || 0);
+      atualizarFornecedor(index, "principal", 1);
+    }
+  });
+
+  $("listaFornecedores")?.addEventListener("change", (ev) => {
     const radioPrincipal = ev.target.closest("[data-marcar-principal]");
     if (radioPrincipal) {
       const index = Number(radioPrincipal.dataset.marcarPrincipal || 0);
