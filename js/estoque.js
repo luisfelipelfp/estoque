@@ -247,6 +247,86 @@ function selecionarProdutoModal(id, nome) {
   if ($("movProdutoId")) $("movProdutoId").value = String(id || "");
   if ($("movProdutoNome")) $("movProdutoNome").value = nome || "";
   limparSugestoes();
+  carregarResumoProduto(id);
+}
+
+function renderUltimasMovimentacoes(movs) {
+  const box = $("movUltimasMovimentacoes");
+  if (!box) return;
+
+  if (!Array.isArray(movs) || movs.length === 0) {
+    box.innerHTML = `<div class="text-muted">Nenhuma movimentação recente para este produto.</div>`;
+    return;
+  }
+
+  box.innerHTML = movs.map((mov) => {
+    const tipo = String(mov?.tipo ?? "").toLowerCase();
+    const classe =
+      tipo === "saida"
+        ? "bg-danger"
+        : tipo === "entrada"
+        ? "bg-success"
+        : "bg-secondary";
+
+    return `
+      <div class="d-flex align-items-start justify-content-between gap-3 border-bottom py-2">
+        <div>
+          <span class="badge ${classe}">${escapeHtml(tipo || "-")}</span>
+          <div class="fw-semibold mt-1">${Number(mov?.quantidade ?? 0)}</div>
+          <div class="text-muted">${escapeHtml(mov?.usuario ?? "Sistema")}</div>
+        </div>
+        <div class="text-end text-muted">
+          ${escapeHtml(mov?.data ?? "-")}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function carregarResumoProduto(produtoId) {
+  const estoqueEl = $("movEstoqueAtual");
+  const historicoEl = $("movUltimasMovimentacoes");
+  const alertaEl = $("movResumoAlerta");
+  const btnHistorico = $("movVerHistorico");
+
+  if (estoqueEl) estoqueEl.textContent = "-";
+  if (alertaEl) alertaEl.textContent = "";
+  if (historicoEl) historicoEl.innerHTML = `<div class="text-muted">Carregando informações do produto...</div>`;
+  if (btnHistorico) btnHistorico.disabled = !produtoId;
+
+  if (!produtoId) {
+    if (historicoEl) historicoEl.innerHTML = `<div class="text-muted">Selecione um produto para visualizar o histórico.</div>`;
+    return;
+  }
+
+  try {
+    const resp = await apiRequest("produto_resumo", { produto_id: produtoId }, "GET");
+
+    if (!resp?.sucesso) {
+      if (historicoEl) historicoEl.innerHTML = `<div class="text-danger">Não foi possível carregar o resumo do produto.</div>`;
+      return;
+    }
+
+    const dados = resp?.dados || {};
+    const produto = dados?.produto || {};
+    const movs = Array.isArray(dados?.ultimas_movimentacoes) ? dados.ultimas_movimentacoes : [];
+    const qtdAtual = Number(produto?.quantidade ?? 0);
+
+    if (estoqueEl) estoqueEl.textContent = String(qtdAtual);
+    if (alertaEl) alertaEl.textContent = qtdAtual <= 0 ? "Produto sem estoque." : "";
+
+    renderUltimasMovimentacoes(movs);
+  } catch (err) {
+    if (historicoEl) historicoEl.innerHTML = `<div class="text-danger">Erro ao carregar o histórico do produto.</div>`;
+
+    logJsError({
+      origem: "estoque.js",
+      mensagem: "Erro ao carregar resumo do produto",
+      detalhe: err?.message,
+      stack: err?.stack,
+      produto_id: produtoId
+    });
+  }
 }
 
 function bindAutocompleteModal() {
@@ -259,6 +339,12 @@ function bindAutocompleteModal() {
     const termo = input.value.trim().toLowerCase();
 
     if ($("movProdutoId")) $("movProdutoId").value = "";
+    if ($("movEstoqueAtual")) $("movEstoqueAtual").textContent = "-";
+    if ($("movResumoAlerta")) $("movResumoAlerta").textContent = "";
+    if ($("movUltimasMovimentacoes")) {
+      $("movUltimasMovimentacoes").innerHTML = `<div class="text-muted">Selecione um produto para visualizar o histórico.</div>`;
+    }
+    if ($("movVerHistorico")) $("movVerHistorico").disabled = true;
 
     if (!termo) {
       limparSugestoes();
@@ -314,6 +400,13 @@ function limparModal() {
   if ($("movDataAgora")) $("movDataAgora").value = formatNowBR();
   if ($("movQuantidade")) $("movQuantidade").value = "1";
   if ($("movStatus")) $("movStatus").textContent = "";
+  if ($("movEstoqueAtual")) $("movEstoqueAtual").textContent = "-";
+  if ($("movResumoAlerta")) $("movResumoAlerta").textContent = "";
+  if ($("movUltimasMovimentacoes")) {
+    $("movUltimasMovimentacoes").innerHTML = `<div class="text-muted">Selecione um produto para visualizar o histórico.</div>`;
+  }
+  if ($("movVerHistorico")) $("movVerHistorico").disabled = true;
+
   limparSugestoes();
 
   if ($("movTipoEntrada")) $("movTipoEntrada").checked = true;
@@ -333,6 +426,10 @@ function abrirModalMovimentar({ id = "", nome = "", tipo = "entrada" } = {}) {
     $("movTipoSaida").checked = true;
   } else if ($("movTipoEntrada")) {
     $("movTipoEntrada").checked = true;
+  }
+
+  if (id) {
+    carregarResumoProduto(Number(id));
   }
 
   modal.show();
@@ -374,6 +471,10 @@ function bindAcoesTopo() {
 
   $("btnAbrirModalMov")?.addEventListener("click", () => {
     abrirModalMovimentar();
+  });
+
+  $("movVerHistorico")?.addEventListener("click", () => {
+    window.location.href = "/estoque/relatorios.html";
   });
 }
 
@@ -420,6 +521,7 @@ async function salvarMovimentacao() {
     if (status) status.textContent = "Movimentação registrada com sucesso.";
 
     await carregarProdutos();
+    await carregarResumoProduto(produtoId);
 
     const modal = getModal();
     setTimeout(() => {

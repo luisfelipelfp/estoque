@@ -154,6 +154,32 @@
                   <input id="movDataAgora" class="form-control" disabled>
                 </div>
 
+                <div class="col-12">
+                  <div class="alert alert-light border mb-0">
+                    <div class="d-flex flex-wrap gap-3 align-items-center">
+                      <div>📦 <strong>Estoque atual:</strong> <span id="movEstoqueAtual">-</span></div>
+                      <div id="movResumoAlerta" class="text-danger fw-bold"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <div class="card border">
+                    <div class="card-body">
+                      <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                        <div class="fw-bold">Últimas Movimentações</div>
+                        <button id="movVerHistorico" class="btn btn-sm btn-outline-primary" type="button" disabled>
+                          Ver histórico completo
+                        </button>
+                      </div>
+
+                      <div id="movUltimasMovimentacoes" class="small text-muted">
+                        Selecione um produto para visualizar o histórico.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div class="col-12 col-lg-6">
                   <label class="form-label">Tipo</label>
                   <div class="btn-group w-100" role="group" aria-label="Tipo de movimentação">
