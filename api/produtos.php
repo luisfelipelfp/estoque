@@ -34,6 +34,204 @@ function coluna_existe(mysqli $conn, string $tabela, string $coluna): bool
     return $ok;
 }
 
+function normalizar_fornecedores(array $fornecedores): array
+{
+    $out = [];
+
+    foreach ($fornecedores as $f) {
+        if (!is_array($f)) {
+            continue;
+        }
+
+        $nome = trim((string)($f['nome'] ?? ''));
+        $codigo = trim((string)($f['codigo'] ?? ''));
+        $precoCusto = (float)($f['preco_custo'] ?? 0);
+        $precoVenda = (float)($f['preco_venda'] ?? 0);
+        $observacao = trim((string)($f['observacao'] ?? ''));
+        $principal = !empty($f['principal']) ? 1 : 0;
+
+        if ($nome === '') {
+            continue;
+        }
+
+        if ($precoCusto < 0) {
+            $precoCusto = 0;
+        }
+
+        if ($precoVenda < 0) {
+            $precoVenda = 0;
+        }
+
+        $out[] = [
+            'nome' => $nome,
+            'codigo' => $codigo,
+            'preco_custo' => $precoCusto,
+            'preco_venda' => $precoVenda,
+            'observacao' => $observacao,
+            'principal' => $principal,
+        ];
+    }
+
+    if (!empty($out)) {
+        $temPrincipal = false;
+        foreach ($out as $f) {
+            if ((int)$f['principal'] === 1) {
+                $temPrincipal = true;
+                break;
+            }
+        }
+
+        if (!$temPrincipal) {
+            $out[0]['principal'] = 1;
+        } else {
+            $achou = false;
+            foreach ($out as $i => $f) {
+                if ((int)$f['principal'] === 1) {
+                    if (!$achou) {
+                        $achou = true;
+                        $out[$i]['principal'] = 1;
+                    } else {
+                        $out[$i]['principal'] = 0;
+                    }
+                }
+            }
+        }
+    }
+
+    return $out;
+}
+
+function fornecedor_obter_ou_criar(mysqli $conn, string $nome): int
+{
+    $stmtSel = $conn->prepare('SELECT id FROM fornecedores WHERE nome = ? LIMIT 1');
+    $stmtSel->bind_param('s', $nome);
+    $stmtSel->execute();
+    $row = $stmtSel->get_result()->fetch_assoc();
+    $stmtSel->close();
+
+    if ($row) {
+        return (int)$row['id'];
+    }
+
+    $stmtIns = $conn->prepare('INSERT INTO fornecedores (nome, ativo) VALUES (?, 1)');
+    $stmtIns->bind_param('s', $nome);
+    $stmtIns->execute();
+    $id = (int)$stmtIns->insert_id;
+    $stmtIns->close();
+
+    return $id;
+}
+
+function produto_fornecedores_salvar(mysqli $conn, int $produto_id, array $fornecedores): void
+{
+    $fornecedores = normalizar_fornecedores($fornecedores);
+
+    $stmtDel = $conn->prepare('DELETE FROM produto_fornecedores WHERE produto_id = ?');
+    $stmtDel->bind_param('i', $produto_id);
+    $stmtDel->execute();
+    $stmtDel->close();
+
+    if (empty($fornecedores)) {
+        return;
+    }
+
+    $stmtIns = $conn->prepare(
+        'INSERT INTO produto_fornecedores
+            (produto_id, fornecedor_id, codigo_produto_fornecedor, preco_custo, preco_venda, observacao, principal)
+         VALUES (?, ?, ?, ?, ?, ?, ?)'
+    );
+
+    foreach ($fornecedores as $f) {
+        $fornecedorId = fornecedor_obter_ou_criar($conn, (string)$f['nome']);
+        $codigo = $f['codigo'] !== '' ? (string)$f['codigo'] : null;
+        $precoCusto = (float)$f['preco_custo'];
+        $precoVenda = (float)$f['preco_venda'];
+        $observacao = $f['observacao'] !== '' ? (string)$f['observacao'] : null;
+        $principal = (int)$f['principal'];
+
+        $stmtIns->bind_param(
+            'iisddsi',
+            $produto_id,
+            $fornecedorId,
+            $codigo,
+            $precoCusto,
+            $precoVenda,
+            $observacao,
+            $principal
+        );
+        $stmtIns->execute();
+    }
+
+    $stmtIns->close();
+}
+
+function produto_fornecedores_listar(mysqli $conn, int $produto_id): array
+{
+    $sql = "
+        SELECT
+            pf.id,
+            pf.fornecedor_id,
+            f.nome AS fornecedor_nome,
+            COALESCE(pf.codigo_produto_fornecedor, '') AS codigo_produto_fornecedor,
+            COALESCE(pf.preco_custo, 0) AS preco_custo,
+            COALESCE(pf.preco_venda, 0) AS preco_venda,
+            COALESCE(pf.observacao, '') AS observacao,
+            COALESCE(pf.principal, 0) AS principal
+        FROM produto_fornecedores pf
+        INNER JOIN fornecedores f ON f.id = pf.fornecedor_id
+        WHERE pf.produto_id = ?
+        ORDER BY pf.principal DESC, f.nome ASC, pf.id ASC
+    ";
+
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param('i', $produto_id);
+    $stmt->execute();
+    $res = $stmt->get_result();
+
+    $dados = [];
+    while ($row = $res->fetch_assoc()) {
+        $dados[] = [
+            'id' => (int)$row['id'],
+            'fornecedor_id' => (int)$row['fornecedor_id'],
+            'nome' => (string)$row['fornecedor_nome'],
+            'codigo' => (string)$row['codigo_produto_fornecedor'],
+            'preco_custo' => (float)$row['preco_custo'],
+            'preco_venda' => (float)$row['preco_venda'],
+            'observacao' => (string)$row['observacao'],
+            'principal' => (int)$row['principal'],
+        ];
+    }
+
+    $stmt->close();
+    return $dados;
+}
+
+function fornecedor_principal_preco(array $fornecedores): array
+{
+    $fornecedores = normalizar_fornecedores($fornecedores);
+
+    if (empty($fornecedores)) {
+        return [
+            'preco_custo' => 0.0,
+            'preco_venda' => 0.0,
+        ];
+    }
+
+    foreach ($fornecedores as $f) {
+        if ((int)$f['principal'] === 1) {
+            return [
+                'preco_custo' => (float)$f['preco_custo'],
+                'preco_venda' => (float)$f['preco_venda'],
+            ];
+        }
+    }
+
+    return [
+        'preco_custo' => (float)$fornecedores[0]['preco_custo'],
+        'preco_venda' => (float)$fornecedores[0]['preco_venda'],
+    ];
+}
+
 function produtos_listar(mysqli $conn): array
 {
     try {
@@ -108,6 +306,8 @@ function produto_obter(mysqli $conn, int $produto_id): array
             ];
         }
 
+        $fornecedores = produto_fornecedores_listar($conn, $produto_id);
+
         return [
             'sucesso'  => true,
             'mensagem' => 'OK',
@@ -118,6 +318,7 @@ function produto_obter(mysqli $conn, int $produto_id): array
                 'ativo'       => (int)$row['ativo'],
                 'preco_custo' => (float)$row['preco_custo'],
                 'preco_venda' => (float)$row['preco_venda'],
+                'fornecedores' => $fornecedores,
             ]
         ];
 
@@ -281,20 +482,35 @@ function produtos_adicionar(
     int $quantidade,
     ?int $usuario_id,
     ?float $preco_custo = null,
-    ?float $preco_venda = null
+    ?float $preco_venda = null,
+    array $fornecedores = []
 ): array {
     try {
-        $pc = ($preco_custo !== null && $preco_custo >= 0) ? $preco_custo : 0.0;
-        $pv = ($preco_venda !== null && $preco_venda >= 0) ? $preco_venda : 0.0;
+        $conn->begin_transaction();
+
+        $precos = !empty($fornecedores)
+            ? fornecedor_principal_preco($fornecedores)
+            : [
+                'preco_custo' => (($preco_custo !== null && $preco_custo >= 0) ? $preco_custo : 0.0),
+                'preco_venda' => (($preco_venda !== null && $preco_venda >= 0) ? $preco_venda : 0.0),
+            ];
+
+        $pc = (float)$precos['preco_custo'];
+        $pv = (float)$precos['preco_venda'];
 
         $stmt = $conn->prepare(
             'INSERT INTO produtos (nome, quantidade, ativo, preco_custo, preco_venda) VALUES (?, ?, 1, ?, ?)'
         );
         $stmt->bind_param('sidd', $nome, $quantidade, $pc, $pv);
-
         $stmt->execute();
-        $id = $stmt->insert_id;
+        $id = (int)$stmt->insert_id;
         $stmt->close();
+
+        if (!empty($fornecedores)) {
+            produto_fornecedores_salvar($conn, $id, $fornecedores);
+        }
+
+        $conn->commit();
 
         return [
             'sucesso'  => true,
@@ -303,6 +519,8 @@ function produtos_adicionar(
         ];
 
     } catch (Throwable $e) {
+        $conn->rollback();
+
         logError('produtos', 'Erro ao adicionar produto', [
             'arquivo'      => $e->getFile(),
             'linha'        => $e->getLine(),
@@ -311,7 +529,8 @@ function produtos_adicionar(
             'qtd'          => $quantidade,
             'usuario'      => $usuario_id,
             'preco_custo'  => $preco_custo,
-            'preco_venda'  => $preco_venda
+            'preco_venda'  => $preco_venda,
+            'fornecedores' => $fornecedores
         ]);
 
         return [
@@ -329,9 +548,12 @@ function produtos_atualizar(
     int $quantidade,
     float $preco_custo,
     float $preco_venda,
-    ?int $usuario_id
+    ?int $usuario_id,
+    array $fornecedores = []
 ): array {
     try {
+        $conn->begin_transaction();
+
         $stmtChk = $conn->prepare('SELECT id FROM produtos WHERE id = ? LIMIT 1');
         $stmtChk->bind_param('i', $produto_id);
         $stmtChk->execute();
@@ -339,6 +561,7 @@ function produtos_atualizar(
         $stmtChk->close();
 
         if (!$exists) {
+            $conn->rollback();
             return [
                 'sucesso'  => false,
                 'mensagem' => 'Produto não encontrado.',
@@ -346,14 +569,28 @@ function produtos_atualizar(
             ];
         }
 
+        $precos = !empty($fornecedores)
+            ? fornecedor_principal_preco($fornecedores)
+            : [
+                'preco_custo' => $preco_custo,
+                'preco_venda' => $preco_venda,
+            ];
+
+        $pc = (float)$precos['preco_custo'];
+        $pv = (float)$precos['preco_venda'];
+
         $stmt = $conn->prepare(
             'UPDATE produtos
              SET nome = ?, quantidade = ?, preco_custo = ?, preco_venda = ?
              WHERE id = ?'
         );
-        $stmt->bind_param('siddi', $nome, $quantidade, $preco_custo, $preco_venda, $produto_id);
+        $stmt->bind_param('siddi', $nome, $quantidade, $pc, $pv, $produto_id);
         $stmt->execute();
         $stmt->close();
+
+        produto_fornecedores_salvar($conn, $produto_id, $fornecedores);
+
+        $conn->commit();
 
         return [
             'sucesso'  => true,
@@ -362,6 +599,8 @@ function produtos_atualizar(
         ];
 
     } catch (Throwable $e) {
+        $conn->rollback();
+
         logError('produtos', 'Erro ao atualizar produto', [
             'arquivo'      => $e->getFile(),
             'linha'        => $e->getLine(),
@@ -371,7 +610,8 @@ function produtos_atualizar(
             'qtd'          => $quantidade,
             'preco_custo'  => $preco_custo,
             'preco_venda'  => $preco_venda,
-            'usuario'      => $usuario_id
+            'usuario'      => $usuario_id,
+            'fornecedores' => $fornecedores
         ]);
 
         return [

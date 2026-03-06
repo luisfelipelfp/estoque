@@ -223,18 +223,49 @@ function criarFornecedorVazio() {
     codigo: "",
     preco_custo: "",
     preco_venda: "",
-    observacao: ""
+    observacao: "",
+    principal: 0
   };
+}
+
+function garantirFornecedorPrincipal() {
+  if (!Array.isArray(fornecedoresTemp) || fornecedoresTemp.length === 0) {
+    return;
+  }
+
+  const temPrincipal = fornecedoresTemp.some((f) => Number(f?.principal ?? 0) === 1);
+
+  if (!temPrincipal) {
+    fornecedoresTemp[0].principal = 1;
+  } else {
+    let achou = false;
+    fornecedoresTemp = fornecedoresTemp.map((f) => {
+      const atual = Number(f?.principal ?? 0) === 1 ? 1 : 0;
+      if (atual === 1 && !achou) {
+        achou = true;
+        return { ...f, principal: 1 };
+      }
+      return { ...f, principal: 0 };
+    });
+  }
 }
 
 function atualizarFornecedor(index, campo, valor) {
   if (!fornecedoresTemp[index]) return;
   fornecedoresTemp[index][campo] = valor;
+  if (campo === "principal" && Number(valor) === 1) {
+    fornecedoresTemp = fornecedoresTemp.map((f, i) => ({
+      ...f,
+      principal: i === index ? 1 : 0
+    }));
+  }
+  garantirFornecedorPrincipal();
   renderListaFornecedores();
 }
 
 function removerFornecedor(index) {
   fornecedoresTemp.splice(index, 1);
+  garantirFornecedorPrincipal();
   renderListaFornecedores();
 }
 
@@ -242,19 +273,33 @@ function criarFornecedorCard(fornecedor, index) {
   const precoCusto = Number(fornecedor?.preco_custo || 0);
   const precoVenda = Number(fornecedor?.preco_venda || 0);
   const lucro = calcularLucro(precoCusto, precoVenda);
+  const principal = Number(fornecedor?.principal || 0) === 1;
 
   return `
     <div class="card border mb-3">
       <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
           <strong>Fornecedor ${index + 1}</strong>
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-danger"
-            data-remover-fornecedor="${index}"
-          >
-            Remover
-          </button>
+          <div class="d-flex align-items-center gap-3">
+            <div class="form-check m-0">
+              <input
+                class="form-check-input"
+                type="radio"
+                name="fornecedorPrincipal"
+                ${principal ? "checked" : ""}
+                data-marcar-principal="${index}"
+              >
+              <label class="form-check-label">Principal</label>
+            </div>
+
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-danger"
+              data-remover-fornecedor="${index}"
+            >
+              Remover
+            </button>
+          </div>
         </div>
 
         <div class="row g-3">
@@ -353,6 +398,8 @@ function renderListaFornecedores() {
     return;
   }
 
+  garantirFornecedorPrincipal();
+
   lista.innerHTML = fornecedoresTemp
     .map((fornecedor, index) => criarFornecedorCard(fornecedor, index))
     .join("");
@@ -360,6 +407,7 @@ function renderListaFornecedores() {
 
 function adicionarFornecedor() {
   fornecedoresTemp.push(criarFornecedorVazio());
+  garantirFornecedorPrincipal();
   renderListaFornecedores();
 }
 
@@ -405,31 +453,35 @@ async function abrirModalProdutoExistente(produtoId) {
   if ($("produtoNome")) $("produtoNome").value = produto.nome ?? "";
   if ($("tituloModalProduto")) $("tituloModalProduto").textContent = "Cadastro do Produto";
 
-  // Enquanto ainda não existe tabela de fornecedores no banco,
-  // montamos um fornecedor inicial usando os preços atuais do produto.
-  fornecedoresTemp = [{
-    nome: "",
-    codigo: "",
-    preco_custo: String(Number(produto.preco_custo ?? 0)),
-    preco_venda: String(Number(produto.preco_venda ?? 0)),
-    observacao: ""
-  }];
+  if (Array.isArray(produto.fornecedores) && produto.fornecedores.length > 0) {
+    fornecedoresTemp = produto.fornecedores.map((f) => ({
+      nome: f?.nome ?? "",
+      codigo: f?.codigo ?? "",
+      preco_custo: String(Number(f?.preco_custo ?? 0)),
+      preco_venda: String(Number(f?.preco_venda ?? 0)),
+      observacao: f?.observacao ?? "",
+      principal: Number(f?.principal ?? 0) === 1 ? 1 : 0
+    }));
+  } else {
+    fornecedoresTemp = [criarFornecedorVazio()];
+  }
 
+  garantirFornecedorPrincipal();
   renderListaFornecedores();
   getModal()?.show();
 }
 
-function obterPrecoBaseProduto() {
-  if (!Array.isArray(fornecedoresTemp) || fornecedoresTemp.length === 0) {
-    return { preco_custo: 0, preco_venda: 0 };
-  }
-
-  const primeiro = fornecedoresTemp[0] || {};
-
-  return {
-    preco_custo: Number(primeiro.preco_custo || 0),
-    preco_venda: Number(primeiro.preco_venda || 0)
-  };
+function fornecedoresValidosParaEnvio() {
+  return (fornecedoresTemp || [])
+    .map((f) => ({
+      nome: String(f?.nome ?? "").trim(),
+      codigo: String(f?.codigo ?? "").trim(),
+      preco_custo: Number(f?.preco_custo || 0),
+      preco_venda: Number(f?.preco_venda || 0),
+      observacao: String(f?.observacao ?? "").trim(),
+      principal: Number(f?.principal ?? 0) === 1 ? 1 : 0
+    }))
+    .filter((f) => f.nome !== "");
 }
 
 async function salvarProduto() {
@@ -444,12 +496,21 @@ async function salvarProduto() {
     return;
   }
 
-  if (!Array.isArray(fornecedoresTemp) || fornecedoresTemp.length === 0) {
-    if (status) status.textContent = "Adicione pelo menos um fornecedor.";
+  const fornecedores = fornecedoresValidosParaEnvio();
+
+  if (fornecedores.length === 0) {
+    if (status) status.textContent = "Adicione pelo menos um fornecedor com nome válido.";
     return;
   }
 
-  const base = obterPrecoBaseProduto();
+  const fornecedoresComErro = fornecedores.find(
+    (f) => f.preco_custo < 0 || f.preco_venda < 0
+  );
+
+  if (fornecedoresComErro) {
+    if (status) status.textContent = "Os preços dos fornecedores devem ser maiores ou iguais a zero.";
+    return;
+  }
 
   if (status) {
     status.textContent = produtoId > 0 ? "Atualizando produto..." : "Salvando produto...";
@@ -458,27 +519,25 @@ async function salvarProduto() {
   try {
     let resp;
 
+    const payload = {
+      nome,
+      quantidade: 0,
+      fornecedores
+    };
+
     if (produtoId > 0) {
       resp = await apiRequest(
         "atualizar_produto",
         {
-          produto_id: produtoId,
-          nome,
-          quantidade: 0,
-          preco_custo: base.preco_custo,
-          preco_venda: base.preco_venda
+          ...payload,
+          produto_id: produtoId
         },
         "POST"
       );
     } else {
       resp = await apiRequest(
         "criar_produto",
-        {
-          nome,
-          quantidade: 0,
-          preco_custo: base.preco_custo,
-          preco_venda: base.preco_venda
-        },
+        payload,
         "POST"
       );
     }
@@ -505,7 +564,7 @@ async function salvarProduto() {
       mensagem: produtoId > 0 ? "Produto atualizado com sucesso" : "Produto criado com sucesso",
       produto_id: produtoId || (resp?.dados?.id ?? null),
       nome,
-      fornecedores: fornecedoresTemp.length
+      fornecedores: fornecedores.length
     });
   } catch (err) {
     if (status) status.textContent = "Erro inesperado ao salvar produto.";
@@ -557,11 +616,18 @@ function bindModal() {
   });
 
   $("listaFornecedores")?.addEventListener("click", (ev) => {
-    const btn = ev.target.closest("[data-remover-fornecedor]");
-    if (!btn) return;
+    const btnRemover = ev.target.closest("[data-remover-fornecedor]");
+    if (btnRemover) {
+      const index = Number(btnRemover.dataset.removerFornecedor || 0);
+      removerFornecedor(index);
+      return;
+    }
 
-    const index = Number(btn.dataset.removerFornecedor || 0);
-    removerFornecedor(index);
+    const radioPrincipal = ev.target.closest("[data-marcar-principal]");
+    if (radioPrincipal) {
+      const index = Number(radioPrincipal.dataset.marcarPrincipal || 0);
+      atualizarFornecedor(index, "principal", 1);
+    }
   });
 }
 

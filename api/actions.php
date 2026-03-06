@@ -39,7 +39,6 @@ header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Headers: Content-Type');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 
-// CORS allowlist (credenciais exigem origem explícita)
 function set_cors_origin(): void
 {
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
@@ -225,13 +224,18 @@ try {
                 ? (float)$body['preco_venda']
                 : null;
 
+            $fornecedores = isset($body['fornecedores']) && is_array($body['fornecedores'])
+                ? $body['fornecedores']
+                : [];
+
             $res = produtos_adicionar(
                 $conn,
                 $nome,
                 $qtd,
                 (int)$usuario['id'],
                 $preco_custo,
-                $preco_venda
+                $preco_venda,
+                $fornecedores
             );
 
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
@@ -252,6 +256,10 @@ try {
             $preco_venda = (isset($body['preco_venda']) && $body['preco_venda'] !== '')
                 ? (float)$body['preco_venda']
                 : 0.0;
+
+            $fornecedores = isset($body['fornecedores']) && is_array($body['fornecedores'])
+                ? $body['fornecedores']
+                : [];
 
             if ($produto_id <= 0) {
                 json_response(false, 'Produto inválido.', null, 400);
@@ -280,7 +288,8 @@ try {
                 $qtd,
                 $preco_custo,
                 $preco_venda,
-                (int)$usuario['id']
+                (int)$usuario['id'],
+                $fornecedores
             );
 
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
