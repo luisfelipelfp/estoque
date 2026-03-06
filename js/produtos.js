@@ -90,7 +90,10 @@ function atualizarResumoModal() {
   const lucro = calcularLucro(precoCusto, precoVenda);
   const margem = calcularMargem(precoCusto, precoVenda);
 
-  if ($("produtoLucroUnitario")) $("produtoLucroUnitario").textContent = formatBRL(lucro);
+  if ($("produtoLucroUnitario")) {
+    $("produtoLucroUnitario").textContent = formatBRL(lucro);
+  }
+
   if ($("produtoMargemEstimada")) {
     $("produtoMargemEstimada").textContent = `${margem.toLocaleString("pt-BR", {
       minimumFractionDigits: 2,
@@ -127,7 +130,7 @@ function renderTabela(produtos) {
   if (!Array.isArray(produtos) || produtos.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="7" class="text-center text-muted">Nenhum produto encontrado.</td>
+        <td colspan="4" class="text-center text-muted">Nenhum produto encontrado.</td>
       </tr>
     `;
     return;
@@ -137,18 +140,12 @@ function renderTabela(produtos) {
     const id = Number(p?.id ?? 0);
     const nome = escapeHtml(p?.nome ?? "");
     const qtd = Number(p?.quantidade ?? 0);
-    const precoCusto = Number(p?.preco_custo ?? 0);
-    const precoVenda = Number(p?.preco_venda ?? 0);
-    const lucro = calcularLucro(precoCusto, precoVenda);
 
     return `
       <tr>
         <td>${id}</td>
         <td>${nome}</td>
         <td>${qtd}</td>
-        <td>${formatBRL(precoCusto)}</td>
-        <td>${formatBRL(precoVenda)}</td>
-        <td>${formatBRL(lucro)}</td>
         <td>
           <button
             class="btn btn-sm btn-outline-primary"
@@ -185,7 +182,7 @@ async function carregarProdutos() {
   if (tbody) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="7" class="text-center text-muted">Carregando...</td>
+        <td colspan="4" class="text-center text-muted">Carregando...</td>
       </tr>
     `;
   }
@@ -250,8 +247,24 @@ function abrirModalNovoProduto() {
   getModal()?.show();
 }
 
-function abrirModalProdutoExistente(produtoId) {
-  const produto = produtosCache.find((p) => Number(p?.id ?? 0) === Number(produtoId));
+async function abrirModalProdutoExistente(produtoId) {
+  let produto = produtosCache.find((p) => Number(p?.id ?? 0) === Number(produtoId));
+
+  try {
+    const resp = await apiRequest("obter_produto", { produto_id: produtoId }, "GET");
+    if (resp?.sucesso && resp?.dados) {
+      produto = resp.dados;
+    }
+  } catch (err) {
+    logJsError({
+      origem: "produtos.js",
+      mensagem: "Erro ao obter produto para edição",
+      detalhe: err?.message,
+      stack: err?.stack,
+      produto_id: produtoId
+    });
+  }
+
   if (!produto) return;
 
   limparModal();
@@ -297,33 +310,48 @@ async function salvarProduto() {
     return;
   }
 
-  if (produtoId > 0) {
-    if (status) {
-      status.textContent = "A edição visual já está pronta. Falta encaixar a ação de atualizar produto no backend.";
-    }
-    return;
+  if (status) {
+    status.textContent = produtoId > 0 ? "Atualizando produto..." : "Salvando produto...";
   }
 
-  if (status) status.textContent = "Salvando produto...";
-
   try {
-    const resp = await apiRequest(
-      "criar_produto",
-      {
-        nome,
-        quantidade,
-        preco_custo: precoCusto,
-        preco_venda: precoVenda
-      },
-      "POST"
-    );
+    let resp;
+
+    if (produtoId > 0) {
+      resp = await apiRequest(
+        "atualizar_produto",
+        {
+          produto_id: produtoId,
+          nome,
+          quantidade,
+          preco_custo: precoCusto,
+          preco_venda: precoVenda
+        },
+        "POST"
+      );
+    } else {
+      resp = await apiRequest(
+        "criar_produto",
+        {
+          nome,
+          quantidade,
+          preco_custo: precoCusto,
+          preco_venda: precoVenda
+        },
+        "POST"
+      );
+    }
 
     if (!resp?.sucesso) {
       if (status) status.textContent = resp?.mensagem || "Erro ao salvar produto.";
       return;
     }
 
-    if (status) status.textContent = "Produto cadastrado com sucesso.";
+    if (status) {
+      status.textContent = produtoId > 0
+        ? "Produto atualizado com sucesso."
+        : "Produto cadastrado com sucesso.";
+    }
 
     await carregarProdutos();
 
@@ -333,7 +361,8 @@ async function salvarProduto() {
 
     logJsInfo({
       origem: "produtos.js",
-      mensagem: "Produto criado com sucesso",
+      mensagem: produtoId > 0 ? "Produto atualizado com sucesso" : "Produto criado com sucesso",
+      produto_id: produtoId || (resp?.dados?.id ?? null),
       nome,
       quantidade,
       preco_custo: precoCusto,
