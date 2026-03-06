@@ -259,7 +259,9 @@ function renderUltimasMovimentacoes(movs) {
     return;
   }
 
-  box.innerHTML = movs.map((mov) => {
+  const ultimas = movs.slice(0, 4);
+
+  box.innerHTML = ultimas.map((mov, index) => {
     const tipo = String(mov?.tipo ?? "").toLowerCase();
     const classe =
       tipo === "saida"
@@ -268,8 +270,10 @@ function renderUltimasMovimentacoes(movs) {
         ? "bg-success"
         : "bg-secondary";
 
+    const borderClass = index < ultimas.length - 1 ? "border-bottom" : "";
+
     return `
-      <div class="d-flex align-items-start justify-content-between gap-3 border-bottom py-2">
+      <div class="d-flex align-items-start justify-content-between gap-3 py-2 ${borderClass}">
         <div>
           <span class="badge ${classe}">${escapeHtml(tipo || "-")}</span>
           <div class="fw-semibold mt-1">${Number(mov?.quantidade ?? 0)}</div>
