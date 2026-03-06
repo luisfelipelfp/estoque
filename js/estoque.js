@@ -15,10 +15,80 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+function formatNowBR() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 let produtosCache = [];
+let modalInstance = null;
+
+async function carregarNavbar() {
+  const host = $("navbar");
+  if (!host) return;
+
+  try {
+    const resp = await fetch("/estoque/components/navbar.html?v=20260305", {
+      cache: "no-store",
+      credentials: "same-origin"
+    });
+
+    if (!resp.ok) {
+      host.innerHTML = "";
+      return;
+    }
+
+    host.innerHTML = await resp.text();
+
+    // como o botão de logout entra depois do DOMContentLoaded,
+    // fazemos o bind localmente aqui também
+    const btn = document.getElementById("btnLogout");
+    if (btn && !btn.dataset.boundLogout) {
+      btn.dataset.boundLogout = "1";
+      btn.addEventListener("click", async () => {
+        try {
+          await apiRequest("logout", null, "POST");
+        } catch (err) {
+          logJsError({
+            origem: "estoque.js",
+            mensagem: "Erro ao executar logout pelo navbar carregado dinamicamente",
+            detalhe: err?.message,
+            stack: err?.stack,
+          });
+        } finally {
+          localStorage.removeItem("usuario");
+          window.location.replace("/estoque/pages/login.html");
+        }
+      });
+    }
+  } catch (err) {
+    logJsError({
+      origem: "estoque.js",
+      mensagem: "Erro ao carregar navbar",
+      detalhe: err?.message,
+      stack: err?.stack,
+    });
+  }
+}
+
+function renderCards(produtos) {
+  const totalProdutos = Array.isArray(produtos) ? produtos.length : 0;
+  const totalItens = Array.isArray(produtos)
+    ? produtos.reduce((acc, p) => acc + Number(p?.quantidade ?? 0), 0)
+    : 0;
+
+  const estoqueBaixo = Array.isArray(produtos)
+    ? produtos.filter((p) => Number(p?.quantidade ?? 0) <= 0).length
+    : 0;
+
+  if ($("cardProdutos")) $("cardProdutos").textContent = String(totalProdutos);
+  if ($("cardItens")) $("cardItens").textContent = String(totalItens);
+  if ($("cardBaixo")) $("cardBaixo").textContent = String(estoqueBaixo);
+}
 
 function renderTabela(produtos) {
-  const tbody = $("tabelaProdutos");
+  const tbody = $("tabelaEstoque");
   if (!tbody) return;
 
   if (!Array.isArray(produtos) || produtos.length === 0) {
@@ -30,67 +100,100 @@ function renderTabela(produtos) {
     return;
   }
 
-  tbody.innerHTML = produtos
-    .map((p) => {
-      const id = Number(p?.id ?? 0);
-      const nome = escapeHtml(p?.nome ?? "");
-      const qtd = Number(p?.quantidade ?? 0);
+  tbody.innerHTML = produtos.map((p) => {
+    const id = Number(p?.id ?? 0);
+    const nome = escapeHtml(p?.nome ?? "");
+    const qtd = Number(p?.quantidade ?? 0);
+    const precoCusto = Number(p?.preco_custo ?? 0);
 
-      return `
-        <tr>
-          <td>${id}</td>
-          <td>${nome}</td>
-          <td><span class="badge bg-${qtd > 0 ? "primary" : "secondary"}">${qtd}</span></td>
-          <td class="text-nowrap">
-            <div class="d-flex gap-2 flex-wrap">
-              <button class="btn btn-sm btn-outline-success" data-acao="entrada" data-id="${id}" data-nome="${escapeHtml(p?.nome ?? "")}" data-qtd="${qtd}">
-                Entrada
-              </button>
-              <button class="btn btn-sm btn-outline-danger" data-acao="saida" data-id="${id}" data-nome="${escapeHtml(p?.nome ?? "")}" data-qtd="${qtd}">
-                Saída
-              </button>
-            </div>
-          </td>
-        </tr>
-      `;
-    })
-    .join("");
+    return `
+      <tr>
+        <td>${id}</td>
+        <td>${nome}</td>
+        <td>
+          <span class="badge bg-${qtd > 0 ? "primary" : "secondary"}">${qtd}</span>
+        </td>
+        <td class="text-nowrap">
+          <div class="d-flex gap-2 flex-wrap">
+            <button
+              class="btn btn-sm btn-outline-success"
+              data-acao="entrada"
+              data-id="${id}"
+              data-nome="${escapeHtml(p?.nome ?? "")}"
+              data-qtd="${qtd}"
+              data-preco="${precoCusto}"
+            >
+              Entrada
+            </button>
+            <button
+              class="btn btn-sm btn-outline-danger"
+              data-acao="saida"
+              data-id="${id}"
+              data-nome="${escapeHtml(p?.nome ?? "")}"
+              data-qtd="${qtd}"
+              data-preco="${precoCusto}"
+            >
+              Saída
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
 }
 
 function aplicarFiltro() {
-  const term = ($("buscaProduto")?.value ?? "").trim().toLowerCase();
-  if (!term) {
+  const termo = ($("buscaProduto")?.value ?? "").trim().toLowerCase();
+
+  if (!termo) {
     renderTabela(produtosCache);
+    renderCards(produtosCache);
     return;
   }
 
   const filtrados = produtosCache.filter((p) =>
-    String(p?.nome ?? "").toLowerCase().includes(term)
+    String(p?.nome ?? "").toLowerCase().includes(termo)
   );
 
   renderTabela(filtrados);
+  renderCards(filtrados);
 }
 
 async function carregarProdutos() {
+  const tbody = $("tabelaEstoque");
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="4" class="text-center text-muted">Carregando...</td>
+      </tr>
+    `;
+  }
+
   try {
     const resp = await apiRequest("listar_produtos", {}, "GET");
+
     if (!resp?.sucesso) {
+      produtosCache = [];
       renderTabela([]);
+      renderCards([]);
       return;
     }
 
-    // seu produtos_listar retorna array direto
-    const dados = resp?.dados ?? [];
-    produtosCache = Array.isArray(dados) ? dados : [];
+    const dados = Array.isArray(resp?.dados) ? resp.dados : [];
+    produtosCache = dados;
+
     aplicarFiltro();
 
     logJsInfo({
       origem: "estoque.js",
-      mensagem: "Produtos carregados",
+      mensagem: "Produtos carregados com sucesso",
       total: produtosCache.length,
     });
   } catch (err) {
+    produtosCache = [];
     renderTabela([]);
+    renderCards([]);
+
     logJsError({
       origem: "estoque.js",
       mensagem: "Erro ao carregar produtos",
@@ -100,36 +203,181 @@ async function carregarProdutos() {
   }
 }
 
+function getModal() {
+  const el = $("modalMovimentar");
+  if (!el || !window.bootstrap?.Modal) return null;
+
+  if (!modalInstance) {
+    modalInstance = new window.bootstrap.Modal(el);
+  }
+  return modalInstance;
+}
+
+function limparModal() {
+  if ($("movProdutoId")) $("movProdutoId").value = "";
+  if ($("movProdutoNome")) $("movProdutoNome").value = "";
+  if ($("movDataAgora")) $("movDataAgora").value = formatNowBR();
+  if ($("movQuantidade")) $("movQuantidade").value = "1";
+  if ($("movObs")) $("movObs").value = "";
+  if ($("movPrecoCusto")) $("movPrecoCusto").value = "";
+  if ($("movStatus")) $("movStatus").textContent = "";
+
+  if ($("movTipoEntrada")) $("movTipoEntrada").checked = true;
+}
+
+function abrirModalMovimentar({ id = "", nome = "", tipo = "entrada", preco_custo = "" } = {}) {
+  const modal = getModal();
+  if (!modal) return;
+
+  limparModal();
+
+  if ($("movProdutoId")) $("movProdutoId").value = id ? String(id) : "";
+  if ($("movProdutoNome")) $("movProdutoNome").value = nome || "";
+  if ($("movDataAgora")) $("movDataAgora").value = formatNowBR();
+
+  if (preco_custo !== "" && $("movPrecoCusto")) {
+    $("movPrecoCusto").value = String(preco_custo);
+  }
+
+  if (tipo === "saida" && $("movTipoSaida")) {
+    $("movTipoSaida").checked = true;
+  } else if ($("movTipoEntrada")) {
+    $("movTipoEntrada").checked = true;
+  }
+
+  modal.show();
+}
+
+function ajustarQuantidade(delta) {
+  const input = $("movQuantidade");
+  if (!input) return;
+
+  const atual = Number(input.value ?? 1);
+  const novo = Math.max(1, (Number.isFinite(atual) ? atual : 1) + delta);
+  input.value = String(novo);
+}
+
 function bindTabelaAcoes() {
-  $("tabelaProdutos")?.addEventListener("click", (ev) => {
+  $("tabelaEstoque")?.addEventListener("click", (ev) => {
     const btn = ev.target.closest("button[data-acao][data-id]");
     if (!btn) return;
 
-    const acao = btn.dataset.acao;
-    const id = Number(btn.dataset.id || 0);
-    const nome = btn.dataset.nome || "";
-    const qtd = Number(btn.dataset.qtd || 0);
-
-    if (!id || !window.abrirModalAdicionarProduto) return;
-
-    window.abrirModalAdicionarProduto({
-      preselectProduto: { id, nome, quantidade: qtd, preco_custo: 0 },
-      preselectTipo: acao === "saida" ? "saida" : "entrada",
+    abrirModalMovimentar({
+      id: Number(btn.dataset.id || 0),
+      nome: btn.dataset.nome || "",
+      tipo: btn.dataset.acao === "saida" ? "saida" : "entrada",
+      preco_custo: btn.dataset.preco || "",
     });
   });
 }
 
 function bindBusca() {
   $("buscaProduto")?.addEventListener("input", aplicarFiltro);
+
+  $("btnLimparBusca")?.addEventListener("click", () => {
+    if ($("buscaProduto")) $("buscaProduto").value = "";
+    aplicarFiltro();
+  });
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+function bindAcoesTopo() {
+  $("btnAtualizar")?.addEventListener("click", carregarProdutos);
+
+  $("btnAbrirModalMov")?.addEventListener("click", () => {
+    abrirModalMovimentar();
+  });
+}
+
+function getTipoSelecionado() {
+  if ($("movTipoSaida")?.checked) return "saida";
+  return "entrada";
+}
+
+async function salvarMovimentacao() {
+  const produtoId = Number($("movProdutoId")?.value ?? 0);
+  const produtoNome = ($("movProdutoNome")?.value ?? "").trim();
+  const quantidade = Number($("movQuantidade")?.value ?? 0);
+  const tipo = getTipoSelecionado();
+  const precoCustoRaw = ($("movPrecoCusto")?.value ?? "").trim();
+  const observacao = ($("movObs")?.value ?? "").trim();
+
+  const status = $("movStatus");
+
+  if (status) status.textContent = "";
+
+  if (!produtoId || !produtoNome) {
+    if (status) status.textContent = "Selecione um produto pela tabela antes de salvar.";
+    return;
+  }
+
+  if (!Number.isFinite(quantidade) || quantidade <= 0) {
+    if (status) status.textContent = "Informe uma quantidade válida.";
+    return;
+  }
+
+  const payload = {
+    produto_id: produtoId,
+    tipo,
+    quantidade
+  };
+
+  if (precoCustoRaw !== "") {
+    payload.preco_custo = Number(precoCustoRaw);
+  }
+
+  if (observacao) {
+    payload.observacao = observacao;
+  }
+
+  if (status) status.textContent = "Salvando movimentação...";
+
+  try {
+    const resp = await apiRequest("registrar_movimentacao", payload, "POST");
+
+    if (!resp?.sucesso) {
+      if (status) status.textContent = resp?.mensagem || "Erro ao salvar movimentação.";
+      return;
+    }
+
+    if (status) status.textContent = "Movimentação registrada com sucesso.";
+
+    await carregarProdutos();
+
+    const modal = getModal();
+    setTimeout(() => {
+      modal?.hide();
+    }, 500);
+
+    logJsInfo({
+      origem: "estoque.js",
+      mensagem: "Movimentação registrada",
+      produto_id: produtoId,
+      tipo,
+      quantidade
+    });
+  } catch (err) {
+    if (status) status.textContent = "Erro inesperado ao salvar movimentação.";
+
+    logJsError({
+      origem: "estoque.js",
+      mensagem: "Erro ao salvar movimentação",
+      detalhe: err?.message,
+      stack: err?.stack,
+    });
+  }
+}
+
+function bindModal() {
+  $("movQtdMenos")?.addEventListener("click", () => ajustarQuantidade(-1));
+  $("movQtdMais")?.addEventListener("click", () => ajustarQuantidade(1));
+  $("movSalvar")?.addEventListener("click", salvarMovimentacao);
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  await carregarNavbar();
   bindTabelaAcoes();
   bindBusca();
+  bindAcoesTopo();
+  bindModal();
   carregarProdutos();
-
-  // quando o modal salvar, ele dispara este evento
-  window.addEventListener("estoque:atualizar", () => {
-    carregarProdutos();
-  });
 });

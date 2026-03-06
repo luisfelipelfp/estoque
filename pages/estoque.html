@@ -1,4 +1,3 @@
-<!-- /estoque/pages/estoque.html -->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -7,102 +6,104 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="/estoque/css/base.css?v=20260304">
-  <link rel="stylesheet" href="/estoque/css/layout.css?v=20260304">
-  <link rel="stylesheet" href="/estoque/css/produtos.css?v=20260304">
+  <link rel="stylesheet" href="/estoque/css/base.css?v=20260305">
+  <link rel="stylesheet" href="/estoque/css/layout.css?v=20260305">
+  <link rel="stylesheet" href="/estoque/css/produtos.css?v=20260305">
 </head>
 
 <body>
-  <!-- Navbar (carregado via main.js) -->
   <div id="navbar"></div>
 
   <div class="app-shell">
-    <!-- Sidebar (carregado via main.js) -->
-    <aside id="sidebar" class="app-sidebar"></aside>
+    <aside id="sidebar" class="app-sidebar d-none"></aside>
 
-    <!-- Conteúdo -->
     <main class="app-content">
-      <!-- Header da página -->
-      <div class="page-head">
-        <div class="d-flex align-items-center gap-2">
+      <div class="page-head mb-4">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
           <div class="page-icon">📦</div>
           <div>
             <h1 class="page-title mb-0">Estoque</h1>
-            <div class="page-subtitle text-muted">Visão rápida do estoque atual e movimentações</div>
+            <div class="page-subtitle text-muted">
+              Visão rápida do estoque atual e movimentações
+            </div>
           </div>
         </div>
 
-        <div class="d-flex gap-2">
-          <button id="btnAbrirModalMov" class="btn btn-primary">
+        <div class="d-flex gap-2 mt-3 mt-lg-0">
+          <button id="btnAbrirModalMov" class="btn btn-primary" type="button">
             ➕ Movimentar
           </button>
         </div>
       </div>
 
-      <!-- Cards -->
-      <section class="row g-3 mb-3">
-        <div class="col-12 col-lg-4">
-          <div class="stat-card">
+      <section class="row g-3 mb-4">
+        <div class="col-12 col-md-6 col-xl-4">
+          <div class="stat-card h-100">
             <div class="stat-label">Produtos cadastrados</div>
             <div class="stat-value" id="cardProdutos">0</div>
-            <div class="stat-hint text-muted">Total de produtos ativos</div>
+            <div class="stat-hint text-muted">Total de produtos listados</div>
           </div>
         </div>
 
-        <div class="col-12 col-lg-4">
-          <div class="stat-card">
+        <div class="col-12 col-md-6 col-xl-4">
+          <div class="stat-card h-100">
             <div class="stat-label">Itens em estoque</div>
             <div class="stat-value" id="cardItens">0</div>
             <div class="stat-hint text-muted">Soma das quantidades</div>
           </div>
         </div>
 
-        <div class="col-12 col-lg-4">
-          <div class="stat-card">
+        <div class="col-12 col-md-6 col-xl-4">
+          <div class="stat-card h-100">
             <div class="stat-label">Estoque baixo</div>
             <div class="stat-value text-danger" id="cardBaixo">0</div>
-            <div class="stat-hint text-muted">Abaixo do mínimo (quando existir)</div>
+            <div class="stat-hint text-muted">Produtos com quantidade igual a 0</div>
           </div>
         </div>
       </section>
 
-      <!-- Barra de ações -->
-      <section class="card p-3 mb-3">
+      <section class="card p-3 mb-4">
         <div class="row g-2 align-items-center">
           <div class="col-12 col-lg-6">
             <div class="input-group">
               <span class="input-group-text">🔎</span>
-              <input id="buscaProduto" class="form-control" placeholder="Buscar produto pelo nome..." autocomplete="off">
-              <button id="btnLimparBusca" class="btn btn-outline-secondary" type="button">Limpar</button>
+              <input
+                id="buscaProduto"
+                class="form-control"
+                placeholder="Buscar produto pelo nome..."
+                autocomplete="off"
+              >
+              <button id="btnLimparBusca" class="btn btn-outline-secondary" type="button">
+                Limpar
+              </button>
             </div>
           </div>
 
-          <div class="col-12 col-lg-6 d-flex justify-content-lg-end gap-2">
+          <div class="col-12 col-lg-6 d-flex justify-content-lg-end gap-2 flex-wrap">
             <button id="btnAtualizar" class="btn btn-outline-primary" type="button">
               🔄 Atualizar
             </button>
-            <a href="/estoque/pages/produtos.html" class="btn btn-outline-dark">
-              🧾 Cadastro de produtos
+            <a href="/estoque/index.html" class="btn btn-outline-dark">
+              🧾 Tela antiga / apoio
             </a>
           </div>
         </div>
       </section>
 
-      <!-- Tabela -->
       <section class="card p-3">
-        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
           <h5 class="mb-0">Produtos</h5>
-          <small class="text-muted">Clique em Entrada/Saída para movimentar rapidamente</small>
+          <small class="text-muted">Clique em Entrada ou Saída para movimentar rapidamente</small>
         </div>
 
         <div class="table-responsive">
           <table class="table table-striped table-bordered align-middle mb-0">
             <thead>
               <tr>
-                <th style="width: 80px;">ID</th>
+                <th style="width: 90px;">ID</th>
                 <th>Produto</th>
-                <th style="width: 140px;">Quantidade</th>
-                <th style="width: 220px;">Ações</th>
+                <th style="width: 150px;">Quantidade</th>
+                <th style="width: 240px;">Ações</th>
               </tr>
             </thead>
             <tbody id="tabelaEstoque">
@@ -114,7 +115,6 @@
         </div>
       </section>
 
-      <!-- Modal: Movimentar -->
       <div class="modal fade" id="modalMovimentar" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
           <div class="modal-content">
@@ -127,9 +127,17 @@
               <div class="row g-3">
                 <div class="col-12 col-lg-8">
                   <label class="form-label">Produto</label>
-                  <input id="movProdutoNome" class="form-control" placeholder="Selecione um produto pela tabela ou digite..." autocomplete="off">
+                  <input
+                    id="movProdutoNome"
+                    class="form-control"
+                    placeholder="Selecione um produto pela tabela"
+                    autocomplete="off"
+                    readonly
+                  >
                   <input id="movProdutoId" type="hidden" value="">
-                  <div class="form-text">Dica: clique em Entrada/Saída na tabela para preencher automaticamente.</div>
+                  <div class="form-text">
+                    Dica: use os botões Entrada/Saída da tabela para preencher automaticamente.
+                  </div>
                 </div>
 
                 <div class="col-12 col-lg-4">
@@ -157,7 +165,22 @@
                   </div>
                 </div>
 
-                <div class="col-12">
+                <div class="col-12 col-lg-6">
+                  <label class="form-label">Preço custo (opcional)</label>
+                  <div class="input-group">
+                    <span class="input-group-text">R$</span>
+                    <input
+                      id="movPrecoCusto"
+                      type="number"
+                      class="form-control"
+                      min="0"
+                      step="0.01"
+                      placeholder="0,00"
+                    >
+                  </div>
+                </div>
+
+                <div class="col-12 col-lg-6">
                   <label class="form-label">Observação (opcional)</label>
                   <input id="movObs" class="form-control" placeholder="Ex.: compra, ajuste, consumo...">
                 </div>
@@ -172,15 +195,14 @@
           </div>
         </div>
       </div>
-
     </main>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-  <script type="module" src="/estoque/js/api.js?v=20260304"></script>
-  <script type="module" src="/estoque/js/logout.js?v=20260304"></script>
-  <script type="module" src="/estoque/js/main.js?v=20260304"></script>
-  <script type="module" src="/estoque/js/estoque.js?v=20260304"></script>
+  <script type="module" src="/estoque/js/api.js?v=20260305"></script>
+  <script type="module" src="/estoque/js/logout.js?v=20260305"></script>
+  <script type="module" src="/estoque/js/main.js?v=20260305"></script>
+  <script type="module" src="/estoque/js/estoque.js?v=20260305"></script>
 </body>
 </html>
