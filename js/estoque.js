@@ -41,8 +41,6 @@ async function carregarNavbar() {
 
     host.innerHTML = await resp.text();
 
-    // como o botão de logout entra depois do DOMContentLoaded,
-    // fazemos o bind localmente aqui também
     const btn = document.getElementById("btnLogout");
     if (btn && !btn.dataset.boundLogout) {
       btn.dataset.boundLogout = "1";
@@ -104,7 +102,6 @@ function renderTabela(produtos) {
     const id = Number(p?.id ?? 0);
     const nome = escapeHtml(p?.nome ?? "");
     const qtd = Number(p?.quantidade ?? 0);
-    const precoCusto = Number(p?.preco_custo ?? 0);
 
     return `
       <tr>
@@ -121,7 +118,6 @@ function renderTabela(produtos) {
               data-id="${id}"
               data-nome="${escapeHtml(p?.nome ?? "")}"
               data-qtd="${qtd}"
-              data-preco="${precoCusto}"
             >
               Entrada
             </button>
@@ -131,7 +127,6 @@ function renderTabela(produtos) {
               data-id="${id}"
               data-nome="${escapeHtml(p?.nome ?? "")}"
               data-qtd="${qtd}"
-              data-preco="${precoCusto}"
             >
               Saída
             </button>
@@ -218,14 +213,12 @@ function limparModal() {
   if ($("movProdutoNome")) $("movProdutoNome").value = "";
   if ($("movDataAgora")) $("movDataAgora").value = formatNowBR();
   if ($("movQuantidade")) $("movQuantidade").value = "1";
-  if ($("movObs")) $("movObs").value = "";
-  if ($("movPrecoCusto")) $("movPrecoCusto").value = "";
   if ($("movStatus")) $("movStatus").textContent = "";
 
   if ($("movTipoEntrada")) $("movTipoEntrada").checked = true;
 }
 
-function abrirModalMovimentar({ id = "", nome = "", tipo = "entrada", preco_custo = "" } = {}) {
+function abrirModalMovimentar({ id = "", nome = "", tipo = "entrada" } = {}) {
   const modal = getModal();
   if (!modal) return;
 
@@ -234,10 +227,6 @@ function abrirModalMovimentar({ id = "", nome = "", tipo = "entrada", preco_cust
   if ($("movProdutoId")) $("movProdutoId").value = id ? String(id) : "";
   if ($("movProdutoNome")) $("movProdutoNome").value = nome || "";
   if ($("movDataAgora")) $("movDataAgora").value = formatNowBR();
-
-  if (preco_custo !== "" && $("movPrecoCusto")) {
-    $("movPrecoCusto").value = String(preco_custo);
-  }
 
   if (tipo === "saida" && $("movTipoSaida")) {
     $("movTipoSaida").checked = true;
@@ -266,7 +255,6 @@ function bindTabelaAcoes() {
       id: Number(btn.dataset.id || 0),
       nome: btn.dataset.nome || "",
       tipo: btn.dataset.acao === "saida" ? "saida" : "entrada",
-      preco_custo: btn.dataset.preco || "",
     });
   });
 }
@@ -298,11 +286,8 @@ async function salvarMovimentacao() {
   const produtoNome = ($("movProdutoNome")?.value ?? "").trim();
   const quantidade = Number($("movQuantidade")?.value ?? 0);
   const tipo = getTipoSelecionado();
-  const precoCustoRaw = ($("movPrecoCusto")?.value ?? "").trim();
-  const observacao = ($("movObs")?.value ?? "").trim();
 
   const status = $("movStatus");
-
   if (status) status.textContent = "";
 
   if (!produtoId || !produtoNome) {
@@ -320,14 +305,6 @@ async function salvarMovimentacao() {
     tipo,
     quantidade
   };
-
-  if (precoCustoRaw !== "") {
-    payload.preco_custo = Number(precoCustoRaw);
-  }
-
-  if (observacao) {
-    payload.observacao = observacao;
-  }
 
   if (status) status.textContent = "Salvando movimentação...";
 
