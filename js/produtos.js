@@ -1,3 +1,5 @@
+Vou te mandar o meu js/produtos.js atual para que você possa analisar fazer todos os ajustes necessários e já me devolver de forma completa
+js/produtos.js
 // js/produtos.js
 import { apiRequest } from "./api.js";
 import { logJsInfo, logJsError } from "./logger.js";
