@@ -1,199 +1,390 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <title>Estoque da Gordinha e do Careca</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+// js/produtos.js
+import { apiRequest } from "./api.js";
+import { logJsInfo, logJsError } from "./logger.js";
 
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+function $(id) {
+  return document.getElementById(id);
+}
 
-  <!-- CSS -->
-  <link rel="stylesheet" href="/estoque/css/base.css?v=20260304">
-  <link rel="stylesheet" href="/estoque/css/produtos.css?v=20260304">
-</head>
-<body class="container py-4">
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
 
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark rounded mb-4 px-3">
-    <a class="navbar-brand fw-bold text-white" href="/estoque/index.html">📦 Estoque</a>
-    <div class="collapse navbar-collapse">
-      <ul class="navbar-nav me-auto">
-        <li class="nav-item">
-          <a class="nav-link active" href="/estoque/index.html">Estoque</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="/estoque/relatorios.html">Relatórios</a>
-        </li>
-      </ul>
-      <div class="d-flex align-items-center">
-        <span id="usuarioLogado" class="me-3 fw-bold text-info"></span>
-        <button id="btnLogout" class="btn btn-outline-danger btn-sm" type="button">Sair</button>
-      </div>
-    </div>
-  </nav>
+function formatBRL(valor) {
+  const n = Number(valor || 0);
+  return `R$ ${n.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+}
 
-  <h1 class="mb-4">📦 Estoque</h1>
+let produtosCache = [];
+let modalInstance = null;
 
-  <!-- Barra de ações -->
-  <div class="d-flex gap-2 align-items-stretch mb-3">
-    <input
-      type="text"
-      id="buscaProduto"
-      class="form-control"
-      placeholder="Digite o nome do produto..."
-      autocomplete="off"
-    >
+async function carregarNavbar() {
+  const host = $("navbar");
+  if (!host) return;
 
-    <button
-      id="btnAbrirModalAdicionar"
-      type="button"
-      class="btn btn-primary d-flex align-items-center gap-2 px-4 text-nowrap"
-      aria-label="Adicionar produto"
-      title="Adicionar produto"
-    >
-      <span aria-hidden="true">➕</span>
-      <span>Adicionar</span>
-    </button>
-  </div>
+  try {
+    const resp = await fetch("/estoque/components/navbar.html?v=20260306", {
+      cache: "no-store",
+      credentials: "same-origin"
+    });
 
-  <table class="table table-bordered table-striped">
-    <thead>
+    if (!resp.ok) {
+      host.innerHTML = "";
+      return;
+    }
+
+    host.innerHTML = await resp.text();
+
+    const btn = document.getElementById("btnLogout");
+    if (btn && !btn.dataset.boundLogout) {
+      btn.dataset.boundLogout = "1";
+      btn.addEventListener("click", async () => {
+        try {
+          await apiRequest("logout", null, "POST");
+        } catch (err) {
+          logJsError({
+            origem: "produtos.js",
+            mensagem: "Erro ao executar logout pelo navbar carregado dinamicamente",
+            detalhe: err?.message,
+            stack: err?.stack,
+          });
+        } finally {
+          localStorage.removeItem("usuario");
+          window.location.replace("/estoque/pages/login.html");
+        }
+      });
+    }
+  } catch (err) {
+    logJsError({
+      origem: "produtos.js",
+      mensagem: "Erro ao carregar navbar",
+      detalhe: err?.message,
+      stack: err?.stack,
+    });
+  }
+}
+
+function calcularLucro(precoCusto, precoVenda) {
+  return Number(precoVenda || 0) - Number(precoCusto || 0);
+}
+
+function calcularMargem(precoCusto, precoVenda) {
+  const venda = Number(precoVenda || 0);
+  const lucro = calcularLucro(precoCusto, precoVenda);
+  if (venda <= 0) return 0;
+  return (lucro / venda) * 100;
+}
+
+function atualizarResumoModal() {
+  const precoCusto = Number($("produtoPrecoCusto")?.value || 0);
+  const precoVenda = Number($("produtoPrecoVenda")?.value || 0);
+
+  const lucro = calcularLucro(precoCusto, precoVenda);
+  const margem = calcularMargem(precoCusto, precoVenda);
+
+  if ($("produtoLucroUnitario")) $("produtoLucroUnitario").textContent = formatBRL(lucro);
+  if ($("produtoMargemEstimada")) {
+    $("produtoMargemEstimada").textContent = `${margem.toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}%`;
+  }
+}
+
+function renderCards(produtos) {
+  const totalProdutos = Array.isArray(produtos) ? produtos.length : 0;
+
+  let somaCusto = 0;
+  let somaLucro = 0;
+
+  for (const p of produtos || []) {
+    const custo = Number(p?.preco_custo ?? 0);
+    const venda = Number(p?.preco_venda ?? 0);
+    somaCusto += custo;
+    somaLucro += calcularLucro(custo, venda);
+  }
+
+  const custoMedio = totalProdutos ? somaCusto / totalProdutos : 0;
+  const lucroMedio = totalProdutos ? somaLucro / totalProdutos : 0;
+
+  if ($("cardTotalProdutos")) $("cardTotalProdutos").textContent = String(totalProdutos);
+  if ($("cardCustoMedio")) $("cardCustoMedio").textContent = formatBRL(custoMedio);
+  if ($("cardLucroMedio")) $("cardLucroMedio").textContent = formatBRL(lucroMedio);
+}
+
+function renderTabela(produtos) {
+  const tbody = $("tabelaProdutos");
+  if (!tbody) return;
+
+  if (!Array.isArray(produtos) || produtos.length === 0) {
+    tbody.innerHTML = `
       <tr>
-        <th>ID</th>
-        <th>Nome</th>
-        <th>Qtd</th>
-        <th>Ações</th>
+        <td colspan="7" class="text-center text-muted">Nenhum produto encontrado.</td>
       </tr>
-    </thead>
-    <tbody id="tabelaProdutos"></tbody>
-  </table>
+    `;
+    return;
+  }
 
-  <!-- ✅ Modal: Adicionar Produto -->
-  <div class="modal fade" id="modalAdicionarProduto" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Adicionar Produto</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-        </div>
+  tbody.innerHTML = produtos.map((p) => {
+    const id = Number(p?.id ?? 0);
+    const nome = escapeHtml(p?.nome ?? "");
+    const qtd = Number(p?.quantidade ?? 0);
+    const precoCusto = Number(p?.preco_custo ?? 0);
+    const precoVenda = Number(p?.preco_venda ?? 0);
+    const lucro = calcularLucro(precoCusto, precoVenda);
 
-        <div class="modal-body">
-          <div class="row g-3">
-            <!-- Produto (autocomplete) -->
-            <div class="col-12 col-lg-8">
-              <label class="form-label">Produto <span class="text-danger">*</span></label>
+    return `
+      <tr>
+        <td>${id}</td>
+        <td>${nome}</td>
+        <td>${qtd}</td>
+        <td>${formatBRL(precoCusto)}</td>
+        <td>${formatBRL(precoVenda)}</td>
+        <td>${formatBRL(lucro)}</td>
+        <td>
+          <button
+            class="btn btn-sm btn-outline-primary"
+            data-acao="abrir"
+            data-id="${id}"
+          >
+            Abrir
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
 
-              <div class="dropdown w-100">
-                <div class="input-group">
-                  <span class="input-group-text">🔎</span>
-                  <input id="apProdutoBusca" class="form-control" placeholder="Digite para buscar..." autocomplete="off">
-                  <button class="btn btn-outline-secondary" type="button" id="apLimparProduto" title="Limpar">✕</button>
-                </div>
+function aplicarFiltro() {
+  const termo = ($("buscaProduto")?.value ?? "").trim().toLowerCase();
 
-                <!-- ✅ guarda o ID do produto selecionado (opcional, mas ok manter) -->
-                <input type="hidden" id="apProdutoId" value="">
+  if (!termo) {
+    renderTabela(produtosCache);
+    renderCards(produtosCache);
+    return;
+  }
 
-                <!-- lista de sugestões -->
-                <div id="apSugestoes" class="ap-sugestoes dropdown-menu w-100" style="display:none;"></div>
-              </div>
+  const filtrados = produtosCache.filter((p) =>
+    String(p?.nome ?? "").toLowerCase().includes(termo)
+  );
 
-              <div class="mt-2 small text-muted" id="apProdutoInfo"></div>
+  renderTabela(filtrados);
+  renderCards(filtrados);
+}
 
-              <div class="mt-2">
-                <button id="apCriarProduto" class="btn btn-link p-0" type="button">
-                  ➕ Criar produto
-                </button>
-              </div>
-            </div>
+async function carregarProdutos() {
+  const tbody = $("tabelaProdutos");
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="text-center text-muted">Carregando...</td>
+      </tr>
+    `;
+  }
 
-            <!-- Últimas movimentações -->
-            <div class="col-12 col-lg-4">
-              <div class="card">
-                <div class="card-body">
-                  <div class="fw-bold mb-2">Últimas Movimentações</div>
-                  <div id="apUltimasMov" class="small text-muted">Selecione um produto…</div>
-                  <div class="mt-2">
-                    <button id="apVerHistorico" class="btn btn-sm btn-outline-primary" type="button" disabled>
-                      Ver histórico completo
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+  try {
+    const resp = await apiRequest("listar_produtos", {}, "GET");
 
-            <!-- Estoque atual / alerta -->
-            <div class="col-12">
-              <div class="alert alert-light border mb-0">
-                <div class="d-flex flex-wrap gap-3 align-items-center">
-                  <div>📦 <strong>Estoque atual:</strong> <span id="apEstoqueAtual">-</span></div>
-                  <div id="apAlertaEstoque" class="text-danger fw-bold"></div>
-                  <div class="ms-auto small text-muted">
-                    <strong>Data:</strong> <span id="apDataAgora">-</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+    if (!resp?.sucesso) {
+      produtosCache = [];
+      renderTabela([]);
+      renderCards([]);
+      return;
+    }
 
-            <!-- Tipo: Entrada / Saída -->
-            <div class="col-12 col-lg-6">
-              <label class="form-label">Tipo</label>
-              <div class="btn-group w-100" role="group" aria-label="Tipo de movimentação">
-                <input type="radio" class="btn-check" name="apTipo" id="apTipoEntrada" value="entrada" checked>
-                <label class="btn btn-outline-success" for="apTipoEntrada">Entrada</label>
+    const dados = Array.isArray(resp?.dados) ? resp.dados : [];
+    produtosCache = dados;
 
-                <input type="radio" class="btn-check" name="apTipo" id="apTipoSaida" value="saida">
-                <label class="btn btn-outline-danger" for="apTipoSaida">Saída</label>
-              </div>
-            </div>
+    aplicarFiltro();
 
-            <!-- Quantidade (stepper) -->
-            <div class="col-12 col-lg-6">
-              <label class="form-label">Quantidade</label>
-              <div class="input-group">
-                <button class="btn btn-outline-secondary" type="button" id="apQtdMenos">−</button>
-                <input id="apQuantidade" type="number" class="form-control text-center" value="1" min="1" step="1">
-                <button class="btn btn-outline-secondary" type="button" id="apQtdMais">+</button>
-              </div>
-            </div>
+    logJsInfo({
+      origem: "produtos.js",
+      mensagem: "Produtos carregados com sucesso",
+      total: produtosCache.length,
+    });
+  } catch (err) {
+    produtosCache = [];
+    renderTabela([]);
+    renderCards([]);
 
-            <!-- Preço custo (opcional) -->
-            <div class="col-12 col-lg-6">
-              <label class="form-label">Preço custo (opcional)</label>
-              <div class="input-group">
-                <span class="input-group-text">R$</span>
-                <input id="apPrecoCusto" type="number" class="form-control" value="" min="0" step="0.01" placeholder="0,00">
-              </div>
-              <div class="form-text">Se informado, pode atualizar o custo do produto.</div>
-            </div>
+    logJsError({
+      origem: "produtos.js",
+      mensagem: "Erro ao carregar produtos",
+      detalhe: err?.message,
+      stack: err?.stack,
+    });
+  }
+}
 
-            <!-- Observação -->
-            <div class="col-12 col-lg-6">
-              <label class="form-label">Observação (opcional)</label>
-              <input id="apObs" class="form-control" placeholder="Ex.: compra, ajuste, consumo…">
-            </div>
-          </div>
-        </div>
+function getModal() {
+  const el = $("modalProduto");
+  if (!el || !window.bootstrap?.Modal) return null;
 
-        <div class="modal-footer">
-          <div class="me-auto small text-muted" id="apStatus"></div>
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="button" class="btn btn-primary" id="apSalvar">Salvar</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  if (!modalInstance) {
+    modalInstance = new window.bootstrap.Modal(el);
+  }
+  return modalInstance;
+}
 
-  <!-- Scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+function limparModal() {
+  if ($("produtoId")) $("produtoId").value = "";
+  if ($("produtoNome")) $("produtoNome").value = "";
+  if ($("produtoQuantidade")) $("produtoQuantidade").value = "0";
+  if ($("produtoPrecoCusto")) $("produtoPrecoCusto").value = "0";
+  if ($("produtoPrecoVenda")) $("produtoPrecoVenda").value = "0";
+  if ($("produtoStatus")) $("produtoStatus").textContent = "";
+  if ($("tituloModalProduto")) $("tituloModalProduto").textContent = "Novo Produto";
+  atualizarResumoModal();
+}
 
-  <script type="module" src="/estoque/js/api.js?v=20260304"></script>
-  <script type="module" src="/estoque/js/logout.js?v=20260304"></script>
-  <script type="module" src="/estoque/js/main.js?v=20260304"></script>
+function abrirModalNovoProduto() {
+  limparModal();
+  getModal()?.show();
+}
 
-  <!-- ✅ Lista do Estoque (tabela + busca + abre modal em Entrada/Saída) -->
-  <script type="module" src="/estoque/js/produtos.js?v=20260304"></script>
+function abrirModalProdutoExistente(produtoId) {
+  const produto = produtosCache.find((p) => Number(p?.id ?? 0) === Number(produtoId));
+  if (!produto) return;
 
-  <!-- ✅ Modal -->
-  <script type="module" src="/estoque/js/modal_adicionar_produto.js?v=20260304"></script>
-</body>
-</html>
+  limparModal();
+
+  if ($("produtoId")) $("produtoId").value = String(produto.id ?? "");
+  if ($("produtoNome")) $("produtoNome").value = produto.nome ?? "";
+  if ($("produtoQuantidade")) $("produtoQuantidade").value = String(Number(produto.quantidade ?? 0));
+  if ($("produtoPrecoCusto")) $("produtoPrecoCusto").value = String(Number(produto.preco_custo ?? 0));
+  if ($("produtoPrecoVenda")) $("produtoPrecoVenda").value = String(Number(produto.preco_venda ?? 0));
+  if ($("tituloModalProduto")) $("tituloModalProduto").textContent = "Cadastro do Produto";
+
+  atualizarResumoModal();
+  getModal()?.show();
+}
+
+async function salvarProduto() {
+  const produtoId = Number($("produtoId")?.value ?? 0);
+  const nome = ($("produtoNome")?.value ?? "").trim();
+  const quantidade = Number($("produtoQuantidade")?.value ?? 0);
+  const precoCusto = Number($("produtoPrecoCusto")?.value ?? 0);
+  const precoVenda = Number($("produtoPrecoVenda")?.value ?? 0);
+  const status = $("produtoStatus");
+
+  if (status) status.textContent = "";
+
+  if (!nome) {
+    if (status) status.textContent = "Informe o nome do produto.";
+    return;
+  }
+
+  if (!Number.isFinite(quantidade) || quantidade < 0) {
+    if (status) status.textContent = "Informe uma quantidade válida.";
+    return;
+  }
+
+  if (!Number.isFinite(precoCusto) || precoCusto < 0) {
+    if (status) status.textContent = "Informe um preço de custo válido.";
+    return;
+  }
+
+  if (!Number.isFinite(precoVenda) || precoVenda < 0) {
+    if (status) status.textContent = "Informe um preço de venda válido.";
+    return;
+  }
+
+  if (produtoId > 0) {
+    if (status) {
+      status.textContent = "A edição visual já está pronta. Falta encaixar a ação de atualizar produto no backend.";
+    }
+    return;
+  }
+
+  if (status) status.textContent = "Salvando produto...";
+
+  try {
+    const resp = await apiRequest(
+      "criar_produto",
+      {
+        nome,
+        quantidade,
+        preco_custo: precoCusto,
+        preco_venda: precoVenda
+      },
+      "POST"
+    );
+
+    if (!resp?.sucesso) {
+      if (status) status.textContent = resp?.mensagem || "Erro ao salvar produto.";
+      return;
+    }
+
+    if (status) status.textContent = "Produto cadastrado com sucesso.";
+
+    await carregarProdutos();
+
+    setTimeout(() => {
+      getModal()?.hide();
+    }, 500);
+
+    logJsInfo({
+      origem: "produtos.js",
+      mensagem: "Produto criado com sucesso",
+      nome,
+      quantidade,
+      preco_custo: precoCusto,
+      preco_venda: precoVenda
+    });
+  } catch (err) {
+    if (status) status.textContent = "Erro inesperado ao salvar produto.";
+
+    logJsError({
+      origem: "produtos.js",
+      mensagem: "Erro ao salvar produto",
+      detalhe: err?.message,
+      stack: err?.stack,
+    });
+  }
+}
+
+function bindTabelaAcoes() {
+  $("tabelaProdutos")?.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("button[data-acao='abrir'][data-id]");
+    if (!btn) return;
+
+    abrirModalProdutoExistente(Number(btn.dataset.id || 0));
+  });
+}
+
+function bindBusca() {
+  $("buscaProduto")?.addEventListener("input", aplicarFiltro);
+
+  $("btnLimparBusca")?.addEventListener("click", () => {
+    if ($("buscaProduto")) $("buscaProduto").value = "";
+    aplicarFiltro();
+  });
+}
+
+function bindAcoesTopo() {
+  $("btnAtualizarProdutos")?.addEventListener("click", carregarProdutos);
+  $("btnNovoProduto")?.addEventListener("click", abrirModalNovoProduto);
+}
+
+function bindModal() {
+  $("produtoPrecoCusto")?.addEventListener("input", atualizarResumoModal);
+  $("produtoPrecoVenda")?.addEventListener("input", atualizarResumoModal);
+  $("btnSalvarProduto")?.addEventListener("click", salvarProduto);
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  await carregarNavbar();
+  bindTabelaAcoes();
+  bindBusca();
+  bindAcoesTopo();
+  bindModal();
+  carregarProdutos();
+});

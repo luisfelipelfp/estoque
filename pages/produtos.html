@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cadastro de Produtos</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/estoque/css/base.css?v=20260306">
+  <link rel="stylesheet" href="/estoque/css/layout.css?v=20260306">
+  <link rel="stylesheet" href="/estoque/css/produtos.css?v=20260306">
+</head>
+
+<body>
+  <div id="navbar"></div>
+
+  <div class="app-shell">
+    <aside id="sidebar" class="app-sidebar d-none"></aside>
+
+    <main class="app-content">
+      <div class="page-head mb-4">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+          <div class="page-icon">🧾</div>
+          <div>
+            <h1 class="page-title mb-0">Cadastro de Produtos</h1>
+            <div class="page-subtitle text-muted">
+              Gerencie produtos, preços e margem de lucro
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-3 mt-lg-0">
+          <button id="btnNovoProduto" class="btn btn-primary" type="button">
+            ➕ Novo Produto
+          </button>
+        </div>
+      </div>
+
+      <section class="row g-3 mb-4">
+        <div class="col-12 col-md-6 col-xl-4">
+          <div class="stat-card h-100">
+            <div class="stat-label">Produtos cadastrados</div>
+            <div class="stat-value" id="cardTotalProdutos">0</div>
+            <div class="stat-hint text-muted">Total geral de produtos</div>
+          </div>
+        </div>
+
+        <div class="col-12 col-md-6 col-xl-4">
+          <div class="stat-card h-100">
+            <div class="stat-label">Preço de custo médio</div>
+            <div class="stat-value" id="cardCustoMedio">R$ 0,00</div>
+            <div class="stat-hint text-muted">Baseado nos produtos cadastrados</div>
+          </div>
+        </div>
+
+        <div class="col-12 col-md-6 col-xl-4">
+          <div class="stat-card h-100">
+            <div class="stat-label">Lucro médio estimado</div>
+            <div class="stat-value" id="cardLucroMedio">R$ 0,00</div>
+            <div class="stat-hint text-muted">Preço de venda - preço de custo</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card p-3 mb-4">
+        <div class="row g-2 align-items-center">
+          <div class="col-12 col-lg-6">
+            <div class="input-group">
+              <span class="input-group-text">🔎</span>
+              <input
+                id="buscaProduto"
+                class="form-control"
+                placeholder="Buscar produto pelo nome..."
+                autocomplete="off"
+              >
+              <button id="btnLimparBusca" class="btn btn-outline-secondary" type="button">
+                Limpar
+              </button>
+            </div>
+          </div>
+
+          <div class="col-12 col-lg-6 d-flex justify-content-lg-end gap-2 flex-wrap">
+            <button id="btnAtualizarProdutos" class="btn btn-outline-primary" type="button">
+              🔄 Atualizar
+            </button>
+            <a href="/estoque/pages/estoque.html" class="btn btn-outline-dark">
+              📦 Ir para estoque
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section class="card p-3">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+          <h5 class="mb-0">Produtos cadastrados</h5>
+          <small class="text-muted">Clique em um produto para abrir o cadastro</small>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-striped table-bordered align-middle mb-0">
+            <thead>
+              <tr>
+                <th style="width: 90px;">ID</th>
+                <th>Produto</th>
+                <th style="width: 150px;">Quantidade</th>
+                <th style="width: 160px;">Preço Custo</th>
+                <th style="width: 160px;">Preço Venda</th>
+                <th style="width: 160px;">Lucro</th>
+                <th style="width: 140px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tabelaProdutos">
+              <tr>
+                <td colspan="7" class="text-center text-muted">Carregando...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="modal fade" id="modalProduto" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="tituloModalProduto">Novo Produto</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+
+            <div class="modal-body">
+              <div class="row g-3">
+                <input type="hidden" id="produtoId">
+
+                <div class="col-12">
+                  <label class="form-label">Nome do produto</label>
+                  <input id="produtoNome" class="form-control" placeholder="Digite o nome do produto...">
+                </div>
+
+                <div class="col-12 col-lg-4">
+                  <label class="form-label">Quantidade inicial</label>
+                  <input id="produtoQuantidade" type="number" class="form-control" min="0" step="1" value="0">
+                </div>
+
+                <div class="col-12 col-lg-4">
+                  <label class="form-label">Preço de custo</label>
+                  <div class="input-group">
+                    <span class="input-group-text">R$</span>
+                    <input id="produtoPrecoCusto" type="number" class="form-control" min="0" step="0.01" value="0">
+                  </div>
+                </div>
+
+                <div class="col-12 col-lg-4">
+                  <label class="form-label">Preço de venda</label>
+                  <div class="input-group">
+                    <span class="input-group-text">R$</span>
+                    <input id="produtoPrecoVenda" type="number" class="form-control" min="0" step="0.01" value="0">
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <div class="alert alert-light border mb-0">
+                    <div class="d-flex flex-wrap gap-4">
+                      <div>
+                        <strong>Lucro unitário:</strong>
+                        <span id="produtoLucroUnitario">R$ 0,00</span>
+                      </div>
+                      <div>
+                        <strong>Margem estimada:</strong>
+                        <span id="produtoMargemEstimada">0,00%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <div class="small text-muted">
+                    Nesta primeira etapa, o cadastro já grava nome, quantidade, preço de custo e preço de venda.
+                    A edição completa e a parte de fornecedores podem entrar no próximo passo.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <div class="me-auto small text-muted" id="produtoStatus"></div>
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+              <button type="button" class="btn btn-primary" id="btnSalvarProduto">Salvar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script type="module" src="/estoque/js/api.js?v=20260306"></script>
+  <script type="module" src="/estoque/js/logout.js?v=20260306"></script>
+  <script type="module" src="/estoque/js/main.js?v=20260306"></script>
+  <script type="module" src="/estoque/js/produtos.js?v=20260306"></script>
+</body>
+</html>
