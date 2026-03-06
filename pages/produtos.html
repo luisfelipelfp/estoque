@@ -103,12 +103,13 @@
                 <th style="width: 90px;">ID</th>
                 <th>Produto</th>
                 <th style="width: 150px;">Quantidade</th>
+                <th style="width: 160px;">Estoque mínimo</th>
                 <th style="width: 140px;">Ações</th>
               </tr>
             </thead>
             <tbody id="tabelaProdutos">
               <tr>
-                <td colspan="4" class="text-center text-muted">Carregando...</td>
+                <td colspan="5" class="text-center text-muted">Carregando...</td>
               </tr>
             </tbody>
           </table>
@@ -127,13 +128,27 @@
               <input type="hidden" id="produtoId">
 
               <div class="row g-3 mb-4">
-                <div class="col-12">
+                <div class="col-12 col-lg-8">
                   <label class="form-label">Nome do produto</label>
                   <input
                     id="produtoNome"
                     class="form-control"
                     placeholder="Digite o nome do produto..."
                   >
+                </div>
+
+                <div class="col-12 col-lg-4">
+                  <label class="form-label">Estoque mínimo</label>
+                  <input
+                    id="produtoEstoqueMinimo"
+                    type="number"
+                    class="form-control"
+                    min="0"
+                    step="1"
+                    value="0"
+                    placeholder="0"
+                  >
+                  <div class="form-text">Quando a quantidade ficar igual ou menor que esse valor, o produto entra em estoque baixo.</div>
                 </div>
               </div>
 

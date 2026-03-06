@@ -237,6 +237,7 @@ function produtos_listar(mysqli $conn): array
     try {
         $hasCusto = coluna_existe($conn, 'produtos', 'preco_custo');
         $hasVenda = coluna_existe($conn, 'produtos', 'preco_venda');
+        $hasEstoqueMinimo = coluna_existe($conn, 'produtos', 'estoque_minimo');
 
         $sql = "
             SELECT
@@ -244,6 +245,7 @@ function produtos_listar(mysqli $conn): array
                 nome,
                 quantidade,
                 ativo
+                " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo,0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
                 " . ($hasCusto ? ", COALESCE(preco_custo,0) AS preco_custo" : ", 0 AS preco_custo") . "
                 " . ($hasVenda ? ", COALESCE(preco_venda,0) AS preco_venda" : ", 0 AS preco_venda") . "
             FROM produtos
@@ -278,6 +280,7 @@ function produto_obter(mysqli $conn, int $produto_id): array
     try {
         $hasCusto = coluna_existe($conn, 'produtos', 'preco_custo');
         $hasVenda = coluna_existe($conn, 'produtos', 'preco_venda');
+        $hasEstoqueMinimo = coluna_existe($conn, 'produtos', 'estoque_minimo');
 
         $sql = "
             SELECT
@@ -285,6 +288,7 @@ function produto_obter(mysqli $conn, int $produto_id): array
                 nome,
                 quantidade,
                 ativo
+                " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo,0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
                 " . ($hasCusto ? ", COALESCE(preco_custo,0) AS preco_custo" : ", 0 AS preco_custo") . "
                 " . ($hasVenda ? ", COALESCE(preco_venda,0) AS preco_venda" : ", 0 AS preco_venda") . "
             FROM produtos
@@ -312,10 +316,11 @@ function produto_obter(mysqli $conn, int $produto_id): array
             'sucesso'  => true,
             'mensagem' => 'OK',
             'dados'    => [
-                'id'          => (int)$row['id'],
-                'nome'        => (string)$row['nome'],
-                'quantidade'  => (int)$row['quantidade'],
-                'ativo'       => (int)$row['ativo'],
+                'id' => (int)$row['id'],
+                'nome' => (string)$row['nome'],
+                'quantidade' => (int)$row['quantidade'],
+                'estoque_minimo' => (int)$row['estoque_minimo'],
+                'ativo' => (int)$row['ativo'],
                 'preco_custo' => (float)$row['preco_custo'],
                 'preco_venda' => (float)$row['preco_venda'],
                 'fornecedores' => $fornecedores,
@@ -480,6 +485,7 @@ function produtos_adicionar(
     mysqli $conn,
     string $nome,
     int $quantidade,
+    int $estoque_minimo,
     ?int $usuario_id,
     ?float $preco_custo = null,
     ?float $preco_venda = null,
@@ -499,9 +505,10 @@ function produtos_adicionar(
         $pv = (float)$precos['preco_venda'];
 
         $stmt = $conn->prepare(
-            'INSERT INTO produtos (nome, quantidade, ativo, preco_custo, preco_venda) VALUES (?, ?, 1, ?, ?)'
+            'INSERT INTO produtos (nome, quantidade, estoque_minimo, ativo, preco_custo, preco_venda)
+             VALUES (?, ?, ?, 1, ?, ?)'
         );
-        $stmt->bind_param('sidd', $nome, $quantidade, $pc, $pv);
+        $stmt->bind_param('siidd', $nome, $quantidade, $estoque_minimo, $pc, $pv);
         $stmt->execute();
         $id = (int)$stmt->insert_id;
         $stmt->close();
@@ -522,15 +529,16 @@ function produtos_adicionar(
         $conn->rollback();
 
         logError('produtos', 'Erro ao adicionar produto', [
-            'arquivo'      => $e->getFile(),
-            'linha'        => $e->getLine(),
-            'erro'         => $e->getMessage(),
-            'nome'         => $nome,
-            'qtd'          => $quantidade,
-            'usuario'      => $usuario_id,
-            'preco_custo'  => $preco_custo,
-            'preco_venda'  => $preco_venda,
-            'fornecedores' => $fornecedores
+            'arquivo'        => $e->getFile(),
+            'linha'          => $e->getLine(),
+            'erro'           => $e->getMessage(),
+            'nome'           => $nome,
+            'qtd'            => $quantidade,
+            'estoque_minimo' => $estoque_minimo,
+            'usuario'        => $usuario_id,
+            'preco_custo'    => $preco_custo,
+            'preco_venda'    => $preco_venda,
+            'fornecedores'   => $fornecedores
         ]);
 
         return [
@@ -546,6 +554,7 @@ function produtos_atualizar(
     int $produto_id,
     string $nome,
     int $quantidade,
+    int $estoque_minimo,
     float $preco_custo,
     float $preco_venda,
     ?int $usuario_id,
@@ -581,10 +590,10 @@ function produtos_atualizar(
 
         $stmt = $conn->prepare(
             'UPDATE produtos
-             SET nome = ?, quantidade = ?, preco_custo = ?, preco_venda = ?
+             SET nome = ?, quantidade = ?, estoque_minimo = ?, preco_custo = ?, preco_venda = ?
              WHERE id = ?'
         );
-        $stmt->bind_param('siddi', $nome, $quantidade, $pc, $pv, $produto_id);
+        $stmt->bind_param('siiddi', $nome, $quantidade, $estoque_minimo, $pc, $pv, $produto_id);
         $stmt->execute();
         $stmt->close();
 
@@ -602,16 +611,17 @@ function produtos_atualizar(
         $conn->rollback();
 
         logError('produtos', 'Erro ao atualizar produto', [
-            'arquivo'      => $e->getFile(),
-            'linha'        => $e->getLine(),
-            'erro'         => $e->getMessage(),
-            'produto_id'   => $produto_id,
-            'nome'         => $nome,
-            'qtd'          => $quantidade,
-            'preco_custo'  => $preco_custo,
-            'preco_venda'  => $preco_venda,
-            'usuario'      => $usuario_id,
-            'fornecedores' => $fornecedores
+            'arquivo'        => $e->getFile(),
+            'linha'          => $e->getLine(),
+            'erro'           => $e->getMessage(),
+            'produto_id'     => $produto_id,
+            'nome'           => $nome,
+            'qtd'            => $quantidade,
+            'estoque_minimo' => $estoque_minimo,
+            'preco_custo'    => $preco_custo,
+            'preco_venda'    => $preco_venda,
+            'usuario'        => $usuario_id,
+            'fornecedores'   => $fornecedores
         ]);
 
         return [

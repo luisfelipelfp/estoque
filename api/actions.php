@@ -11,7 +11,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
         'lifetime' => 0,
         'path'     => '/',
-        'secure'   => false, // em HTTPS real, colocar true
+        'secure'   => false,
         'httponly' => true,
         'samesite' => 'Lax'
     ]);
@@ -215,6 +215,7 @@ try {
             }
 
             $qtd = (int)($body['quantidade'] ?? 0);
+            $estoque_minimo = (int)($body['estoque_minimo'] ?? 0);
 
             $preco_custo = (isset($body['preco_custo']) && $body['preco_custo'] !== '')
                 ? (float)$body['preco_custo']
@@ -228,10 +229,16 @@ try {
                 ? $body['fornecedores']
                 : [];
 
+            if ($estoque_minimo < 0) {
+                json_response(false, 'Estoque mínimo inválido.', null, 400);
+                exit;
+            }
+
             $res = produtos_adicionar(
                 $conn,
                 $nome,
                 $qtd,
+                $estoque_minimo,
                 (int)$usuario['id'],
                 $preco_custo,
                 $preco_venda,
@@ -248,6 +255,7 @@ try {
             $produto_id = (int)($body['produto_id'] ?? 0);
             $nome = trim((string)($body['nome'] ?? ''));
             $qtd = (int)($body['quantidade'] ?? 0);
+            $estoque_minimo = (int)($body['estoque_minimo'] ?? 0);
 
             $preco_custo = (isset($body['preco_custo']) && $body['preco_custo'] !== '')
                 ? (float)$body['preco_custo']
@@ -276,6 +284,11 @@ try {
                 exit;
             }
 
+            if ($estoque_minimo < 0) {
+                json_response(false, 'Estoque mínimo inválido.', null, 400);
+                exit;
+            }
+
             if ($preco_custo < 0 || $preco_venda < 0) {
                 json_response(false, 'Preços inválidos.', null, 400);
                 exit;
@@ -286,6 +299,7 @@ try {
                 $produto_id,
                 $nome,
                 $qtd,
+                $estoque_minimo,
                 $preco_custo,
                 $preco_venda,
                 (int)$usuario['id'],

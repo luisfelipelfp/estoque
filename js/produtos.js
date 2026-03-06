@@ -116,7 +116,7 @@ function renderTabela(produtos) {
   if (!Array.isArray(produtos) || produtos.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="4" class="text-center text-muted">Nenhum produto encontrado.</td>
+        <td colspan="5" class="text-center text-muted">Nenhum produto encontrado.</td>
       </tr>
     `;
     return;
@@ -126,12 +126,14 @@ function renderTabela(produtos) {
     const id = Number(p?.id ?? 0);
     const nome = escapeHtml(p?.nome ?? "");
     const qtd = Number(p?.quantidade ?? 0);
+    const estoqueMinimo = Number(p?.estoque_minimo ?? 0);
 
     return `
       <tr>
         <td>${id}</td>
         <td>${nome}</td>
         <td>${qtd}</td>
+        <td>${estoqueMinimo}</td>
         <td>
           <button
             class="btn btn-sm btn-outline-primary"
@@ -168,7 +170,7 @@ async function carregarProdutos() {
   if (tbody) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="4" class="text-center text-muted">Carregando...</td>
+        <td colspan="5" class="text-center text-muted">Carregando...</td>
       </tr>
     `;
   }
@@ -455,6 +457,7 @@ function adicionarFornecedor() {
 function limparModal() {
   if ($("produtoId")) $("produtoId").value = "";
   if ($("produtoNome")) $("produtoNome").value = "";
+  if ($("produtoEstoqueMinimo")) $("produtoEstoqueMinimo").value = "0";
   if ($("produtoStatus")) $("produtoStatus").textContent = "";
   if ($("tituloModalProduto")) $("tituloModalProduto").textContent = "Novo Produto";
 
@@ -492,6 +495,7 @@ async function abrirModalProdutoExistente(produtoId) {
 
   if ($("produtoId")) $("produtoId").value = String(produto.id ?? "");
   if ($("produtoNome")) $("produtoNome").value = produto.nome ?? "";
+  if ($("produtoEstoqueMinimo")) $("produtoEstoqueMinimo").value = String(Number(produto.estoque_minimo ?? 0));
   if ($("tituloModalProduto")) $("tituloModalProduto").textContent = "Cadastro do Produto";
 
   if (Array.isArray(produto.fornecedores) && produto.fornecedores.length > 0) {
@@ -528,12 +532,18 @@ function fornecedoresValidosParaEnvio() {
 async function salvarProduto() {
   const produtoId = Number($("produtoId")?.value ?? 0);
   const nome = ($("produtoNome")?.value ?? "").trim();
+  const estoqueMinimo = Number($("produtoEstoqueMinimo")?.value ?? 0);
   const status = $("produtoStatus");
 
   if (status) status.textContent = "";
 
   if (!nome) {
     if (status) status.textContent = "Informe o nome do produto.";
+    return;
+  }
+
+  if (!Number.isFinite(estoqueMinimo) || estoqueMinimo < 0) {
+    if (status) status.textContent = "Informe um estoque mínimo válido.";
     return;
   }
 
@@ -563,6 +573,7 @@ async function salvarProduto() {
     const payload = {
       nome,
       quantidade: 0,
+      estoque_minimo: estoqueMinimo,
       fornecedores
     };
 
@@ -605,6 +616,7 @@ async function salvarProduto() {
       mensagem: produtoId > 0 ? "Produto atualizado com sucesso" : "Produto criado com sucesso",
       produto_id: produtoId || (resp?.dados?.id ?? null),
       nome,
+      estoque_minimo: estoqueMinimo,
       fornecedores: fornecedores.length
     });
   } catch (err) {
