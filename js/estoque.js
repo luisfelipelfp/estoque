@@ -77,7 +77,11 @@ function renderCards(produtos) {
     : 0;
 
   const estoqueBaixo = Array.isArray(produtos)
-    ? produtos.filter((p) => Number(p?.quantidade ?? 0) <= 0).length
+    ? produtos.filter((p) => {
+        const quantidade = Number(p?.quantidade ?? 0);
+        const estoqueMinimo = Number(p?.estoque_minimo ?? 0);
+        return quantidade <= estoqueMinimo;
+      }).length
     : 0;
 
   if ($("cardProdutos")) $("cardProdutos").textContent = String(totalProdutos);
@@ -92,7 +96,7 @@ function renderTabela(produtos) {
   if (!Array.isArray(produtos) || produtos.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="4" class="text-center text-muted">Nenhum produto encontrado.</td>
+        <td colspan="5" class="text-center text-muted">Nenhum produto encontrado.</td>
       </tr>
     `;
     return;
@@ -102,14 +106,17 @@ function renderTabela(produtos) {
     const id = Number(p?.id ?? 0);
     const nome = escapeHtml(p?.nome ?? "");
     const qtd = Number(p?.quantidade ?? 0);
+    const estoqueMinimo = Number(p?.estoque_minimo ?? 0);
+    const emBaixa = qtd <= estoqueMinimo;
 
     return `
       <tr>
         <td>${id}</td>
         <td>${nome}</td>
         <td>
-          <span class="badge bg-${qtd > 0 ? "primary" : "secondary"}">${qtd}</span>
+          <span class="badge bg-${emBaixa ? "danger" : "primary"}">${qtd}</span>
         </td>
+        <td>${estoqueMinimo}</td>
         <td class="text-nowrap">
           <div class="d-flex gap-2 flex-wrap">
             <button
@@ -159,7 +166,7 @@ async function carregarProdutos() {
   if (tbody) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="4" class="text-center text-muted">Carregando...</td>
+        <td colspan="5" class="text-center text-muted">Carregando...</td>
       </tr>
     `;
   }
@@ -289,11 +296,13 @@ function renderUltimasMovimentacoes(movs) {
 
 async function carregarResumoProduto(produtoId) {
   const estoqueEl = $("movEstoqueAtual");
+  const estoqueMinimoEl = $("movEstoqueMinimo");
   const historicoEl = $("movUltimasMovimentacoes");
   const alertaEl = $("movResumoAlerta");
   const btnHistorico = $("movVerHistorico");
 
   if (estoqueEl) estoqueEl.textContent = "-";
+  if (estoqueMinimoEl) estoqueMinimoEl.textContent = "-";
   if (alertaEl) alertaEl.textContent = "";
   if (historicoEl) historicoEl.innerHTML = `<div class="text-muted">Carregando informações do produto...</div>`;
   if (btnHistorico) btnHistorico.disabled = !produtoId;
@@ -315,9 +324,20 @@ async function carregarResumoProduto(produtoId) {
     const produto = dados?.produto || {};
     const movs = Array.isArray(dados?.ultimas_movimentacoes) ? dados.ultimas_movimentacoes : [];
     const qtdAtual = Number(produto?.quantidade ?? 0);
+    const estoqueMinimo = Number(produto?.estoque_minimo ?? 0);
 
     if (estoqueEl) estoqueEl.textContent = String(qtdAtual);
-    if (alertaEl) alertaEl.textContent = qtdAtual <= 0 ? "Produto sem estoque." : "";
+    if (estoqueMinimoEl) estoqueMinimoEl.textContent = String(estoqueMinimo);
+
+    if (alertaEl) {
+      if (qtdAtual <= 0) {
+        alertaEl.textContent = "Produto sem estoque.";
+      } else if (qtdAtual <= estoqueMinimo) {
+        alertaEl.textContent = "Produto em estoque baixo.";
+      } else {
+        alertaEl.textContent = "";
+      }
+    }
 
     renderUltimasMovimentacoes(movs);
   } catch (err) {
@@ -344,6 +364,7 @@ function bindAutocompleteModal() {
 
     if ($("movProdutoId")) $("movProdutoId").value = "";
     if ($("movEstoqueAtual")) $("movEstoqueAtual").textContent = "-";
+    if ($("movEstoqueMinimo")) $("movEstoqueMinimo").textContent = "-";
     if ($("movResumoAlerta")) $("movResumoAlerta").textContent = "";
     if ($("movUltimasMovimentacoes")) {
       $("movUltimasMovimentacoes").innerHTML = `<div class="text-muted">Selecione um produto para visualizar o histórico.</div>`;
@@ -405,6 +426,7 @@ function limparModal() {
   if ($("movQuantidade")) $("movQuantidade").value = "1";
   if ($("movStatus")) $("movStatus").textContent = "";
   if ($("movEstoqueAtual")) $("movEstoqueAtual").textContent = "-";
+  if ($("movEstoqueMinimo")) $("movEstoqueMinimo").textContent = "-";
   if ($("movResumoAlerta")) $("movResumoAlerta").textContent = "";
   if ($("movUltimasMovimentacoes")) {
     $("movUltimasMovimentacoes").innerHTML = `<div class="text-muted">Selecione um produto para visualizar o histórico.</div>`;

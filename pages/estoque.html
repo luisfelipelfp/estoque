@@ -57,7 +57,7 @@
           <div class="stat-card h-100">
             <div class="stat-label">Estoque baixo</div>
             <div class="stat-value text-danger" id="cardBaixo">0</div>
-            <div class="stat-hint text-muted">Produtos com quantidade igual a 0</div>
+            <div class="stat-hint text-muted">Produtos com quantidade menor ou igual ao estoque mínimo</div>
           </div>
         </div>
       </section>
@@ -103,12 +103,13 @@
                 <th style="width: 90px;">ID</th>
                 <th>Produto</th>
                 <th style="width: 150px;">Quantidade</th>
+                <th style="width: 160px;">Estoque mínimo</th>
                 <th style="width: 240px;">Ações</th>
               </tr>
             </thead>
             <tbody id="tabelaEstoque">
               <tr>
-                <td colspan="4" class="text-center text-muted">Carregando...</td>
+                <td colspan="5" class="text-center text-muted">Carregando...</td>
               </tr>
             </tbody>
           </table>
@@ -151,6 +152,7 @@
                   <div class="alert alert-light border mt-3 mb-0">
                     <div class="d-flex flex-wrap gap-3 align-items-center">
                       <div>📦 <strong>Estoque atual:</strong> <span id="movEstoqueAtual">-</span></div>
+                      <div>📉 <strong>Estoque mínimo:</strong> <span id="movEstoqueMinimo">-</span></div>
                       <div id="movResumoAlerta" class="text-danger fw-bold"></div>
                     </div>
                   </div>
