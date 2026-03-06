@@ -75,6 +75,68 @@ function produtos_listar(mysqli $conn): array
     }
 }
 
+function produto_obter(mysqli $conn, int $produto_id): array
+{
+    try {
+        $hasCusto = coluna_existe($conn, 'produtos', 'preco_custo');
+        $hasVenda = coluna_existe($conn, 'produtos', 'preco_venda');
+
+        $sql = "
+            SELECT
+                id,
+                nome,
+                quantidade,
+                ativo
+                " . ($hasCusto ? ", COALESCE(preco_custo,0) AS preco_custo" : ", 0 AS preco_custo") . "
+                " . ($hasVenda ? ", COALESCE(preco_venda,0) AS preco_venda" : ", 0 AS preco_venda") . "
+            FROM produtos
+            WHERE id = ?
+            LIMIT 1
+        ";
+
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param('i', $produto_id);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        if (!$row) {
+            return [
+                'sucesso'  => false,
+                'mensagem' => 'Produto não encontrado.',
+                'dados'    => null
+            ];
+        }
+
+        return [
+            'sucesso'  => true,
+            'mensagem' => 'OK',
+            'dados'    => [
+                'id'          => (int)$row['id'],
+                'nome'        => (string)$row['nome'],
+                'quantidade'  => (int)$row['quantidade'],
+                'ativo'       => (int)$row['ativo'],
+                'preco_custo' => (float)$row['preco_custo'],
+                'preco_venda' => (float)$row['preco_venda'],
+            ]
+        ];
+
+    } catch (Throwable $e) {
+        logError('produtos', 'Erro ao obter produto', [
+            'arquivo'    => $e->getFile(),
+            'linha'      => $e->getLine(),
+            'erro'       => $e->getMessage(),
+            'produto_id' => $produto_id
+        ]);
+
+        return [
+            'sucesso'  => false,
+            'mensagem' => 'Erro ao obter produto',
+            'dados'    => null
+        ];
+    }
+}
+
 function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
 {
     try {
@@ -104,10 +166,10 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
         $itens = [];
         while ($r = $res->fetch_assoc()) {
             $itens[] = [
-                'id'         => (int)$r['id'],
-                'nome'       => (string)$r['nome'],
-                'quantidade' => (int)$r['quantidade'],
-                'preco_custo'=> (float)$r['preco_custo'],
+                'id'          => (int)$r['id'],
+                'nome'        => (string)$r['nome'],
+                'quantidade'  => (int)$r['quantidade'],
+                'preco_custo' => (float)$r['preco_custo'],
             ];
         }
         $stmt->close();
@@ -191,10 +253,10 @@ function produto_resumo(mysqli $conn, int $produto_id): array
 
         $payload = [
             'produto' => [
-                'id'         => (int)$prod['id'],
-                'nome'       => (string)$prod['nome'],
-                'quantidade' => (int)$prod['quantidade'],
-                'preco_custo'=> (float)$prod['preco_custo'],
+                'id'          => (int)$prod['id'],
+                'nome'        => (string)$prod['nome'],
+                'quantidade'  => (int)$prod['quantidade'],
+                'preco_custo' => (float)$prod['preco_custo'],
             ],
             'ultimas_movimentacoes' => $movs
         ];
@@ -203,9 +265,9 @@ function produto_resumo(mysqli $conn, int $produto_id): array
 
     } catch (Throwable $e) {
         logError('produtos', 'Erro ao gerar resumo do produto', [
-            'arquivo' => $e->getFile(),
-            'linha'   => $e->getLine(),
-            'erro'    => $e->getMessage(),
+            'arquivo'    => $e->getFile(),
+            'linha'      => $e->getLine(),
+            'erro'       => $e->getMessage(),
             'produto_id' => $produto_id
         ]);
 
@@ -222,7 +284,6 @@ function produtos_adicionar(
     ?float $preco_venda = null
 ): array {
     try {
-        // sua tabela tem NOT NULL com default 0.00, mas vamos setar explicitamente
         $pc = ($preco_custo !== null && $preco_custo >= 0) ? $preco_custo : 0.0;
         $pv = ($preco_venda !== null && $preco_venda >= 0) ? $preco_venda : 0.0;
 
@@ -243,19 +304,79 @@ function produtos_adicionar(
 
     } catch (Throwable $e) {
         logError('produtos', 'Erro ao adicionar produto', [
-            'arquivo' => $e->getFile(),
-            'linha'   => $e->getLine(),
-            'erro'    => $e->getMessage(),
-            'nome'    => $nome,
-            'qtd'     => $quantidade,
-            'usuario' => $usuario_id,
-            'preco_custo' => $preco_custo,
-            'preco_venda' => $preco_venda
+            'arquivo'      => $e->getFile(),
+            'linha'        => $e->getLine(),
+            'erro'         => $e->getMessage(),
+            'nome'         => $nome,
+            'qtd'          => $quantidade,
+            'usuario'      => $usuario_id,
+            'preco_custo'  => $preco_custo,
+            'preco_venda'  => $preco_venda
         ]);
 
         return [
             'sucesso'  => false,
             'mensagem' => 'Erro ao adicionar produto',
+            'dados'    => null
+        ];
+    }
+}
+
+function produtos_atualizar(
+    mysqli $conn,
+    int $produto_id,
+    string $nome,
+    int $quantidade,
+    float $preco_custo,
+    float $preco_venda,
+    ?int $usuario_id
+): array {
+    try {
+        $stmtChk = $conn->prepare('SELECT id FROM produtos WHERE id = ? LIMIT 1');
+        $stmtChk->bind_param('i', $produto_id);
+        $stmtChk->execute();
+        $exists = $stmtChk->get_result()->fetch_assoc();
+        $stmtChk->close();
+
+        if (!$exists) {
+            return [
+                'sucesso'  => false,
+                'mensagem' => 'Produto não encontrado.',
+                'dados'    => null
+            ];
+        }
+
+        $stmt = $conn->prepare(
+            'UPDATE produtos
+             SET nome = ?, quantidade = ?, preco_custo = ?, preco_venda = ?
+             WHERE id = ?'
+        );
+        $stmt->bind_param('siddi', $nome, $quantidade, $preco_custo, $preco_venda, $produto_id);
+        $stmt->execute();
+        $stmt->close();
+
+        return [
+            'sucesso'  => true,
+            'mensagem' => 'Produto atualizado com sucesso',
+            'dados'    => ['id' => $produto_id]
+        ];
+
+    } catch (Throwable $e) {
+        logError('produtos', 'Erro ao atualizar produto', [
+            'arquivo'      => $e->getFile(),
+            'linha'        => $e->getLine(),
+            'erro'         => $e->getMessage(),
+            'produto_id'   => $produto_id,
+            'nome'         => $nome,
+            'qtd'          => $quantidade,
+            'preco_custo'  => $preco_custo,
+            'preco_venda'  => $preco_venda,
+            'usuario'      => $usuario_id
+        ]);
+
+        return [
+            'sucesso'  => false,
+            'mensagem' => 'Erro ao atualizar produto',
             'dados'    => null
         ];
     }

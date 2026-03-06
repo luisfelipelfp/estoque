@@ -107,8 +107,6 @@ try {
                 exit;
             }
 
-            // Seu banco tem: nome, email, senha (hash), nivel
-            // Vamos aceitar login por email OU nome
             $stmt = $conn->prepare("
                 SELECT id, nome, email, senha, nivel
                 FROM usuarios
@@ -131,7 +129,6 @@ try {
                 exit;
             }
 
-            // ok: cria sessão
             $_SESSION['usuario'] = [
                 'id'    => (int)$user['id'],
                 'nome'  => (string)$user['nome'],
@@ -151,11 +148,13 @@ try {
         }
 
         case 'logout': {
-            // encerra sessão
             $_SESSION = [];
             if (ini_get("session.use_cookies")) {
                 $params = session_get_cookie_params();
-                setcookie(session_name(), '', time() - 42000,
+                setcookie(
+                    session_name(),
+                    '',
+                    time() - 42000,
                     $params["path"],
                     $params["domain"] ?? '',
                     (bool)$params["secure"],
@@ -174,6 +173,20 @@ try {
             require_auth();
             $res = produtos_listar($conn);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
+            exit;
+        }
+
+        case 'obter_produto': {
+            require_auth();
+
+            $produto_id = (int)($_GET['produto_id'] ?? $body['produto_id'] ?? 0);
+            if ($produto_id <= 0) {
+                json_response(false, 'Produto inválido.', null, 400);
+                exit;
+            }
+
+            $res = produto_obter($conn, $produto_id);
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
             exit;
         }
 
@@ -212,9 +225,63 @@ try {
                 ? (float)$body['preco_venda']
                 : null;
 
-            // ⚠️ só vai funcionar se sua assinatura de produtos_adicionar aceitar esses params
-            // Se ainda não aceitar, me avisa e eu ajusto seu produtos.php também.
-            $res = produtos_adicionar($conn, $nome, $qtd, (int)$usuario['id'], $preco_custo, $preco_venda);
+            $res = produtos_adicionar(
+                $conn,
+                $nome,
+                $qtd,
+                (int)$usuario['id'],
+                $preco_custo,
+                $preco_venda
+            );
+
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
+            exit;
+        }
+
+        case 'atualizar_produto': {
+            $usuario = require_auth();
+
+            $produto_id = (int)($body['produto_id'] ?? 0);
+            $nome = trim((string)($body['nome'] ?? ''));
+            $qtd = (int)($body['quantidade'] ?? 0);
+
+            $preco_custo = (isset($body['preco_custo']) && $body['preco_custo'] !== '')
+                ? (float)$body['preco_custo']
+                : 0.0;
+
+            $preco_venda = (isset($body['preco_venda']) && $body['preco_venda'] !== '')
+                ? (float)$body['preco_venda']
+                : 0.0;
+
+            if ($produto_id <= 0) {
+                json_response(false, 'Produto inválido.', null, 400);
+                exit;
+            }
+
+            if ($nome === '') {
+                json_response(false, 'Nome do produto obrigatório.', null, 400);
+                exit;
+            }
+
+            if ($qtd < 0) {
+                json_response(false, 'Quantidade inválida.', null, 400);
+                exit;
+            }
+
+            if ($preco_custo < 0 || $preco_venda < 0) {
+                json_response(false, 'Preços inválidos.', null, 400);
+                exit;
+            }
+
+            $res = produtos_atualizar(
+                $conn,
+                $produto_id,
+                $nome,
+                $qtd,
+                $preco_custo,
+                $preco_venda,
+                (int)$usuario['id']
+            );
 
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
             exit;
@@ -299,7 +366,6 @@ try {
                 exit;
             }
 
-            // fallback: se não mandou valor_unitario, usa preco_custo como valor_unitario
             if ($valor_unitario === null && $preco_custo !== null) {
                 $valor_unitario = $preco_custo;
             }
