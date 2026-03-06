@@ -269,6 +269,13 @@ function atualizarResumoFornecedorNoDOM(index) {
   }
 }
 
+function atualizarTituloFornecedorNoDOM(index, valor) {
+  const titulo = document.querySelector(`[data-titulo-fornecedor="${index}"]`);
+  if (!titulo) return;
+
+  titulo.textContent = String(valor || "").trim() || `Fornecedor ${index + 1}`;
+}
+
 function atualizarFornecedor(index, campo, valor) {
   if (!fornecedoresTemp[index]) return;
 
@@ -287,6 +294,10 @@ function atualizarFornecedor(index, campo, valor) {
   if (campo === "preco_custo" || campo === "preco_venda") {
     atualizarResumoFornecedorNoDOM(index);
   }
+
+  if (campo === "nome") {
+    atualizarTituloFornecedorNoDOM(index, valor);
+  }
 }
 
 function removerFornecedor(index) {
@@ -300,12 +311,13 @@ function criarFornecedorCard(fornecedor, index) {
   const precoVenda = Number(fornecedor?.preco_venda || 0);
   const lucro = calcularLucro(precoCusto, precoVenda);
   const principal = Number(fornecedor?.principal || 0) === 1;
+  const tituloFornecedor = escapeHtml((fornecedor?.nome ?? "").trim() || `Fornecedor ${index + 1}`);
 
   return `
     <div class="card border mb-3">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-          <strong>Fornecedor ${index + 1}</strong>
+          <strong data-titulo-fornecedor="${index}">${tituloFornecedor}</strong>
           <div class="d-flex align-items-center gap-3">
             <div class="form-check m-0">
               <input
