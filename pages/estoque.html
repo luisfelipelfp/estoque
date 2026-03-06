@@ -127,16 +127,25 @@
               <div class="row g-3">
                 <div class="col-12 col-lg-8">
                   <label class="form-label">Produto</label>
-                  <input
-                    id="movProdutoNome"
-                    class="form-control"
-                    placeholder="Selecione um produto pela tabela"
-                    autocomplete="off"
-                    readonly
-                  >
-                  <input id="movProdutoId" type="hidden" value="">
+
+                  <div class="position-relative">
+                    <input
+                      id="movProdutoNome"
+                      class="form-control"
+                      placeholder="Digite o nome do produto..."
+                      autocomplete="off"
+                    >
+                    <input id="movProdutoId" type="hidden" value="">
+
+                    <div
+                      id="movSugestoes"
+                      class="list-group position-absolute w-100 shadow-sm"
+                      style="z-index: 1056; display: none; max-height: 220px; overflow-y: auto;"
+                    ></div>
+                  </div>
+
                   <div class="form-text">
-                    Dica: use os botões Entrada/Saída da tabela para preencher automaticamente.
+                    Dica: use os botões Entrada/Saída da tabela ou digite para buscar um produto.
                   </div>
                 </div>
 

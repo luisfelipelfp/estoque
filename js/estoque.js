@@ -208,12 +208,113 @@ function getModal() {
   return modalInstance;
 }
 
+function limparSugestoes() {
+  const box = $("movSugestoes");
+  if (!box) return;
+  box.innerHTML = "";
+  box.style.display = "none";
+}
+
+function renderSugestoesModal(produtos) {
+  const box = $("movSugestoes");
+  if (!box) return;
+
+  if (!Array.isArray(produtos) || produtos.length === 0) {
+    box.innerHTML = `
+      <button type="button" class="list-group-item list-group-item-action disabled">
+        Nenhum produto encontrado
+      </button>
+    `;
+    box.style.display = "block";
+    return;
+  }
+
+  box.innerHTML = produtos.map((p) => `
+    <button
+      type="button"
+      class="list-group-item list-group-item-action"
+      data-id="${Number(p?.id ?? 0)}"
+      data-nome="${escapeHtml(p?.nome ?? "")}"
+    >
+      ${escapeHtml(p?.nome ?? "")}
+    </button>
+  `).join("");
+
+  box.style.display = "block";
+}
+
+function selecionarProdutoModal(id, nome) {
+  if ($("movProdutoId")) $("movProdutoId").value = String(id || "");
+  if ($("movProdutoNome")) $("movProdutoNome").value = nome || "";
+  limparSugestoes();
+}
+
+function bindAutocompleteModal() {
+  const input = $("movProdutoNome");
+  const box = $("movSugestoes");
+
+  if (!input || !box) return;
+
+  input.addEventListener("input", () => {
+    const termo = input.value.trim().toLowerCase();
+
+    if ($("movProdutoId")) $("movProdutoId").value = "";
+
+    if (!termo) {
+      limparSugestoes();
+      return;
+    }
+
+    const encontrados = produtosCache.filter((p) =>
+      String(p?.nome ?? "").toLowerCase().includes(termo)
+    );
+
+    renderSugestoesModal(encontrados.slice(0, 8));
+  });
+
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter") return;
+
+    const termo = input.value.trim().toLowerCase();
+    if (!termo) return;
+
+    const encontrados = produtosCache.filter((p) =>
+      String(p?.nome ?? "").toLowerCase().includes(termo)
+    );
+
+    if (encontrados.length > 0) {
+      ev.preventDefault();
+      selecionarProdutoModal(encontrados[0].id, encontrados[0].nome);
+    }
+  });
+
+  box.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("button[data-id][data-nome]");
+    if (!btn) return;
+
+    selecionarProdutoModal(
+      Number(btn.dataset.id || 0),
+      btn.dataset.nome || ""
+    );
+  });
+
+  document.addEventListener("click", (ev) => {
+    const clicouNoInput = ev.target.closest("#movProdutoNome");
+    const clicouNaLista = ev.target.closest("#movSugestoes");
+
+    if (!clicouNoInput && !clicouNaLista) {
+      limparSugestoes();
+    }
+  });
+}
+
 function limparModal() {
   if ($("movProdutoId")) $("movProdutoId").value = "";
   if ($("movProdutoNome")) $("movProdutoNome").value = "";
   if ($("movDataAgora")) $("movDataAgora").value = formatNowBR();
   if ($("movQuantidade")) $("movQuantidade").value = "1";
   if ($("movStatus")) $("movStatus").textContent = "";
+  limparSugestoes();
 
   if ($("movTipoEntrada")) $("movTipoEntrada").checked = true;
 }
@@ -291,7 +392,7 @@ async function salvarMovimentacao() {
   if (status) status.textContent = "";
 
   if (!produtoId || !produtoNome) {
-    if (status) status.textContent = "Selecione um produto pela tabela antes de salvar.";
+    if (status) status.textContent = "Selecione um produto válido.";
     return;
   }
 
@@ -348,6 +449,7 @@ function bindModal() {
   $("movQtdMenos")?.addEventListener("click", () => ajustarQuantidade(-1));
   $("movQtdMais")?.addEventListener("click", () => ajustarQuantidade(1));
   $("movSalvar")?.addEventListener("click", salvarMovimentacao);
+  bindAutocompleteModal();
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
