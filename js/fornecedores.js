@@ -1,5 +1,4 @@
 // js/fornecedores.js
-import { apiRequest } from "./api.js";
 import { logJsInfo, logJsError } from "./logger.js";
 
 function $(id) {
@@ -32,7 +31,6 @@ function limparModal() {
   if ($("fornecedorId")) $("fornecedorId").value = "";
   if ($("fornecedorNome")) $("fornecedorNome").value = "";
   if ($("fornecedorAtivo")) $("fornecedorAtivo").value = "1";
-  if ($("fornecedorObservacao")) $("fornecedorObservacao").value = "";
   if ($("fornecedorStatus")) $("fornecedorStatus").textContent = "";
   if ($("tituloModalFornecedor")) $("tituloModalFornecedor").textContent = "Novo Fornecedor";
 }
@@ -51,7 +49,6 @@ function abrirModalFornecedorExistente(fornecedorId) {
   if ($("fornecedorId")) $("fornecedorId").value = String(fornecedor.id ?? "");
   if ($("fornecedorNome")) $("fornecedorNome").value = fornecedor.nome ?? "";
   if ($("fornecedorAtivo")) $("fornecedorAtivo").value = String(Number(fornecedor.ativo ?? 1));
-  if ($("fornecedorObservacao")) $("fornecedorObservacao").value = fornecedor.observacao ?? "";
   if ($("tituloModalFornecedor")) $("tituloModalFornecedor").textContent = "Editar Fornecedor";
 
   getModal()?.show();
@@ -126,11 +123,11 @@ async function carregarFornecedores() {
   }
 
   try {
-    // Simulação visual enquanto a API ainda não existe
+    // Base visual temporária até ligar com a API real
     fornecedoresCache = [
-      { id: 1, nome: "Ferragens Brasil", ativo: 1, observacao: "", total_produtos: 12 },
-      { id: 2, nome: "Acabamentos São Paulo", ativo: 1, observacao: "", total_produtos: 7 },
-      { id: 3, nome: "Distribuidora Central", ativo: 0, observacao: "", total_produtos: 3 }
+      { id: 1, nome: "Ferragens Brasil", ativo: 1, total_produtos: 12 },
+      { id: 2, nome: "Acabamentos São Paulo", ativo: 1, total_produtos: 7 },
+      { id: 3, nome: "Distribuidora Central", ativo: 0, total_produtos: 3 }
     ];
 
     aplicarFiltro();
@@ -157,13 +154,22 @@ async function salvarFornecedor() {
   const fornecedorId = Number($("fornecedorId")?.value ?? 0);
   const nome = ($("fornecedorNome")?.value ?? "").trim();
   const ativo = Number($("fornecedorAtivo")?.value ?? 1);
-  const observacao = ($("fornecedorObservacao")?.value ?? "").trim();
   const status = $("fornecedorStatus");
 
   if (status) status.textContent = "";
 
   if (!nome) {
     if (status) status.textContent = "Informe o nome do fornecedor.";
+    return;
+  }
+
+  const nomeJaExiste = fornecedoresCache.some((f) =>
+    Number(f?.id ?? 0) !== fornecedorId &&
+    String(f?.nome ?? "").trim().toLowerCase() === nome.toLowerCase()
+  );
+
+  if (nomeJaExiste) {
+    if (status) status.textContent = "Já existe um fornecedor com esse nome.";
     return;
   }
 
@@ -174,11 +180,11 @@ async function salvarFornecedor() {
         : "Salvando fornecedor...";
     }
 
-    // Simulação visual enquanto a API ainda não existe
+    // Base visual temporária até ligar com a API real
     if (fornecedorId > 0) {
       fornecedoresCache = fornecedoresCache.map((f) =>
         Number(f.id) === fornecedorId
-          ? { ...f, nome, ativo, observacao }
+          ? { ...f, nome, ativo }
           : f
       );
     } else {
@@ -190,7 +196,6 @@ async function salvarFornecedor() {
         id: novoId,
         nome,
         ativo,
-        observacao,
         total_produtos: 0
       });
     }
