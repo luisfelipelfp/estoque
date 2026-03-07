@@ -27,52 +27,6 @@ let produtosCache = [];
 let modalInstance = null;
 let fornecedoresTemp = [];
 
-async function carregarNavbar() {
-  const host = $("navbar");
-  if (!host) return;
-
-  try {
-    const resp = await fetch("/estoque/components/navbar.html?v=20260306", {
-      cache: "no-store",
-      credentials: "same-origin"
-    });
-
-    if (!resp.ok) {
-      host.innerHTML = "";
-      return;
-    }
-
-    host.innerHTML = await resp.text();
-
-    const btn = document.getElementById("btnLogout");
-    if (btn && !btn.dataset.boundLogout) {
-      btn.dataset.boundLogout = "1";
-      btn.addEventListener("click", async () => {
-        try {
-          await apiRequest("logout", null, "POST");
-        } catch (err) {
-          logJsError({
-            origem: "produtos.js",
-            mensagem: "Erro ao executar logout pelo navbar carregado dinamicamente",
-            detalhe: err?.message,
-            stack: err?.stack,
-          });
-        } finally {
-          localStorage.removeItem("usuario");
-          window.location.replace("/estoque/pages/login.html");
-        }
-      });
-    }
-  } catch (err) {
-    logJsError({
-      origem: "produtos.js",
-      mensagem: "Erro ao carregar navbar",
-      detalhe: err?.message,
-      stack: err?.stack,
-    });
-  }
-}
-
 function calcularLucro(precoCusto, precoVenda) {
   return Number(precoVenda || 0) - Number(precoCusto || 0);
 }
@@ -660,7 +614,6 @@ function bindModal() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  await carregarNavbar();
   bindTabelaAcoes();
   bindBusca();
   bindAcoesTopo();
