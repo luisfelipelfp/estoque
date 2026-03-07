@@ -95,8 +95,6 @@ try {
 
     switch ($acao) {
 
-        // ================= AUTH =================
-
         case 'login': {
             $login = trim((string)($body['login'] ?? ''));
             $senha = (string)($body['senha'] ?? '');
@@ -166,8 +164,6 @@ try {
             exit;
         }
 
-        // ================= PRODUTOS =================
-
         case 'listar_produtos': {
             require_auth();
             $res = produtos_listar($conn);
@@ -200,7 +196,7 @@ try {
                 exit;
             }
 
-            $res = produtos_adicionar($conn, $nome, $qtd, (int)$usuario['id']);
+            $res = produtos_adicionar($conn, $nome, $qtd, 0, (int)$usuario['id']);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
             exit;
         }
@@ -228,6 +224,11 @@ try {
             $fornecedores = isset($body['fornecedores']) && is_array($body['fornecedores'])
                 ? $body['fornecedores']
                 : [];
+
+            if ($qtd < 0) {
+                json_response(false, 'Quantidade inválida.', null, 400);
+                exit;
+            }
 
             if ($estoque_minimo < 0) {
                 json_response(false, 'Estoque mínimo inválido.', null, 400);
@@ -350,8 +351,6 @@ try {
             exit;
         }
 
-        // ================= MOVIMENTAÇÕES =================
-
         case 'listar_movimentacoes': {
             require_auth();
 
@@ -407,8 +406,6 @@ try {
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
             exit;
         }
-
-        // ================= RELATÓRIOS =================
 
         case 'relatorio':
         case 'relatorios':

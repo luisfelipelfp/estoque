@@ -508,10 +508,9 @@ async function abrirModalProdutoExistente(produtoId) {
       principal: Number(f?.principal ?? 0) === 1 ? 1 : 0
     }));
   } else {
-    fornecedoresTemp = [criarFornecedorVazio()];
+    fornecedoresTemp = [];
   }
 
-  garantirFornecedorPrincipal();
   renderListaFornecedores();
   getModal()?.show();
 }
@@ -549,11 +548,6 @@ async function salvarProduto() {
 
   const fornecedores = fornecedoresValidosParaEnvio();
 
-  if (fornecedores.length === 0) {
-    if (status) status.textContent = "Adicione pelo menos um fornecedor com nome válido.";
-    return;
-  }
-
   const fornecedoresComErro = fornecedores.find(
     (f) => f.preco_custo < 0 || f.preco_venda < 0
   );
@@ -570,9 +564,11 @@ async function salvarProduto() {
   try {
     let resp;
 
+    const produtoAtual = produtosCache.find((p) => Number(p?.id ?? 0) === produtoId);
+
     const payload = {
       nome,
-      quantidade: 0,
+      quantidade: produtoId > 0 ? Number(produtoAtual?.quantidade ?? 0) : 0,
       estoque_minimo: estoqueMinimo,
       fornecedores
     };

@@ -406,12 +406,14 @@ function produto_resumo(mysqli $conn, int $produto_id): array
 {
     try {
         $hasCusto = coluna_existe($conn, 'produtos', 'preco_custo');
+        $hasEstoqueMinimo = coluna_existe($conn, 'produtos', 'estoque_minimo');
 
         $sqlP = "
             SELECT
                 id,
                 nome,
                 quantidade
+                " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo,0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
                 " . ($hasCusto ? ", COALESCE(preco_custo,0) AS preco_custo" : ", 0 AS preco_custo") . "
             FROM produtos
             WHERE id = ?
@@ -459,10 +461,11 @@ function produto_resumo(mysqli $conn, int $produto_id): array
 
         $payload = [
             'produto' => [
-                'id'          => (int)$prod['id'],
-                'nome'        => (string)$prod['nome'],
-                'quantidade'  => (int)$prod['quantidade'],
-                'preco_custo' => (float)$prod['preco_custo'],
+                'id'             => (int)$prod['id'],
+                'nome'           => (string)$prod['nome'],
+                'quantidade'     => (int)$prod['quantidade'],
+                'estoque_minimo' => (int)$prod['estoque_minimo'],
+                'preco_custo'    => (float)$prod['preco_custo'],
             ],
             'ultimas_movimentacoes' => $movs
         ];
@@ -494,8 +497,10 @@ function produtos_adicionar(
     try {
         $conn->begin_transaction();
 
-        $precos = !empty($fornecedores)
-            ? fornecedor_principal_preco($fornecedores)
+        $fornecedoresNormalizados = normalizar_fornecedores($fornecedores);
+
+        $precos = !empty($fornecedoresNormalizados)
+            ? fornecedor_principal_preco($fornecedoresNormalizados)
             : [
                 'preco_custo' => (($preco_custo !== null && $preco_custo >= 0) ? $preco_custo : 0.0),
                 'preco_venda' => (($preco_venda !== null && $preco_venda >= 0) ? $preco_venda : 0.0),
@@ -513,8 +518,8 @@ function produtos_adicionar(
         $id = (int)$stmt->insert_id;
         $stmt->close();
 
-        if (!empty($fornecedores)) {
-            produto_fornecedores_salvar($conn, $id, $fornecedores);
+        if (!empty($fornecedoresNormalizados)) {
+            produto_fornecedores_salvar($conn, $id, $fornecedoresNormalizados);
         }
 
         $conn->commit();
@@ -578,8 +583,10 @@ function produtos_atualizar(
             ];
         }
 
-        $precos = !empty($fornecedores)
-            ? fornecedor_principal_preco($fornecedores)
+        $fornecedoresNormalizados = normalizar_fornecedores($fornecedores);
+
+        $precos = !empty($fornecedoresNormalizados)
+            ? fornecedor_principal_preco($fornecedoresNormalizados)
             : [
                 'preco_custo' => $preco_custo,
                 'preco_venda' => $preco_venda,
@@ -597,7 +604,7 @@ function produtos_atualizar(
         $stmt->execute();
         $stmt->close();
 
-        produto_fornecedores_salvar($conn, $produto_id, $fornecedores);
+        produto_fornecedores_salvar($conn, $produto_id, $fornecedoresNormalizados);
 
         $conn->commit();
 
@@ -638,10 +645,19 @@ function produtos_remover(
     ?int $usuario_id
 ): array {
     try {
+        $conn->begin_transaction();
+
+        $stmtDelRel = $conn->prepare('DELETE FROM produto_fornecedores WHERE produto_id = ?');
+        $stmtDelRel->bind_param('i', $produto_id);
+        $stmtDelRel->execute();
+        $stmtDelRel->close();
+
         $stmt = $conn->prepare('DELETE FROM produtos WHERE id = ?');
         $stmt->bind_param('i', $produto_id);
         $stmt->execute();
         $stmt->close();
+
+        $conn->commit();
 
         return [
             'sucesso'  => true,
@@ -650,6 +666,8 @@ function produtos_remover(
         ];
 
     } catch (Throwable $e) {
+        $conn->rollback();
+
         logError('produtos', 'Erro ao remover produto', [
             'arquivo'    => $e->getFile(),
             'linha'      => $e->getLine(),
