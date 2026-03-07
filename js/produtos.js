@@ -88,27 +88,6 @@ function formatMargem(precoCusto, precoVenda) {
   })}%`;
 }
 
-function renderCards(produtos) {
-  const totalProdutos = Array.isArray(produtos) ? produtos.length : 0;
-
-  let somaCusto = 0;
-  let somaLucro = 0;
-
-  for (const p of produtos || []) {
-    const custo = Number(p?.preco_custo ?? 0);
-    const venda = Number(p?.preco_venda ?? 0);
-    somaCusto += custo;
-    somaLucro += calcularLucro(custo, venda);
-  }
-
-  const custoMedio = totalProdutos ? somaCusto / totalProdutos : 0;
-  const lucroMedio = totalProdutos ? somaLucro / totalProdutos : 0;
-
-  if ($("cardTotalProdutos")) $("cardTotalProdutos").textContent = String(totalProdutos);
-  if ($("cardCustoMedio")) $("cardCustoMedio").textContent = formatBRL(custoMedio);
-  if ($("cardLucroMedio")) $("cardLucroMedio").textContent = formatBRL(lucroMedio);
-}
-
 function renderTabela(produtos) {
   const tbody = $("tabelaProdutos");
   if (!tbody) return;
@@ -116,7 +95,7 @@ function renderTabela(produtos) {
   if (!Array.isArray(produtos) || produtos.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="5" class="text-center text-muted">Nenhum produto encontrado.</td>
+        <td colspan="3" class="text-center text-muted">Nenhum produto encontrado.</td>
       </tr>
     `;
     return;
@@ -125,15 +104,11 @@ function renderTabela(produtos) {
   tbody.innerHTML = produtos.map((p) => {
     const id = Number(p?.id ?? 0);
     const nome = escapeHtml(p?.nome ?? "");
-    const qtd = Number(p?.quantidade ?? 0);
-    const estoqueMinimo = Number(p?.estoque_minimo ?? 0);
 
     return `
       <tr>
         <td>${id}</td>
         <td>${nome}</td>
-        <td>${qtd}</td>
-        <td>${estoqueMinimo}</td>
         <td>
           <button
             class="btn btn-sm btn-outline-primary"
@@ -153,7 +128,6 @@ function aplicarFiltro() {
 
   if (!termo) {
     renderTabela(produtosCache);
-    renderCards(produtosCache);
     return;
   }
 
@@ -162,7 +136,6 @@ function aplicarFiltro() {
   );
 
   renderTabela(filtrados);
-  renderCards(filtrados);
 }
 
 async function carregarProdutos() {
@@ -170,7 +143,7 @@ async function carregarProdutos() {
   if (tbody) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="5" class="text-center text-muted">Carregando...</td>
+        <td colspan="3" class="text-center text-muted">Carregando...</td>
       </tr>
     `;
   }
@@ -181,7 +154,6 @@ async function carregarProdutos() {
     if (!resp?.sucesso) {
       produtosCache = [];
       renderTabela([]);
-      renderCards([]);
       return;
     }
 
@@ -198,7 +170,6 @@ async function carregarProdutos() {
   } catch (err) {
     produtosCache = [];
     renderTabela([]);
-    renderCards([]);
 
     logJsError({
       origem: "produtos.js",

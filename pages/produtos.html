@@ -36,32 +36,6 @@
         </div>
       </div>
 
-      <section class="row g-3 mb-4">
-        <div class="col-12 col-md-6 col-xl-4">
-          <div class="stat-card h-100">
-            <div class="stat-label">Produtos cadastrados</div>
-            <div class="stat-value" id="cardTotalProdutos">0</div>
-            <div class="stat-hint text-muted">Total geral de produtos</div>
-          </div>
-        </div>
-
-        <div class="col-12 col-md-6 col-xl-4">
-          <div class="stat-card h-100">
-            <div class="stat-label">Preço de custo médio</div>
-            <div class="stat-value" id="cardCustoMedio">R$ 0,00</div>
-            <div class="stat-hint text-muted">Informação mantida para uso futuro</div>
-          </div>
-        </div>
-
-        <div class="col-12 col-md-6 col-xl-4">
-          <div class="stat-card h-100">
-            <div class="stat-label">Lucro médio estimado</div>
-            <div class="stat-value" id="cardLucroMedio">R$ 0,00</div>
-            <div class="stat-hint text-muted">Informação mantida para uso futuro</div>
-          </div>
-        </div>
-      </section>
-
       <section class="card p-3 mb-4">
         <div class="row g-2 align-items-center">
           <div class="col-12 col-lg-6">
@@ -102,14 +76,12 @@
               <tr>
                 <th style="width: 90px;">ID</th>
                 <th>Produto</th>
-                <th style="width: 150px;">Quantidade</th>
-                <th style="width: 160px;">Estoque mínimo</th>
                 <th style="width: 140px;">Ações</th>
               </tr>
             </thead>
             <tbody id="tabelaProdutos">
               <tr>
-                <td colspan="5" class="text-center text-muted">Carregando...</td>
+                <td colspan="3" class="text-center text-muted">Carregando...</td>
               </tr>
             </tbody>
           </table>
@@ -148,7 +120,9 @@
                     value="0"
                     placeholder="0"
                   >
-                  <div class="form-text">Quando a quantidade ficar igual ou menor que esse valor, o produto entra em estoque baixo.</div>
+                  <div class="form-text">
+                    Quando a quantidade ficar igual ou menor que esse valor, o produto entra em estoque baixo.
+                  </div>
                 </div>
               </div>
 
