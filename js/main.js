@@ -187,4 +187,4 @@ document.addEventListener("DOMContentLoaded", async () => {
     mensagem: "Usuário autenticado",
     usuario: usuario.nome,
   });
-});
+}); 
