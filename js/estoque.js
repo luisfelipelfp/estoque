@@ -21,6 +21,36 @@ function formatNowBR() {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function obterStatusEstoque(produto) {
+  const quantidade = Number(produto?.quantidade ?? 0);
+  const estoqueMinimo = Number(produto?.estoque_minimo ?? 0);
+
+  if (quantidade <= 0) {
+    return {
+      texto: "Sem estoque",
+      badge: "bg-danger",
+      alerta: "text-danger",
+      emBaixa: true
+    };
+  }
+
+  if (quantidade <= estoqueMinimo) {
+    return {
+      texto: "Estoque baixo",
+      badge: "bg-warning text-dark",
+      alerta: "text-warning",
+      emBaixa: true
+    };
+  }
+
+  return {
+    texto: "Normal",
+    badge: "bg-success",
+    alerta: "text-success",
+    emBaixa: false
+  };
+}
+
 let produtosCache = [];
 let modalInstance = null;
 
@@ -29,7 +59,7 @@ async function carregarNavbar() {
   if (!host) return;
 
   try {
-    const resp = await fetch("/estoque/components/navbar.html?v=20260305", {
+    const resp = await fetch("/estoque/components/navbar.html?v=20260307", {
       cache: "no-store",
       credentials: "same-origin"
     });
@@ -77,11 +107,7 @@ function renderCards(produtos) {
     : 0;
 
   const estoqueBaixo = Array.isArray(produtos)
-    ? produtos.filter((p) => {
-        const quantidade = Number(p?.quantidade ?? 0);
-        const estoqueMinimo = Number(p?.estoque_minimo ?? 0);
-        return quantidade <= estoqueMinimo;
-      }).length
+    ? produtos.filter((p) => obterStatusEstoque(p).emBaixa).length
     : 0;
 
   if ($("cardProdutos")) $("cardProdutos").textContent = String(totalProdutos);
@@ -96,7 +122,7 @@ function renderTabela(produtos) {
   if (!Array.isArray(produtos) || produtos.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="5" class="text-center text-muted">Nenhum produto encontrado.</td>
+        <td colspan="6" class="text-center text-muted">Nenhum produto encontrado.</td>
       </tr>
     `;
     return;
@@ -107,16 +133,19 @@ function renderTabela(produtos) {
     const nome = escapeHtml(p?.nome ?? "");
     const qtd = Number(p?.quantidade ?? 0);
     const estoqueMinimo = Number(p?.estoque_minimo ?? 0);
-    const emBaixa = qtd <= estoqueMinimo;
+    const status = obterStatusEstoque(p);
 
     return `
-      <tr>
+      <tr class="${status.emBaixa ? "table-warning" : ""}">
         <td>${id}</td>
         <td>${nome}</td>
         <td>
-          <span class="badge bg-${emBaixa ? "danger" : "primary"}">${qtd}</span>
+          <span class="badge ${status.emBaixa ? "bg-danger" : "bg-primary"}">${qtd}</span>
         </td>
         <td>${estoqueMinimo}</td>
+        <td>
+          <span class="badge ${status.badge}">${status.texto}</span>
+        </td>
         <td class="text-nowrap">
           <div class="d-flex gap-2 flex-wrap">
             <button
@@ -124,7 +153,6 @@ function renderTabela(produtos) {
               data-acao="entrada"
               data-id="${id}"
               data-nome="${escapeHtml(p?.nome ?? "")}"
-              data-qtd="${qtd}"
             >
               Entrada
             </button>
@@ -133,7 +161,6 @@ function renderTabela(produtos) {
               data-acao="saida"
               data-id="${id}"
               data-nome="${escapeHtml(p?.nome ?? "")}"
-              data-qtd="${qtd}"
             >
               Saída
             </button>
@@ -166,7 +193,7 @@ async function carregarProdutos() {
   if (tbody) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="5" class="text-center text-muted">Carregando...</td>
+        <td colspan="6" class="text-center text-muted">Carregando...</td>
       </tr>
     `;
   }
@@ -303,12 +330,17 @@ async function carregarResumoProduto(produtoId) {
 
   if (estoqueEl) estoqueEl.textContent = "-";
   if (estoqueMinimoEl) estoqueMinimoEl.textContent = "-";
-  if (alertaEl) alertaEl.textContent = "";
+  if (alertaEl) {
+    alertaEl.textContent = "";
+    alertaEl.className = "fw-bold";
+  }
   if (historicoEl) historicoEl.innerHTML = `<div class="text-muted">Carregando informações do produto...</div>`;
   if (btnHistorico) btnHistorico.disabled = !produtoId;
 
   if (!produtoId) {
-    if (historicoEl) historicoEl.innerHTML = `<div class="text-muted">Selecione um produto para visualizar o histórico.</div>`;
+    if (historicoEl) {
+      historicoEl.innerHTML = `<div class="text-muted">Selecione um produto para visualizar o histórico.</div>`;
+    }
     return;
   }
 
@@ -316,7 +348,9 @@ async function carregarResumoProduto(produtoId) {
     const resp = await apiRequest("produto_resumo", { produto_id: produtoId }, "GET");
 
     if (!resp?.sucesso) {
-      if (historicoEl) historicoEl.innerHTML = `<div class="text-danger">Não foi possível carregar o resumo do produto.</div>`;
+      if (historicoEl) {
+        historicoEl.innerHTML = `<div class="text-danger">Não foi possível carregar o resumo do produto.</div>`;
+      }
       return;
     }
 
@@ -332,16 +366,21 @@ async function carregarResumoProduto(produtoId) {
     if (alertaEl) {
       if (qtdAtual <= 0) {
         alertaEl.textContent = "Produto sem estoque.";
+        alertaEl.className = "fw-bold text-danger";
       } else if (qtdAtual <= estoqueMinimo) {
         alertaEl.textContent = "Produto em estoque baixo.";
+        alertaEl.className = "fw-bold text-warning";
       } else {
-        alertaEl.textContent = "";
+        alertaEl.textContent = "Estoque normal.";
+        alertaEl.className = "fw-bold text-success";
       }
     }
 
     renderUltimasMovimentacoes(movs);
   } catch (err) {
-    if (historicoEl) historicoEl.innerHTML = `<div class="text-danger">Erro ao carregar o histórico do produto.</div>`;
+    if (historicoEl) {
+      historicoEl.innerHTML = `<div class="text-danger">Erro ao carregar o histórico do produto.</div>`;
+    }
 
     logJsError({
       origem: "estoque.js",
@@ -365,7 +404,10 @@ function bindAutocompleteModal() {
     if ($("movProdutoId")) $("movProdutoId").value = "";
     if ($("movEstoqueAtual")) $("movEstoqueAtual").textContent = "-";
     if ($("movEstoqueMinimo")) $("movEstoqueMinimo").textContent = "-";
-    if ($("movResumoAlerta")) $("movResumoAlerta").textContent = "";
+    if ($("movResumoAlerta")) {
+      $("movResumoAlerta").textContent = "";
+      $("movResumoAlerta").className = "fw-bold";
+    }
     if ($("movUltimasMovimentacoes")) {
       $("movUltimasMovimentacoes").innerHTML = `<div class="text-muted">Selecione um produto para visualizar o histórico.</div>`;
     }
@@ -427,7 +469,10 @@ function limparModal() {
   if ($("movStatus")) $("movStatus").textContent = "";
   if ($("movEstoqueAtual")) $("movEstoqueAtual").textContent = "-";
   if ($("movEstoqueMinimo")) $("movEstoqueMinimo").textContent = "-";
-  if ($("movResumoAlerta")) $("movResumoAlerta").textContent = "";
+  if ($("movResumoAlerta")) {
+    $("movResumoAlerta").textContent = "";
+    $("movResumoAlerta").className = "fw-bold";
+  }
   if ($("movUltimasMovimentacoes")) {
     $("movUltimasMovimentacoes").innerHTML = `<div class="text-muted">Selecione um produto para visualizar o histórico.</div>`;
   }
