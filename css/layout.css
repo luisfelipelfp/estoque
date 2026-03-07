@@ -1,43 +1,277 @@
-/* Container principal */
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
+/* =========================
+   Layout geral da aplicação
+   ========================= */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
 }
 
-/* Tabelas */
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 20px;
-    font-family: Verdana, sans-serif;
-    border-radius: 8px;
-    overflow: hidden;
+.app-sidebar {
+  width: 280px;
+  min-width: 280px;
+  background:
+    radial-gradient(circle at top left, rgba(82, 98, 140, 0.22), transparent 35%),
+    linear-gradient(180deg, #151a28 0%, #1b2233 55%, #151a28 100%);
+  color: #f8f9fa;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 22px 16px 18px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex !important;
+  flex-direction: column;
+  box-shadow: 10px 0 30px rgba(0, 0, 0, 0.18);
+  z-index: 1020;
 }
 
-table th, table td {
-    border: 1px solid #dee2e6;
-    padding: 10px;
-    text-align: center;
+.app-content {
+  flex: 1;
+  min-width: 0;
+  padding: 28px;
 }
 
-table th {
-    background-color: #e9ecef;
-    font-weight: bold;
+.sidebar-brand {
+  margin-bottom: 18px;
 }
 
+.sidebar-brand-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: #ffffff;
+}
+
+.sidebar-brand-link:hover {
+  color: #ffffff;
+  opacity: 0.96;
+}
+
+.sidebar-brand-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.45rem;
+  background: linear-gradient(135deg, rgba(255,255,255,0.16), rgba(255,255,255,0.06));
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+.sidebar-brand-text {
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.sidebar-user {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 12px 14px;
+  margin-bottom: 22px;
+}
+
+.sidebar-user-label {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.62);
+  margin-bottom: 4px;
+}
+
+.sidebar-user-name {
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: #ffffff;
+  word-break: break-word;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-link,
+.sidebar-logout {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: 16px;
+  color: rgba(255,255,255,0.88);
+  text-decoration: none;
+  border: 1px solid transparent;
+  background: transparent;
+  transition: all 0.18s ease;
+  font-size: 1.02rem;
+  font-weight: 500;
+}
+
+.sidebar-link:hover,
+.sidebar-logout:hover {
+  color: #ffffff;
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.06);
+}
+
+.sidebar-link.active {
+  color: #ffffff;
+  background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.10));
+  border-color: rgba(255,255,255,0.10);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+.sidebar-link-icon {
+  width: 24px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.15rem;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.sidebar-logout {
+  text-align: left;
+  cursor: pointer;
+}
+
+/* =========================
+   Cabeçalho de página
+   ========================= */
+.page-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.page-icon {
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.45rem;
+  background: linear-gradient(135deg, #eef2ff, #e2e8f0);
+  border: 1px solid #dbe3f0;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+}
+
+.page-title {
+  background: none !important;
+  color: #1f2937 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  font-size: 1.95rem !important;
+  text-align: left !important;
+  box-shadow: none !important;
+  margin-bottom: 4px !important;
+}
+
+.page-subtitle {
+  font-size: 0.98rem;
+}
+
+/* =========================
+   Cards estatísticos
+   ========================= */
+.stat-card {
+  background: #ffffff;
+  border: 1px solid #e9edf3;
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.05);
+}
+
+.stat-label {
+  font-size: 0.92rem;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #111827;
+  margin-bottom: 6px;
+}
+
+.stat-hint {
+  font-size: 0.88rem;
+}
+
+/* =========================
+   Ajustes gerais
+   ========================= */
 .table td,
 .table th {
-    vertical-align: middle;
+  vertical-align: middle;
 }
 
-/* Formulários */
-form {
-    margin-bottom: 20px;
+.card {
+  border-radius: 18px;
+  border: 1px solid #e9edf3;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
 }
 
-input[type="text"], input[type="date"], select {
-    padding: 6px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    font-family: Verdana, sans-serif;
+.modal-content {
+  border-radius: 20px;
+  border: 1px solid #e9edf3;
+  box-shadow: 0 22px 48px rgba(15, 23, 42, 0.16);
+}
+
+.input-group-text {
+  border-radius: 12px 0 0 12px;
+}
+
+.form-control,
+.form-select,
+.btn,
+.input-group-text {
+  border-radius: 12px;
+}
+
+.btn-sm {
+  border-radius: 10px;
+}
+
+/* =========================
+   Responsivo
+   ========================= */
+@media (max-width: 991.98px) {
+  .app-shell {
+    display: block;
+  }
+
+  .app-sidebar {
+    width: 100%;
+    min-width: 100%;
+    height: auto;
+    position: relative;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    border-radius: 0 0 24px 24px;
+  }
+
+  .app-content {
+    padding: 18px;
+  }
+
+  .sidebar-footer {
+    margin-top: 18px;
+  }
 }

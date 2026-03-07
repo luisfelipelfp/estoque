@@ -7,8 +7,9 @@ body, h1, h2, h3, p, table {
 
 /* Corpo */
 body {
-  background-color: #f8f9fa;
-  padding: 20px;
+  background-color: #f4f6fb;
+  padding: 0;
+  color: #212529;
 }
 
 /* Títulos */
@@ -27,7 +28,7 @@ h1 {
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
-/* ✅ Gráfico pequeno e estável (sem “rolagem infinita”) */
+/* Gráfico */
 .chart-box {
   height: 240px;
   max-height: 240px;
@@ -42,7 +43,7 @@ h1 {
   display: block;
 }
 
-/* Pequenos ajustes visuais opcionais (seguros) */
+/* Pequenos ajustes visuais */
 .card {
   border-radius: 12px;
 }
@@ -51,9 +52,7 @@ h1 {
   vertical-align: middle;
 }
 
-/* =========================
-   Autocomplete (modal adicionar produto)
-   ========================= */
+/* Autocomplete */
 .ap-sugestoes {
   max-height: 320px;
   overflow: auto;
@@ -82,21 +81,32 @@ h1 {
   color: #6c757d;
 }
 
-/* =========================
-   Impressão (PDF via print)
-   ========================= */
+/* Impressão */
 @media print {
   body {
     background: #fff !important;
     padding: 0 !important;
   }
 
-  /* some com navbar e botões */
-  nav, #btnLogout, #btnAplicarFiltros, #btnExportarCSV, #btnExportarPDF {
+  nav,
+  #navbar,
+  #sidebar,
+  #btnLogout,
+  #btnLogoutSidebar,
+  #btnAplicarFiltros,
+  #btnExportarCSV,
+  #btnExportarPDF {
     display: none !important;
   }
 
-  /* título mais limpo */
+  .app-shell {
+    display: block !important;
+  }
+
+  .app-content {
+    padding: 0 !important;
+  }
+
   h1 {
     background: none !important;
     color: #000 !important;
@@ -104,6 +114,10 @@ h1 {
     padding: 0 !important;
     margin: 0 0 12px 0 !important;
     text-align: left !important;
+  }
+
+  .page-title {
+    color: #000 !important;
   }
 
   .card {
