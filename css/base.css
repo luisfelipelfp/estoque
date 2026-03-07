@@ -1,24 +1,38 @@
-/* Reset básico */
-body, h1, h2, h3, p, table {
+/* =========================
+   Reset básico
+   ========================= */
+html, body {
   margin: 0;
   padding: 0;
+  min-height: 100%;
   font-family: Verdana, sans-serif;
 }
 
-/* Corpo */
-body {
-  background-color: #f4f6fb;
+h1, h2, h3, h4, h5, h6,
+p, table {
+  margin: 0;
   padding: 0;
-  color: #212529;
 }
 
-/* Títulos */
+/* =========================
+   Corpo
+   ========================= */
+body {
+  background-color: #f4f6fb;
+  color: #212529;
+  padding: 0;
+}
+
+/* =========================
+   Títulos
+   ========================= */
 h1, h2 {
   margin-bottom: 20px;
   font-weight: bold;
 }
 
-h1 {
+/* Mantém compatibilidade com páginas antigas */
+h1:not(.page-title) {
   background-color: #0d6efd;
   color: white;
   padding: 20px;
@@ -28,7 +42,9 @@ h1 {
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
-/* Gráfico */
+/* =========================
+   Gráfico
+   ========================= */
 .chart-box {
   height: 240px;
   max-height: 240px;
@@ -43,16 +59,21 @@ h1 {
   display: block;
 }
 
-/* Pequenos ajustes visuais */
+/* =========================
+   Ajustes visuais base
+   ========================= */
 .card {
   border-radius: 12px;
 }
 
-.table th, .table td {
+.table th,
+.table td {
   vertical-align: middle;
 }
 
-/* Autocomplete */
+/* =========================
+   Autocomplete
+   ========================= */
 .ap-sugestoes {
   max-height: 320px;
   overflow: auto;
@@ -81,7 +102,16 @@ h1 {
   color: #6c757d;
 }
 
-/* Impressão */
+/* =========================
+   Navbar fallback
+   ========================= */
+#navbar:empty {
+  display: none;
+}
+
+/* =========================
+   Impressão
+   ========================= */
 @media print {
   body {
     background: #fff !important;
@@ -95,7 +125,14 @@ h1 {
   #btnLogoutSidebar,
   #btnAplicarFiltros,
   #btnExportarCSV,
-  #btnExportarPDF {
+  #btnExportarPDF,
+  #btnAtualizar,
+  #btnAtualizarProdutos,
+  #btnNovoProduto,
+  #btnAbrirModalMov,
+  #btnAdicionarFornecedor,
+  #movSalvar,
+  .btn {
     display: none !important;
   }
 
@@ -107,7 +144,7 @@ h1 {
     padding: 0 !important;
   }
 
-  h1 {
+  h1:not(.page-title) {
     background: none !important;
     color: #000 !important;
     box-shadow: none !important;
