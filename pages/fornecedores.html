@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Fornecedores</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/estoque/css/base.css?v=20260307">
+  <link rel="stylesheet" href="/estoque/css/layout.css?v=20260307">
+  <link rel="stylesheet" href="/estoque/css/produtos.css?v=20260307">
+</head>
+
+<body>
+  <div id="navbar"></div>
+
+  <div class="app-shell">
+    <aside id="sidebar" class="app-sidebar d-none"></aside>
+
+    <main class="app-content">
+      <div class="page-head mb-4">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+          <div class="page-icon">🏷️</div>
+          <div>
+            <h1 class="page-title mb-0">Fornecedores</h1>
+            <div class="page-subtitle text-muted">
+              Gerencie os fornecedores cadastrados no sistema
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-3 mt-lg-0">
+          <button id="btnNovoFornecedor" class="btn btn-primary" type="button">
+            ➕ Novo Fornecedor
+          </button>
+        </div>
+      </div>
+
+      <section class="card p-3 mb-4">
+        <div class="row g-2 align-items-center">
+          <div class="col-12 col-lg-6">
+            <div class="input-group">
+              <span class="input-group-text">🔎</span>
+              <input
+                id="buscaFornecedor"
+                class="form-control"
+                placeholder="Buscar fornecedor pelo nome..."
+                autocomplete="off"
+              >
+              <button id="btnLimparBuscaFornecedor" class="btn btn-outline-secondary" type="button">
+                Limpar
+              </button>
+            </div>
+          </div>
+
+          <div class="col-12 col-lg-6 d-flex justify-content-lg-end gap-2 flex-wrap">
+            <button id="btnAtualizarFornecedores" class="btn btn-outline-primary" type="button">
+              🔄 Atualizar
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card p-3">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+          <h5 class="mb-0">Fornecedores cadastrados</h5>
+          <small class="text-muted">Clique em editar para abrir o cadastro</small>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-striped table-bordered align-middle mb-0">
+            <thead>
+              <tr>
+                <th style="width: 90px;">ID</th>
+                <th>Fornecedor</th>
+                <th style="width: 140px;">Status</th>
+                <th style="width: 180px;">Produtos vinculados</th>
+                <th style="width: 140px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tabelaFornecedores">
+              <tr>
+                <td colspan="5" class="text-center text-muted">Carregando...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="modal fade" id="modalFornecedor" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="tituloModalFornecedor">Novo Fornecedor</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+
+            <div class="modal-body">
+              <input type="hidden" id="fornecedorId">
+
+              <div class="row g-3">
+                <div class="col-12">
+                  <label class="form-label">Nome do fornecedor</label>
+                  <input
+                    id="fornecedorNome"
+                    class="form-control"
+                    placeholder="Digite o nome do fornecedor..."
+                  >
+                </div>
+
+                <div class="col-12 col-lg-4">
+                  <label class="form-label">Status</label>
+                  <select id="fornecedorAtivo" class="form-select">
+                    <option value="1">Ativo</option>
+                    <option value="0">Inativo</option>
+                  </select>
+                </div>
+
+                <div class="col-12 col-lg-8">
+                  <label class="form-label">Resumo</label>
+                  <div class="alert alert-light border mb-0">
+                    <div class="small text-muted">
+                      Aqui depois podemos mostrar:
+                      quantidade de produtos vinculados, últimos vínculos e observações relevantes.
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label">Observação</label>
+                  <textarea
+                    id="fornecedorObservacao"
+                    class="form-control"
+                    rows="4"
+                    placeholder="Digite uma observação sobre este fornecedor..."
+                  ></textarea>
+                </div>
+
+                <div class="col-12">
+                  <div class="small text-muted" id="fornecedorStatus"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                Cancelar
+              </button>
+              <button type="button" class="btn btn-primary" id="btnSalvarFornecedor">
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script type="module" src="/estoque/js/api.js?v=20260307"></script>
+  <script type="module" src="/estoque/js/logout.js?v=20260307"></script>
+  <script type="module" src="/estoque/js/main.js?v=20260307"></script>
+  <script type="module" src="/estoque/js/fornecedores.js?v=20260307"></script>
+</body>
+</html>
