@@ -4,6 +4,7 @@
 .app-shell {
   display: flex;
   min-height: 100vh;
+  background: #f4f6fb;
 }
 
 .app-sidebar {
@@ -14,7 +15,7 @@
     linear-gradient(180deg, #151a28 0%, #1b2233 55%, #151a28 100%);
   color: #f8f9fa;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 22px 16px 18px;
+  padding: 26px 16px 18px;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -34,13 +35,14 @@
    Sidebar
    ========================= */
 .sidebar-brand {
-  margin-bottom: 18px;
-  padding-bottom: 10px;
+  margin-bottom: 20px;
+  padding-bottom: 8px;
 }
 
 .sidebar-brand-link {
   display: flex;
   align-items: center;
+  gap: 14px;
   text-decoration: none;
   color: #ffffff;
 }
@@ -48,6 +50,20 @@
 .sidebar-brand-link:hover {
   color: #ffffff;
   opacity: 0.98;
+}
+
+.sidebar-brand-icon {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  background: linear-gradient(135deg, rgba(255,255,255,0.14), rgba(255,255,255,0.05));
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
 }
 
 .sidebar-brand-text {
@@ -66,7 +82,7 @@
 }
 
 .sidebar-user-label {
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: rgba(255,255,255,0.62);
@@ -90,6 +106,7 @@
 .sidebar-logout {
   display: flex;
   align-items: center;
+  gap: 14px;
   width: 100%;
   padding: 13px 16px;
   border-radius: 16px;
@@ -115,6 +132,15 @@
   background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.10));
   border-color: rgba(255,255,255,0.10);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+.sidebar-link-icon {
+  width: 24px;
+  min-width: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
 }
 
 .sidebar-footer {
@@ -211,6 +237,7 @@
   border-radius: 18px;
   border: 1px solid #e9edf3;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+  background: #ffffff;
 }
 
 .table {
@@ -224,6 +251,10 @@
 
 .table thead th {
   white-space: nowrap;
+}
+
+.table-responsive {
+  border-radius: 14px;
 }
 
 .modal-content {
@@ -282,6 +313,7 @@
     border-right: 0;
     border-bottom: 1px solid rgba(255,255,255,0.08);
     border-radius: 0 0 24px 24px;
+    padding: 18px 14px;
   }
 
   .app-content {
@@ -294,5 +326,12 @@
 
   .sidebar-brand-text {
     font-size: 1.6rem;
+  }
+
+  .sidebar-brand-icon {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    font-size: 1.15rem;
   }
 }
