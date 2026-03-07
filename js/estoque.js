@@ -29,7 +29,8 @@ function obterStatusEstoque(produto) {
     return {
       texto: "Sem estoque",
       badge: "bg-danger",
-      alerta: "text-danger",
+      alertaClasse: "fw-bold text-danger",
+      alertaTexto: "Produto sem estoque.",
       emBaixa: true
     };
   }
@@ -38,7 +39,8 @@ function obterStatusEstoque(produto) {
     return {
       texto: "Estoque baixo",
       badge: "bg-warning text-dark",
-      alerta: "text-warning",
+      alertaClasse: "fw-bold text-warning",
+      alertaTexto: "Produto em estoque baixo.",
       emBaixa: true
     };
   }
@@ -46,7 +48,8 @@ function obterStatusEstoque(produto) {
   return {
     texto: "Normal",
     badge: "bg-success",
-    alerta: "text-success",
+    alertaClasse: "fw-bold text-success",
+    alertaTexto: "Estoque normal.",
     emBaixa: false
   };
 }
@@ -98,21 +101,6 @@ async function carregarNavbar() {
       stack: err?.stack,
     });
   }
-}
-
-function renderCards(produtos) {
-  const totalProdutos = Array.isArray(produtos) ? produtos.length : 0;
-  const totalItens = Array.isArray(produtos)
-    ? produtos.reduce((acc, p) => acc + Number(p?.quantidade ?? 0), 0)
-    : 0;
-
-  const estoqueBaixo = Array.isArray(produtos)
-    ? produtos.filter((p) => obterStatusEstoque(p).emBaixa).length
-    : 0;
-
-  if ($("cardProdutos")) $("cardProdutos").textContent = String(totalProdutos);
-  if ($("cardItens")) $("cardItens").textContent = String(totalItens);
-  if ($("cardBaixo")) $("cardBaixo").textContent = String(estoqueBaixo);
 }
 
 function renderTabela(produtos) {
@@ -176,7 +164,6 @@ function aplicarFiltro() {
 
   if (!termo) {
     renderTabela(produtosCache);
-    renderCards(produtosCache);
     return;
   }
 
@@ -185,7 +172,6 @@ function aplicarFiltro() {
   );
 
   renderTabela(filtrados);
-  renderCards(filtrados);
 }
 
 async function carregarProdutos() {
@@ -204,7 +190,6 @@ async function carregarProdutos() {
     if (!resp?.sucesso) {
       produtosCache = [];
       renderTabela([]);
-      renderCards([]);
       return;
     }
 
@@ -221,7 +206,6 @@ async function carregarProdutos() {
   } catch (err) {
     produtosCache = [];
     renderTabela([]);
-    renderCards([]);
 
     logJsError({
       origem: "estoque.js",
@@ -334,7 +318,9 @@ async function carregarResumoProduto(produtoId) {
     alertaEl.textContent = "";
     alertaEl.className = "fw-bold";
   }
-  if (historicoEl) historicoEl.innerHTML = `<div class="text-muted">Carregando informações do produto...</div>`;
+  if (historicoEl) {
+    historicoEl.innerHTML = `<div class="text-muted">Carregando informações do produto...</div>`;
+  }
   if (btnHistorico) btnHistorico.disabled = !produtoId;
 
   if (!produtoId) {
@@ -359,21 +345,17 @@ async function carregarResumoProduto(produtoId) {
     const movs = Array.isArray(dados?.ultimas_movimentacoes) ? dados.ultimas_movimentacoes : [];
     const qtdAtual = Number(produto?.quantidade ?? 0);
     const estoqueMinimo = Number(produto?.estoque_minimo ?? 0);
+    const status = obterStatusEstoque({
+      quantidade: qtdAtual,
+      estoque_minimo: estoqueMinimo
+    });
 
     if (estoqueEl) estoqueEl.textContent = String(qtdAtual);
     if (estoqueMinimoEl) estoqueMinimoEl.textContent = String(estoqueMinimo);
 
     if (alertaEl) {
-      if (qtdAtual <= 0) {
-        alertaEl.textContent = "Produto sem estoque.";
-        alertaEl.className = "fw-bold text-danger";
-      } else if (qtdAtual <= estoqueMinimo) {
-        alertaEl.textContent = "Produto em estoque baixo.";
-        alertaEl.className = "fw-bold text-warning";
-      } else {
-        alertaEl.textContent = "Estoque normal.";
-        alertaEl.className = "fw-bold text-success";
-      }
+      alertaEl.textContent = status.alertaTexto;
+      alertaEl.className = status.alertaClasse;
     }
 
     renderUltimasMovimentacoes(movs);

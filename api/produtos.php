@@ -259,7 +259,6 @@ function produtos_listar(mysqli $conn): array
             'mensagem' => '',
             'dados'    => $res->fetch_all(MYSQLI_ASSOC)
         ];
-
     } catch (Throwable $e) {
         logError('produtos', 'Erro ao listar produtos', [
             'arquivo' => $e->getFile(),
@@ -326,7 +325,6 @@ function produto_obter(mysqli $conn, int $produto_id): array
                 'fornecedores' => $fornecedores,
             ]
         ];
-
     } catch (Throwable $e) {
         logError('produtos', 'Erro ao obter produto', [
             'arquivo'    => $e->getFile(),
@@ -350,6 +348,7 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
         $limit = max(1, min(25, $limit));
 
         $hasCusto = coluna_existe($conn, 'produtos', 'preco_custo');
+        $hasEstoqueMinimo = coluna_existe($conn, 'produtos', 'estoque_minimo');
 
         $like = '%' . $q . '%';
 
@@ -358,6 +357,7 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
                 id,
                 nome,
                 quantidade
+                " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo,0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
                 " . ($hasCusto ? ", COALESCE(preco_custo,0) AS preco_custo" : ", 0 AS preco_custo") . "
             FROM produtos
             WHERE nome LIKE ?
@@ -372,9 +372,10 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
         $itens = [];
         while ($r = $res->fetch_assoc()) {
             $itens[] = [
-                'id'          => (int)$r['id'],
-                'nome'        => (string)$r['nome'],
-                'quantidade'  => (int)$r['quantidade'],
+                'id' => (int)$r['id'],
+                'nome' => (string)$r['nome'],
+                'quantidade' => (int)$r['quantidade'],
+                'estoque_minimo' => (int)$r['estoque_minimo'],
                 'preco_custo' => (float)$r['preco_custo'],
             ];
         }
@@ -385,7 +386,6 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
             'mensagem'=> 'OK',
             'dados'   => ['itens' => $itens]
         ];
-
     } catch (Throwable $e) {
         logError('produtos', 'Erro ao buscar produtos (autocomplete)', [
             'arquivo' => $e->getFile(),
@@ -426,7 +426,11 @@ function produto_resumo(mysqli $conn, int $produto_id): array
         $stmtP->close();
 
         if (!$prod) {
-            return ['sucesso' => false, 'mensagem' => 'Produto não encontrado.', 'dados' => null];
+            return [
+                'sucesso' => false,
+                'mensagem' => 'Produto não encontrado.',
+                'dados' => null
+            ];
         }
 
         $sqlM = "
@@ -459,19 +463,20 @@ function produto_resumo(mysqli $conn, int $produto_id): array
         }
         $stmtM->close();
 
-        $payload = [
-            'produto' => [
-                'id'             => (int)$prod['id'],
-                'nome'           => (string)$prod['nome'],
-                'quantidade'     => (int)$prod['quantidade'],
-                'estoque_minimo' => (int)$prod['estoque_minimo'],
-                'preco_custo'    => (float)$prod['preco_custo'],
-            ],
-            'ultimas_movimentacoes' => $movs
+        return [
+            'sucesso' => true,
+            'mensagem' => 'OK',
+            'dados' => [
+                'produto' => [
+                    'id'             => (int)$prod['id'],
+                    'nome'           => (string)$prod['nome'],
+                    'quantidade'     => (int)$prod['quantidade'],
+                    'estoque_minimo' => (int)$prod['estoque_minimo'],
+                    'preco_custo'    => (float)$prod['preco_custo'],
+                ],
+                'ultimas_movimentacoes' => $movs
+            ]
         ];
-
-        return ['sucesso' => true, 'mensagem' => 'OK', 'dados' => $payload];
-
     } catch (Throwable $e) {
         logError('produtos', 'Erro ao gerar resumo do produto', [
             'arquivo'    => $e->getFile(),
@@ -480,7 +485,11 @@ function produto_resumo(mysqli $conn, int $produto_id): array
             'produto_id' => $produto_id
         ]);
 
-        return ['sucesso' => false, 'mensagem' => 'Erro interno ao gerar resumo.', 'dados' => null];
+        return [
+            'sucesso' => false,
+            'mensagem' => 'Erro interno ao gerar resumo.',
+            'dados' => null
+        ];
     }
 }
 
@@ -529,7 +538,6 @@ function produtos_adicionar(
             'mensagem' => 'Produto adicionado com sucesso',
             'dados'    => ['id' => $id]
         ];
-
     } catch (Throwable $e) {
         $conn->rollback();
 
@@ -613,7 +621,6 @@ function produtos_atualizar(
             'mensagem' => 'Produto atualizado com sucesso',
             'dados'    => ['id' => $produto_id]
         ];
-
     } catch (Throwable $e) {
         $conn->rollback();
 
@@ -664,7 +671,6 @@ function produtos_remover(
             'mensagem' => 'Produto removido com sucesso',
             'dados'    => null
         ];
-
     } catch (Throwable $e) {
         $conn->rollback();
 
