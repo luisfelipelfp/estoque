@@ -20,6 +20,8 @@ function obterPaginaAtual() {
   if (path.includes("/pages/estoque.html")) return "estoque";
   if (path.includes("/pages/produtos.html")) return "produtos";
   if (path.includes("/relatorios.html")) return "relatorios";
+  if (path.includes("/pages/usuarios.html")) return "usuarios";
+  if (path.includes("/pages/movimentacoes.html")) return "movimentacoes";
 
   return "";
 }
@@ -81,22 +83,52 @@ async function carregarComponente(seletorOuId, url) {
 }
 
 function preencherUsuario(usuario) {
-  const textoUsuario = `${usuario?.nome ?? ""}${usuario?.nivel ? ` (${usuario.nivel})` : ""}`.trim();
+  const nome = String(usuario?.nome ?? "").trim();
+  const nivel = String(usuario?.nivel ?? "").trim();
+  const textoUsuario = nivel ? `${nome} (${nivel})` : nome;
 
   const navbarUser = $("usuarioLogado");
-  if (navbarUser) navbarUser.textContent = textoUsuario;
+  if (navbarUser) {
+    navbarUser.textContent = textoUsuario || "Usuário";
+  }
 
   const sidebarUser = $("sidebarUsuarioNome");
-  if (sidebarUser) sidebarUser.textContent = textoUsuario || "Usuário";
+  if (sidebarUser) {
+    sidebarUser.textContent = textoUsuario || "Usuário";
+  }
 }
 
 function marcarLinkAtivoSidebar() {
   const paginaAtual = obterPaginaAtual();
-  if (!paginaAtual) return;
 
   document.querySelectorAll("[data-sidebar-page]").forEach((link) => {
-    const ativo = link.getAttribute("data-sidebar-page") === paginaAtual;
+    const paginaLink = String(link.getAttribute("data-sidebar-page") || "").toLowerCase();
+    const ativo = paginaAtual !== "" && paginaLink === paginaAtual;
+
     link.classList.toggle("active", ativo);
+    if (ativo) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  });
+
+  document.querySelectorAll(".navbar .nav-link").forEach((link) => {
+    const href = String(link.getAttribute("href") || "").toLowerCase();
+
+    const ativo =
+      (paginaAtual === "estoque" && href.includes("/pages/estoque.html")) ||
+      (paginaAtual === "produtos" && href.includes("/pages/produtos.html")) ||
+      (paginaAtual === "relatorios" && href.includes("/relatorios.html")) ||
+      (paginaAtual === "usuarios" && href.includes("/pages/usuarios.html")) ||
+      (paginaAtual === "movimentacoes" && href.includes("/pages/movimentacoes.html"));
+
+    link.classList.toggle("active", ativo);
+    if (ativo) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
   });
 }
 
