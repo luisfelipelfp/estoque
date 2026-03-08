@@ -7,7 +7,6 @@ let graficoTemporal = null;
 const DEFAULT_RANGE_DAYS = 30;
 const MAX_POINTS_CHART = 120;
 const DEFAULT_LIMITE_TABELA = 200;
-const APP_BASE = "/estoque";
 
 function formatBRL(valor) {
   const n = Number(valor || 0);
@@ -68,14 +67,15 @@ function setBtnLoading(id, loading, textoOriginal = "") {
   btn.textContent = loading ? "Processando..." : btn.dataset.originalText;
 }
 
-function buildQuery(params) {
-  const usp = new URLSearchParams();
-  for (const [k, v] of Object.entries(params || {})) {
-    if (v !== undefined && v !== null && String(v).trim() !== "") {
-      usp.append(k, String(v));
-    }
-  }
-  return usp.toString();
+function avisarExportacaoNaoDisponivel(tipo) {
+  const msg = `${tipo} ainda não está implementado no backend atual.`;
+  window.alert(msg);
+
+  logJsInfo({
+    origem: "relatorios.js",
+    mensagem: "Exportação indisponível",
+    tipo
+  });
 }
 
 /* =========================
@@ -83,31 +83,11 @@ function buildQuery(params) {
    ========================= */
 
 function exportarCSV() {
-  const filtros = getFiltros();
-  delete filtros.pagina;
-  delete filtros.limite;
-
-  const qs = buildQuery(filtros);
-  const url = `${APP_BASE}/api/exportar_csv.php${qs ? `?${qs}` : ""}`;
-
-  setBtnLoading("btnExportarCSV", true);
-  setTimeout(() => setBtnLoading("btnExportarCSV", false), 1200);
-
-  window.location.href = url;
+  avisarExportacaoNaoDisponivel("Exportação CSV");
 }
 
 function exportarPDF() {
-  const filtros = getFiltros();
-  delete filtros.pagina;
-  delete filtros.limite;
-
-  const qs = buildQuery(filtros);
-  const url = `${APP_BASE}/api/exportar_pdf.php${qs ? `?${qs}` : ""}`;
-
-  setBtnLoading("btnExportarPDF", true);
-  setTimeout(() => setBtnLoading("btnExportarPDF", false), 1200);
-
-  window.location.href = url;
+  avisarExportacaoNaoDisponivel("Exportação PDF");
 }
 
 /* =========================
@@ -211,32 +191,20 @@ async function carregarEstoqueAtual() {
   renderEstoqueAtualLoading();
 
   try {
-    const resp = await fetch(`${APP_BASE}/api/estoque_atual.php`, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-      credentials: "same-origin"
-    });
+    const resp = await apiRequest("estoque_atual", {}, "GET");
 
-    if (!resp.ok) {
-      renderEstoqueAtualErro(`Erro HTTP ${resp.status} ao carregar estoque.`);
+    if (!resp?.sucesso) {
+      renderEstoqueAtualErro(resp?.mensagem || "Erro ao gerar estoque atual.");
       return;
     }
 
-    const json = await resp.json();
-
-    if (!json?.sucesso) {
-      renderEstoqueAtualErro(json?.mensagem || "Erro ao gerar estoque atual.");
-      return;
-    }
-
-    renderEstoqueAtual(json?.dados);
+    renderEstoqueAtual(resp?.dados);
 
     logJsInfo({
       origem: "relatorios.js",
       mensagem: "Estoque atual carregado",
-      total_itens: json?.dados?.itens?.length ?? 0,
-      total_qtd: json?.dados?.totais?.total_qtd ?? 0
+      total_itens: resp?.dados?.itens?.length ?? 0,
+      total_qtd: resp?.dados?.totais?.total_qtd ?? 0
     });
   } catch (err) {
     renderEstoqueAtualErro("Erro inesperado ao carregar estoque atual.");
