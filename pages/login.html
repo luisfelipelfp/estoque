@@ -7,54 +7,94 @@
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 
-  <link rel="stylesheet" href="/estoque/css/base.css?v=20260304">
-  <link rel="stylesheet" href="/estoque/css/login.css?v=20260304">
+  <link rel="stylesheet" href="/estoque/css/base.css?v=20260308">
+  <link rel="stylesheet" href="/estoque/css/login.css?v=20260308">
 </head>
 
-<body class="bg-light d-flex align-items-center justify-content-center vh-100">
+<body class="login-page">
+  <div class="login-bg-shape login-bg-shape-1"></div>
+  <div class="login-bg-shape login-bg-shape-2"></div>
 
-  <div class="card shadow p-4" style="max-width: 420px; width: 100%;">
-    <h3 class="text-center mb-3">🔐 Login no Sistema</h3>
-    <p class="text-center text-muted mb-4" style="font-size: 0.95rem;">
-      Entre para acessar o estoque.
-    </p>
+  <main class="login-wrapper">
+    <section class="login-card card border-0 shadow-lg">
+      <div class="card-body p-4 p-md-5">
+        <div class="text-center mb-4">
+          <div class="login-brand-icon mb-3">📦</div>
+          <h1 class="login-title mb-2">Bem-vindo ao Estoque</h1>
+          <p class="login-subtitle text-muted mb-0">
+            Faça login para acessar o sistema.
+          </p>
+        </div>
 
-    <form id="formLogin" novalidate>
-      <div class="mb-3">
-        <label for="login" class="form-label">Usuário ou E-mail</label>
-        <input
-          type="text"
-          class="form-control"
-          id="login"
-          name="login"
-          autocomplete="username"
-          required
-        >
+        <form id="formLogin" novalidate>
+          <div class="mb-3">
+            <label for="login" class="form-label fw-semibold">Usuário ou E-mail</label>
+            <input
+              type="text"
+              class="form-control form-control-lg"
+              id="login"
+              name="login"
+              autocomplete="username"
+              placeholder="Digite seu usuário ou e-mail"
+              required
+            >
+          </div>
+
+          <div class="mb-3">
+            <label for="senha" class="form-label fw-semibold">Senha</label>
+            <div class="input-group input-group-lg">
+              <input
+                type="password"
+                class="form-control"
+                id="senha"
+                name="senha"
+                autocomplete="current-password"
+                placeholder="Digite sua senha"
+                required
+              >
+              <button
+                class="btn btn-outline-secondary"
+                type="button"
+                id="btnToggleSenha"
+                aria-label="Mostrar ou ocultar senha"
+                title="Mostrar ou ocultar senha"
+              >
+                👁️
+              </button>
+            </div>
+          </div>
+
+          <button id="btnEntrar" type="submit" class="btn btn-primary btn-lg w-100 fw-bold mt-2">
+            Entrar no sistema
+          </button>
+
+          <div id="msgErro" class="alert alert-danger mt-3 d-none mb-0" role="alert"></div>
+
+          <div class="login-footer-note text-center mt-4">
+            <small class="text-muted">
+              Caso alguma alteração não apareça, atualize com <strong>Ctrl + F5</strong>.
+            </small>
+          </div>
+        </form>
       </div>
+    </section>
+  </main>
 
-      <div class="mb-3">
-        <label for="senha" class="form-label">Senha</label>
-        <input
-          type="password"
-          class="form-control"
-          id="senha"
-          name="senha"
-          autocomplete="current-password"
-          required
-        >
-      </div>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const btn = document.getElementById("btnToggleSenha");
+      const input = document.getElementById("senha");
 
-      <button id="btnEntrar" type="submit" class="btn btn-primary w-100 fw-bold">
-        Entrar
-      </button>
+      if (!btn || !input) return;
 
-      <div id="msgErro" class="alert alert-danger mt-3 d-none mb-0" role="alert"></div>
-      <div class="text-center mt-3">
-        <small class="text-muted">Dica: se algo “não atualizar”, use Ctrl+F5.</small>
-      </div>
-    </form>
-  </div>
+      btn.addEventListener("click", () => {
+        const mostrando = input.type === "text";
+        input.type = mostrando ? "password" : "text";
+        btn.textContent = mostrando ? "👁️" : "🙈";
+      });
+    });
+  </script>
 
-  <script type="module" src="/estoque/js/login.js?v=20260304"></script>
+  <script type="module" src="/estoque/js/login.js?v=20260308"></script>
 </body>
 </html>
