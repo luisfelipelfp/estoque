@@ -16,7 +16,7 @@ function getNextUrl() {
     return next;
   }
 
-  return `${APP_BASE}/pages/estoque.html`;
+  return `${APP_BASE}/pages/home.html`;
 }
 
 function mostrarErro(mensagem) {
@@ -143,4 +143,4 @@ document.addEventListener("DOMContentLoaded", () => {
       setBotaoLoading(false);
     }
   });
-});
+}); 

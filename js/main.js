@@ -17,6 +17,7 @@ function redirectToLogin() {
 function obterPaginaAtual() {
   const path = window.location.pathname.toLowerCase();
 
+  if (path.includes("/pages/home.html")) return "home";
   if (path.includes("/pages/estoque.html")) return "estoque";
   if (path.includes("/pages/produtos.html")) return "produtos";
   if (path.includes("/pages/fornecedores.html")) return "fornecedores";
@@ -141,6 +142,7 @@ function linkCorrespondePaginaAtual(link, paginaAtual) {
   const href = String(link.getAttribute("href") || "").toLowerCase();
 
   return (
+    (paginaAtual === "home" && href.includes("/pages/home.html")) ||
     (paginaAtual === "estoque" && href.includes("/pages/estoque.html")) ||
     (paginaAtual === "produtos" && href.includes("/pages/produtos.html")) ||
     (paginaAtual === "fornecedores" && href.includes("/pages/fornecedores.html")) ||
@@ -207,8 +209,8 @@ function bindLogout() {
 }
 
 async function carregarLayout(usuario) {
-  const navbarEl = await carregarComponente("#navbar", `${APP_BASE}/components/navbar.html?v=20260308`);
-  const sidebarEl = await carregarComponente("#sidebar", `${APP_BASE}/components/sidebar.html?v=20260308`);
+  const navbarEl = await carregarComponente("#navbar", `${APP_BASE}/components/navbar.html?v=20260308-home`);
+  const sidebarEl = await carregarComponente("#sidebar", `${APP_BASE}/components/sidebar.html?v=20260308-home`);
 
   if (sidebarEl) {
     sidebarEl.classList.remove("d-none");
