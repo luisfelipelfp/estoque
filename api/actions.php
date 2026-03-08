@@ -197,6 +197,81 @@ function normalizar_fornecedores_payload(mysqli $conn, mixed $fornecedoresRaw): 
     return $normalizados;
 }
 
+function tabela_existe(mysqli $conn, string $nomeTabela): bool
+{
+    $stmt = $conn->prepare("
+        SELECT 1
+        FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = ?
+        LIMIT 1
+    ");
+    $stmt->bind_param('s', $nomeTabela);
+    $stmt->execute();
+    $ok = (bool)$stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return $ok;
+}
+
+function home_obter_conteudo(mysqli $conn): array
+{
+    $frase = [
+        'texto' => '',
+        'autor' => '',
+    ];
+
+    $imagem = [
+        'caminho' => '',
+    ];
+
+    if (tabela_existe($conn, 'frases_home')) {
+        $sqlFrase = "
+            SELECT frase, autor
+            FROM frases_home
+            WHERE ativo = 1
+            ORDER BY RAND()
+            LIMIT 1
+        ";
+
+        $resFrase = $conn->query($sqlFrase);
+        if ($resFrase instanceof mysqli_result) {
+            $fraseRow = $resFrase->fetch_assoc();
+            $resFrase->free();
+
+            if (is_array($fraseRow)) {
+                $frase['texto'] = (string)($fraseRow['frase'] ?? '');
+                $frase['autor'] = (string)($fraseRow['autor'] ?? '');
+            }
+        }
+    }
+
+    if (tabela_existe($conn, 'imagens_home')) {
+        $sqlImagem = "
+            SELECT caminho
+            FROM imagens_home
+            WHERE ativo = 1
+            ORDER BY RAND()
+            LIMIT 1
+        ";
+
+        $resImagem = $conn->query($sqlImagem);
+        if ($resImagem instanceof mysqli_result) {
+            $imagemRow = $resImagem->fetch_assoc();
+            $resImagem->free();
+
+            if (is_array($imagemRow)) {
+                $imagem['caminho'] = (string)($imagemRow['caminho'] ?? '');
+            }
+        }
+    }
+
+    return [
+        'frase'  => $frase,
+        'imagem' => $imagem,
+    ];
+}
+
 // ======================
 // EXECUÇÃO
 // ======================
@@ -294,44 +369,9 @@ try {
         case 'obter_home': {
             require_auth();
 
-            $fraseRow = null;
-            $imagemRow = null;
+            $dados = home_obter_conteudo($conn);
 
-            $sqlFrase = "
-                SELECT frase, autor
-                FROM frases_home
-                WHERE ativo = 1
-                ORDER BY RAND()
-                LIMIT 1
-            ";
-            $resFrase = $conn->query($sqlFrase);
-            if ($resFrase instanceof mysqli_result) {
-                $fraseRow = $resFrase->fetch_assoc();
-                $resFrase->free();
-            }
-
-            $sqlImagem = "
-                SELECT caminho
-                FROM imagens_home
-                WHERE ativo = 1
-                ORDER BY RAND()
-                LIMIT 1
-            ";
-            $resImagem = $conn->query($sqlImagem);
-            if ($resImagem instanceof mysqli_result) {
-                $imagemRow = $resImagem->fetch_assoc();
-                $resImagem->free();
-            }
-
-            json_response(true, 'OK', [
-                'frase' => [
-                    'texto' => (string)($fraseRow['frase'] ?? ''),
-                    'autor' => (string)($fraseRow['autor'] ?? '')
-                ],
-                'imagem' => [
-                    'caminho' => (string)($imagemRow['caminho'] ?? '')
-                ]
-            ]);
+            json_response(true, 'OK', $dados);
         }
 
         // ================= FORNECEDORES =================
