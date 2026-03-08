@@ -289,6 +289,51 @@ try {
             json_response(true, 'OK', null);
         }
 
+        // ================= HOME =================
+
+        case 'obter_home': {
+            require_auth();
+
+            $fraseRow = null;
+            $imagemRow = null;
+
+            $sqlFrase = "
+                SELECT frase, autor
+                FROM frases_home
+                WHERE ativo = 1
+                ORDER BY RAND()
+                LIMIT 1
+            ";
+            $resFrase = $conn->query($sqlFrase);
+            if ($resFrase instanceof mysqli_result) {
+                $fraseRow = $resFrase->fetch_assoc();
+                $resFrase->free();
+            }
+
+            $sqlImagem = "
+                SELECT caminho
+                FROM imagens_home
+                WHERE ativo = 1
+                ORDER BY RAND()
+                LIMIT 1
+            ";
+            $resImagem = $conn->query($sqlImagem);
+            if ($resImagem instanceof mysqli_result) {
+                $imagemRow = $resImagem->fetch_assoc();
+                $resImagem->free();
+            }
+
+            json_response(true, 'OK', [
+                'frase' => [
+                    'texto' => (string)($fraseRow['frase'] ?? ''),
+                    'autor' => (string)($fraseRow['autor'] ?? '')
+                ],
+                'imagem' => [
+                    'caminho' => (string)($imagemRow['caminho'] ?? '')
+                ]
+            ]);
+        }
+
         // ================= FORNECEDORES =================
 
         case 'listar_fornecedores': {
