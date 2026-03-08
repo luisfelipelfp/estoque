@@ -74,13 +74,12 @@
                 <th style="width: 90px;">ID</th>
                 <th>Fornecedor</th>
                 <th style="width: 140px;">Status</th>
-                <th style="width: 180px;">Produtos vinculados</th>
                 <th style="width: 140px;">Ações</th>
               </tr>
             </thead>
             <tbody id="tabelaFornecedores">
               <tr>
-                <td colspan="5" class="text-center text-muted">Carregando...</td>
+                <td colspan="4" class="text-center text-muted">Carregando...</td>
               </tr>
             </tbody>
           </table>
@@ -88,7 +87,7 @@
       </section>
 
       <div class="modal fade" id="modalFornecedor" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
           <div class="modal-content">
             <div class="modal-header">
               <h5 class="modal-title" id="tituloModalFornecedor">Novo Fornecedor</h5>
@@ -99,7 +98,7 @@
               <input type="hidden" id="fornecedorId">
 
               <div class="row g-3">
-                <div class="col-12 col-lg-8">
+                <div class="col-12 col-lg-6">
                   <label class="form-label">Nome do fornecedor</label>
                   <input
                     id="fornecedorNome"
@@ -108,7 +107,16 @@
                   >
                 </div>
 
-                <div class="col-12 col-lg-4">
+                <div class="col-12 col-lg-3">
+                  <label class="form-label">CNPJ</label>
+                  <input
+                    id="fornecedorCnpj"
+                    class="form-control"
+                    placeholder="00.000.000/0000-00"
+                  >
+                </div>
+
+                <div class="col-12 col-lg-3">
                   <label class="form-label">Status</label>
                   <select id="fornecedorAtivo" class="form-select">
                     <option value="1">Ativo</option>
@@ -116,13 +124,49 @@
                   </select>
                 </div>
 
+                <div class="col-12 col-lg-4">
+                  <label class="form-label">Telefone</label>
+                  <input
+                    id="fornecedorTelefone"
+                    class="form-control"
+                    placeholder="(14) 99999-9999"
+                  >
+                </div>
+
+                <div class="col-12 col-lg-8">
+                  <label class="form-label">E-mail</label>
+                  <input
+                    id="fornecedorEmail"
+                    type="email"
+                    class="form-control"
+                    placeholder="fornecedor@empresa.com.br"
+                  >
+                </div>
+
                 <div class="col-12">
-                  <div class="alert alert-light border mb-0">
-                    <div class="small text-muted">
-                      Nesta primeira versão, o cadastro está focado em nome e status.
-                      Depois podemos expandir para exibir produtos atendidos, códigos por produto,
-                      contatos e outras informações do fornecedor.
+                  <label class="form-label">Observação</label>
+                  <textarea
+                    id="fornecedorObservacao"
+                    class="form-control"
+                    rows="4"
+                    placeholder="Digite uma observação sobre este fornecedor..."
+                  ></textarea>
+                </div>
+
+                <div class="col-12">
+                  <hr class="my-1">
+                </div>
+
+                <div class="col-12">
+                  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                    <div>
+                      <h6 class="mb-0">Produtos vinculados</h6>
+                      <small class="text-muted">Produtos já associados a este fornecedor</small>
                     </div>
+                  </div>
+
+                  <div id="fornecedorProdutosVinculados" class="border rounded p-3 bg-light">
+                    <div class="text-muted small">Salve o fornecedor ou abra um fornecedor existente para visualizar os produtos vinculados.</div>
                   </div>
                 </div>
 

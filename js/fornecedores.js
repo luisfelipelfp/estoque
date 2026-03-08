@@ -1,4 +1,5 @@
 // js/fornecedores.js
+import { apiRequest } from "./api.js";
 import { logJsInfo, logJsError } from "./logger.js";
 
 function $(id) {
@@ -27,12 +28,69 @@ function getModal() {
   return modalInstance;
 }
 
+function renderProdutosVinculados(produtos) {
+  const box = $("fornecedorProdutosVinculados");
+  if (!box) return;
+
+  if (!Array.isArray(produtos) || produtos.length === 0) {
+    box.innerHTML = `
+      <div class="text-muted small">
+        Nenhum produto vinculado a este fornecedor.
+      </div>
+    `;
+    return;
+  }
+
+  box.innerHTML = `
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered align-middle mb-0 bg-white">
+        <thead>
+          <tr>
+            <th style="width: 90px;">ID</th>
+            <th>Produto</th>
+            <th style="width: 180px;">Código no fornecedor</th>
+            <th style="width: 130px;">Principal</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${produtos.map((p) => `
+            <tr>
+              <td>${Number(p?.produto_id ?? 0)}</td>
+              <td>${escapeHtml(p?.produto_nome ?? "")}</td>
+              <td>${escapeHtml(p?.codigo_produto_fornecedor ?? "") || "-"}</td>
+              <td>
+                <span class="badge ${Number(p?.principal ?? 0) === 1 ? "bg-primary" : "bg-secondary"}">
+                  ${Number(p?.principal ?? 0) === 1 ? "Sim" : "Não"}
+                </span>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 function limparModal() {
   if ($("fornecedorId")) $("fornecedorId").value = "";
   if ($("fornecedorNome")) $("fornecedorNome").value = "";
+  if ($("fornecedorCnpj")) $("fornecedorCnpj").value = "";
+  if ($("fornecedorTelefone")) $("fornecedorTelefone").value = "";
+  if ($("fornecedorEmail")) $("fornecedorEmail").value = "";
   if ($("fornecedorAtivo")) $("fornecedorAtivo").value = "1";
+  if ($("fornecedorObservacao")) $("fornecedorObservacao").value = "";
   if ($("fornecedorStatus")) $("fornecedorStatus").textContent = "";
   if ($("tituloModalFornecedor")) $("tituloModalFornecedor").textContent = "Novo Fornecedor";
+
+  renderProdutosVinculados([]);
+  const box = $("fornecedorProdutosVinculados");
+  if (box) {
+    box.innerHTML = `
+      <div class="text-muted small">
+        Salve o fornecedor ou abra um fornecedor existente para visualizar os produtos vinculados.
+      </div>
+    `;
+  }
 }
 
 function abrirModalNovoFornecedor() {
@@ -40,18 +98,45 @@ function abrirModalNovoFornecedor() {
   getModal()?.show();
 }
 
-function abrirModalFornecedorExistente(fornecedorId) {
-  const fornecedor = fornecedoresCache.find((f) => Number(f?.id ?? 0) === Number(fornecedorId));
-  if (!fornecedor) return;
-
+async function abrirModalFornecedorExistente(fornecedorId) {
   limparModal();
 
-  if ($("fornecedorId")) $("fornecedorId").value = String(fornecedor.id ?? "");
-  if ($("fornecedorNome")) $("fornecedorNome").value = fornecedor.nome ?? "";
-  if ($("fornecedorAtivo")) $("fornecedorAtivo").value = String(Number(fornecedor.ativo ?? 1));
-  if ($("tituloModalFornecedor")) $("tituloModalFornecedor").textContent = "Editar Fornecedor";
+  try {
+    const resp = await apiRequest("obter_fornecedor", { fornecedor_id: fornecedorId }, "GET");
 
-  getModal()?.show();
+    if (!resp?.sucesso || !resp?.dados) {
+      if ($("fornecedorStatus")) {
+        $("fornecedorStatus").textContent = resp?.mensagem || "Não foi possível carregar o fornecedor.";
+      }
+      return;
+    }
+
+    const fornecedor = resp.dados;
+
+    if ($("fornecedorId")) $("fornecedorId").value = String(fornecedor.id ?? "");
+    if ($("fornecedorNome")) $("fornecedorNome").value = fornecedor.nome ?? "";
+    if ($("fornecedorCnpj")) $("fornecedorCnpj").value = fornecedor.cnpj ?? "";
+    if ($("fornecedorTelefone")) $("fornecedorTelefone").value = fornecedor.telefone ?? "";
+    if ($("fornecedorEmail")) $("fornecedorEmail").value = fornecedor.email ?? "";
+    if ($("fornecedorAtivo")) $("fornecedorAtivo").value = String(Number(fornecedor.ativo ?? 1));
+    if ($("fornecedorObservacao")) $("fornecedorObservacao").value = fornecedor.observacao ?? "";
+    if ($("tituloModalFornecedor")) $("tituloModalFornecedor").textContent = "Editar Fornecedor";
+
+    renderProdutosVinculados(Array.isArray(fornecedor.produtos) ? fornecedor.produtos : []);
+    getModal()?.show();
+  } catch (err) {
+    logJsError({
+      origem: "fornecedores.js",
+      mensagem: "Erro ao obter fornecedor",
+      detalhe: err?.message,
+      stack: err?.stack,
+      fornecedor_id: fornecedorId
+    });
+
+    if ($("fornecedorStatus")) {
+      $("fornecedorStatus").textContent = "Erro ao carregar fornecedor.";
+    }
+  }
 }
 
 function renderTabela(fornecedores) {
@@ -61,7 +146,7 @@ function renderTabela(fornecedores) {
   if (!Array.isArray(fornecedores) || fornecedores.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="5" class="text-center text-muted">Nenhum fornecedor encontrado.</td>
+        <td colspan="4" class="text-center text-muted">Nenhum fornecedor encontrado.</td>
       </tr>
     `;
     return;
@@ -71,7 +156,6 @@ function renderTabela(fornecedores) {
     const id = Number(f?.id ?? 0);
     const nome = escapeHtml(f?.nome ?? "");
     const ativo = Number(f?.ativo ?? 1) === 1;
-    const totalProdutos = Number(f?.total_produtos ?? 0);
 
     return `
       <tr>
@@ -82,7 +166,6 @@ function renderTabela(fornecedores) {
             ${ativo ? "Ativo" : "Inativo"}
           </span>
         </td>
-        <td>${totalProdutos}</td>
         <td>
           <button
             class="btn btn-sm btn-outline-primary"
@@ -117,19 +200,21 @@ async function carregarFornecedores() {
   if (tbody) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="5" class="text-center text-muted">Carregando...</td>
+        <td colspan="4" class="text-center text-muted">Carregando...</td>
       </tr>
     `;
   }
 
   try {
-    // Base visual temporária até ligar com a API real
-    fornecedoresCache = [
-      { id: 1, nome: "Ferragens Brasil", ativo: 1, total_produtos: 12 },
-      { id: 2, nome: "Acabamentos São Paulo", ativo: 1, total_produtos: 7 },
-      { id: 3, nome: "Distribuidora Central", ativo: 0, total_produtos: 3 }
-    ];
+    const resp = await apiRequest("listar_fornecedores", {}, "GET");
 
+    if (!resp?.sucesso) {
+      fornecedoresCache = [];
+      renderTabela([]);
+      return;
+    }
+
+    fornecedoresCache = Array.isArray(resp?.dados) ? resp.dados : [];
     aplicarFiltro();
 
     logJsInfo({
@@ -153,7 +238,11 @@ async function carregarFornecedores() {
 async function salvarFornecedor() {
   const fornecedorId = Number($("fornecedorId")?.value ?? 0);
   const nome = ($("fornecedorNome")?.value ?? "").trim();
+  const cnpj = ($("fornecedorCnpj")?.value ?? "").trim();
+  const telefone = ($("fornecedorTelefone")?.value ?? "").trim();
+  const email = ($("fornecedorEmail")?.value ?? "").trim();
   const ativo = Number($("fornecedorAtivo")?.value ?? 1);
+  const observacao = ($("fornecedorObservacao")?.value ?? "").trim();
   const status = $("fornecedorStatus");
 
   if (status) status.textContent = "";
@@ -163,13 +252,8 @@ async function salvarFornecedor() {
     return;
   }
 
-  const nomeJaExiste = fornecedoresCache.some((f) =>
-    Number(f?.id ?? 0) !== fornecedorId &&
-    String(f?.nome ?? "").trim().toLowerCase() === nome.toLowerCase()
-  );
-
-  if (nomeJaExiste) {
-    if (status) status.textContent = "Já existe um fornecedor com esse nome.";
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (status) status.textContent = "Informe um e-mail válido.";
     return;
   }
 
@@ -180,27 +264,24 @@ async function salvarFornecedor() {
         : "Salvando fornecedor...";
     }
 
-    // Base visual temporária até ligar com a API real
-    if (fornecedorId > 0) {
-      fornecedoresCache = fornecedoresCache.map((f) =>
-        Number(f.id) === fornecedorId
-          ? { ...f, nome, ativo }
-          : f
-      );
-    } else {
-      const novoId = fornecedoresCache.length > 0
-        ? Math.max(...fornecedoresCache.map((f) => Number(f.id || 0))) + 1
-        : 1;
-
-      fornecedoresCache.unshift({
-        id: novoId,
+    const resp = await apiRequest(
+      "salvar_fornecedor",
+      {
+        fornecedor_id: fornecedorId,
         nome,
+        cnpj,
+        telefone,
+        email,
         ativo,
-        total_produtos: 0
-      });
-    }
+        observacao
+      },
+      "POST"
+    );
 
-    aplicarFiltro();
+    if (!resp?.sucesso) {
+      if (status) status.textContent = resp?.mensagem || "Erro ao salvar fornecedor.";
+      return;
+    }
 
     if (status) {
       status.textContent = fornecedorId > 0
@@ -208,14 +289,20 @@ async function salvarFornecedor() {
         : "Fornecedor cadastrado com sucesso.";
     }
 
+    await carregarFornecedores();
+
+    if (resp?.dados?.id) {
+      await abrirModalFornecedorExistente(Number(resp.dados.id));
+    }
+
     setTimeout(() => {
       getModal()?.hide();
-    }, 500);
+    }, 700);
 
     logJsInfo({
       origem: "fornecedores.js",
       mensagem: fornecedorId > 0 ? "Fornecedor atualizado" : "Fornecedor criado",
-      fornecedor_id: fornecedorId || null,
+      fornecedor_id: fornecedorId || (resp?.dados?.id ?? null),
       nome,
       ativo,
     });

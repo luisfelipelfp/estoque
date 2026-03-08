@@ -164,6 +164,68 @@ try {
             exit;
         }
 
+        // ================= FORNECEDORES =================
+
+        case 'listar_fornecedores': {
+            require_auth();
+            $res = fornecedores_listar($conn);
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
+            exit;
+        }
+
+        case 'obter_fornecedor': {
+            require_auth();
+
+            $fornecedor_id = (int)($_GET['fornecedor_id'] ?? $body['fornecedor_id'] ?? 0);
+            if ($fornecedor_id <= 0) {
+                json_response(false, 'Fornecedor inválido.', null, 400);
+                exit;
+            }
+
+            $res = fornecedor_obter($conn, $fornecedor_id);
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
+            exit;
+        }
+
+        case 'salvar_fornecedor': {
+            $usuario = require_auth();
+
+            $fornecedor_id = (int)($body['fornecedor_id'] ?? 0);
+            $nome = trim((string)($body['nome'] ?? ''));
+            $cnpj = trim((string)($body['cnpj'] ?? ''));
+            $telefone = trim((string)($body['telefone'] ?? ''));
+            $email = trim((string)($body['email'] ?? ''));
+            $ativo = (int)($body['ativo'] ?? 1);
+            $observacao = trim((string)($body['observacao'] ?? ''));
+
+            if ($nome === '') {
+                json_response(false, 'Nome do fornecedor obrigatório.', null, 400);
+                exit;
+            }
+
+            if (!in_array($ativo, [0, 1], true)) {
+                json_response(false, 'Status inválido.', null, 400);
+                exit;
+            }
+
+            $res = fornecedor_salvar(
+                $conn,
+                $fornecedor_id,
+                $nome,
+                $cnpj,
+                $telefone,
+                $email,
+                $ativo,
+                $observacao,
+                (int)$usuario['id']
+            );
+
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
+            exit;
+        }
+
+        // ================= PRODUTOS =================
+
         case 'listar_produtos': {
             require_auth();
             $res = produtos_listar($conn);
@@ -351,6 +413,8 @@ try {
             exit;
         }
 
+        // ================= MOVIMENTAÇÕES =================
+
         case 'listar_movimentacoes': {
             require_auth();
 
@@ -406,6 +470,8 @@ try {
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
             exit;
         }
+
+        // ================= RELATÓRIOS =================
 
         case 'relatorio':
         case 'relatorios':

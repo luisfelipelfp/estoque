@@ -232,6 +232,255 @@ function fornecedor_principal_preco(array $fornecedores): array
     ];
 }
 
+/* =========================
+   FORNECEDORES
+   ========================= */
+
+function fornecedores_listar(mysqli $conn): array
+{
+    try {
+        $hasCnpj = coluna_existe($conn, 'fornecedores', 'cnpj');
+        $hasTelefone = coluna_existe($conn, 'fornecedores', 'telefone');
+        $hasEmail = coluna_existe($conn, 'fornecedores', 'email');
+        $hasObservacao = coluna_existe($conn, 'fornecedores', 'observacao');
+
+        $sql = "
+            SELECT
+                f.id,
+                f.nome,
+                f.ativo
+                " . ($hasCnpj ? ", COALESCE(f.cnpj, '') AS cnpj" : ", '' AS cnpj") . "
+                " . ($hasTelefone ? ", COALESCE(f.telefone, '') AS telefone" : ", '' AS telefone") . "
+                " . ($hasEmail ? ", COALESCE(f.email, '') AS email" : ", '' AS email") . "
+                " . ($hasObservacao ? ", COALESCE(f.observacao, '') AS observacao" : ", '' AS observacao") . "
+            FROM fornecedores f
+            ORDER BY f.nome ASC
+        ";
+
+        $res = $conn->query($sql);
+
+        return [
+            'sucesso' => true,
+            'mensagem' => 'OK',
+            'dados' => $res->fetch_all(MYSQLI_ASSOC),
+        ];
+    } catch (Throwable $e) {
+        logError('produtos', 'Erro ao listar fornecedores', [
+            'arquivo' => $e->getFile(),
+            'linha'   => $e->getLine(),
+            'erro'    => $e->getMessage()
+        ]);
+
+        return [
+            'sucesso' => false,
+            'mensagem' => 'Erro ao buscar fornecedores',
+            'dados' => []
+        ];
+    }
+}
+
+function fornecedor_produtos_vinculados(mysqli $conn, int $fornecedor_id): array
+{
+    $sql = "
+        SELECT
+            p.id AS produto_id,
+            p.nome AS produto_nome,
+            COALESCE(pf.codigo_produto_fornecedor, '') AS codigo_produto_fornecedor,
+            COALESCE(pf.principal, 0) AS principal
+        FROM produto_fornecedores pf
+        INNER JOIN produtos p ON p.id = pf.produto_id
+        WHERE pf.fornecedor_id = ?
+        ORDER BY p.nome ASC
+    ";
+
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param('i', $fornecedor_id);
+    $stmt->execute();
+    $res = $stmt->get_result();
+
+    $dados = [];
+    while ($row = $res->fetch_assoc()) {
+        $dados[] = [
+            'produto_id' => (int)$row['produto_id'],
+            'produto_nome' => (string)$row['produto_nome'],
+            'codigo_produto_fornecedor' => (string)$row['codigo_produto_fornecedor'],
+            'principal' => (int)$row['principal'],
+        ];
+    }
+
+    $stmt->close();
+    return $dados;
+}
+
+function fornecedor_obter(mysqli $conn, int $fornecedor_id): array
+{
+    try {
+        $hasCnpj = coluna_existe($conn, 'fornecedores', 'cnpj');
+        $hasTelefone = coluna_existe($conn, 'fornecedores', 'telefone');
+        $hasEmail = coluna_existe($conn, 'fornecedores', 'email');
+        $hasObservacao = coluna_existe($conn, 'fornecedores', 'observacao');
+
+        $sql = "
+            SELECT
+                id,
+                nome,
+                ativo
+                " . ($hasCnpj ? ", COALESCE(cnpj, '') AS cnpj" : ", '' AS cnpj") . "
+                " . ($hasTelefone ? ", COALESCE(telefone, '') AS telefone" : ", '' AS telefone") . "
+                " . ($hasEmail ? ", COALESCE(email, '') AS email" : ", '' AS email") . "
+                " . ($hasObservacao ? ", COALESCE(observacao, '') AS observacao" : ", '' AS observacao") . "
+            FROM fornecedores
+            WHERE id = ?
+            LIMIT 1
+        ";
+
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param('i', $fornecedor_id);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        if (!$row) {
+            return [
+                'sucesso' => false,
+                'mensagem' => 'Fornecedor não encontrado.',
+                'dados' => null
+            ];
+        }
+
+        $produtos = fornecedor_produtos_vinculados($conn, $fornecedor_id);
+
+        return [
+            'sucesso' => true,
+            'mensagem' => 'OK',
+            'dados' => [
+                'id' => (int)$row['id'],
+                'nome' => (string)$row['nome'],
+                'cnpj' => (string)$row['cnpj'],
+                'telefone' => (string)$row['telefone'],
+                'email' => (string)$row['email'],
+                'ativo' => (int)$row['ativo'],
+                'observacao' => (string)$row['observacao'],
+                'produtos' => $produtos,
+            ]
+        ];
+    } catch (Throwable $e) {
+        logError('produtos', 'Erro ao obter fornecedor', [
+            'arquivo' => $e->getFile(),
+            'linha'   => $e->getLine(),
+            'erro'    => $e->getMessage(),
+            'fornecedor_id' => $fornecedor_id
+        ]);
+
+        return [
+            'sucesso' => false,
+            'mensagem' => 'Erro ao obter fornecedor',
+            'dados' => null
+        ];
+    }
+}
+
+function fornecedor_salvar(
+    mysqli $conn,
+    int $fornecedor_id,
+    string $nome,
+    string $cnpj,
+    string $telefone,
+    string $email,
+    int $ativo,
+    string $observacao,
+    ?int $usuario_id
+): array {
+    try {
+        $cnpj = trim($cnpj);
+        $telefone = trim($telefone);
+        $email = trim($email);
+        $observacao = trim($observacao);
+
+        $stmtDup = $conn->prepare('SELECT id FROM fornecedores WHERE LOWER(nome) = LOWER(?) AND id <> ? LIMIT 1');
+        $stmtDup->bind_param('si', $nome, $fornecedor_id);
+        $stmtDup->execute();
+        $dup = $stmtDup->get_result()->fetch_assoc();
+        $stmtDup->close();
+
+        if ($dup) {
+            return [
+                'sucesso' => false,
+                'mensagem' => 'Já existe um fornecedor com esse nome.',
+                'dados' => null
+            ];
+        }
+
+        if ($fornecedor_id > 0) {
+            $stmt = $conn->prepare("
+                UPDATE fornecedores
+                SET nome = ?, cnpj = ?, telefone = ?, email = ?, ativo = ?, observacao = ?
+                WHERE id = ?
+            ");
+            $stmt->bind_param(
+                'ssssisi',
+                $nome,
+                $cnpj,
+                $telefone,
+                $email,
+                $ativo,
+                $observacao,
+                $fornecedor_id
+            );
+            $stmt->execute();
+            $stmt->close();
+
+            return [
+                'sucesso' => true,
+                'mensagem' => 'Fornecedor atualizado com sucesso',
+                'dados' => ['id' => $fornecedor_id]
+            ];
+        }
+
+        $stmt = $conn->prepare("
+            INSERT INTO fornecedores (nome, cnpj, telefone, email, ativo, observacao)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ");
+        $stmt->bind_param(
+            'ssssis',
+            $nome,
+            $cnpj,
+            $telefone,
+            $email,
+            $ativo,
+            $observacao
+        );
+        $stmt->execute();
+        $novoId = (int)$stmt->insert_id;
+        $stmt->close();
+
+        return [
+            'sucesso' => true,
+            'mensagem' => 'Fornecedor cadastrado com sucesso',
+            'dados' => ['id' => $novoId]
+        ];
+    } catch (Throwable $e) {
+        logError('produtos', 'Erro ao salvar fornecedor', [
+            'arquivo' => $e->getFile(),
+            'linha'   => $e->getLine(),
+            'erro'    => $e->getMessage(),
+            'fornecedor_id' => $fornecedor_id,
+            'nome' => $nome,
+            'usuario' => $usuario_id
+        ]);
+
+        return [
+            'sucesso' => false,
+            'mensagem' => 'Erro ao salvar fornecedor',
+            'dados' => null
+        ];
+    }
+}
+
+/* =========================
+   PRODUTOS
+   ========================= */
+
 function produtos_listar(mysqli $conn): array
 {
     try {
