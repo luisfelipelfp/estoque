@@ -891,4 +891,4 @@ document.addEventListener("DOMContentLoaded", async () => {
   await carregarFornecedoresCadastrados();
   await carregarProdutos();
   await abrirProdutoViaQueryStringSeExistir();
-});
+}); 
