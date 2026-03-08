@@ -42,8 +42,9 @@ async function verificarLogin() {
   } catch (err) {
     logJsError({
       origem: "main.js",
-      mensagem: err?.message || String(err),
-      stack: err?.stack,
+      mensagem: "Erro ao verificar login",
+      detalhe: err?.message || String(err),
+      stack: err?.stack || null,
     });
     redirectToLogin();
     return null;
@@ -65,6 +66,11 @@ async function carregarComponente(seletorOuId, url) {
 
     if (!resp.ok) {
       el.innerHTML = "";
+      logJsError({
+        origem: "main.js",
+        mensagem: "Falha ao carregar componente",
+        detalhe: `HTTP ${resp.status} - ${url}`,
+      });
       return null;
     }
 
@@ -76,8 +82,8 @@ async function carregarComponente(seletorOuId, url) {
     logJsError({
       origem: "main.js",
       mensagem: `Erro ao carregar componente: ${url}`,
-      detalhe: err?.message,
-      stack: err?.stack,
+      detalhe: err?.message || String(err),
+      stack: err?.stack || null,
     });
     return null;
   }
@@ -143,8 +149,8 @@ async function executarLogout() {
     logJsError({
       origem: "main.js",
       mensagem: "Erro ao executar logout",
-      detalhe: err?.message,
-      stack: err?.stack,
+      detalhe: err?.message || String(err),
+      stack: err?.stack || null,
     });
   } finally {
     localStorage.removeItem("usuario");
@@ -185,6 +191,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   logJsInfo({
     origem: "main.js",
     mensagem: "Usuário autenticado",
-    usuario: usuario.nome,
+    usuario: usuario.nome || null,
   });
-}); 
+});
