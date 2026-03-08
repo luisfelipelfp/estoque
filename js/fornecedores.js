@@ -405,4 +405,4 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindModal();
   bindModalEventos();
   await carregarFornecedores();
-});
+}); 
