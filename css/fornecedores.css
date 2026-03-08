@@ -1,0 +1,37 @@
+#modalFornecedor .modal-content {
+  border: 0;
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+#modalFornecedor .modal-header {
+  background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+  border-bottom: 1px solid #e9ecef;
+}
+
+#modalFornecedor .modal-footer {
+  border-top: 1px solid #e9ecef;
+  background: #fbfbfc;
+}
+
+.fornecedor-resumo-box {
+  border: 1px solid #e9ecef;
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: #fafbfd;
+}
+
+.fornecedor-resumo-titulo {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #212529;
+}
+
+.fornecedor-resumo-texto {
+  font-size: 0.9rem;
+  color: #6c757d;
+}
+
+#fornecedorStatus {
+  min-height: 20px;
+}

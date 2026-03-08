@@ -1,22 +1,67 @@
 /* ===== Estilos específicos da área de Produtos ===== */
 
-/* Tabela de produtos */
 #tabelaProdutos {
-    border-radius: 8px;
-    overflow: hidden;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 #tabelaProdutos th {
-    background-color: #e9ecef;
-    font-weight: bold;
+  background-color: #e9ecef;
+  font-weight: bold;
 }
 
 #tabelaProdutos td {
-    vertical-align: middle;
+  vertical-align: middle;
 }
 
-/* Formulário adicionar produto */
-#formAdicionarProduto input,
-#formAdicionarProduto button {
-    height: 45px;
+#modalProduto .modal-content {
+  border: 0;
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+#modalProduto .modal-header {
+  background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+  border-bottom: 1px solid #e9ecef;
+}
+
+#modalProduto .modal-footer {
+  border-top: 1px solid #e9ecef;
+  background: #fbfbfc;
+}
+
+.produto-resumo-box {
+  border: 1px solid #e9ecef;
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: #fafbfd;
+}
+
+.produto-resumo-titulo {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #212529;
+}
+
+.produto-resumo-texto {
+  font-size: 0.9rem;
+  color: #6c757d;
+}
+
+.fornecedor-card {
+  border-radius: 16px;
+}
+
+.fornecedor-card .card-body {
+  padding: 1rem 1rem 1.1rem;
+}
+
+#produtoStatus {
+  min-height: 20px;
+}
+
+@media (max-width: 991px) {
+  #modalProduto .modal-dialog {
+    margin: 0.75rem;
+  }
 }

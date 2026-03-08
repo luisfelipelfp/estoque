@@ -120,15 +120,16 @@ function fornecedor_obter(mysqli $conn, int $fornecedor_id): array
         $produtos = fornecedor_produtos_listar($conn, $fornecedor_id);
 
         return resposta(true, 'OK', [
-            'id'         => (int)$row['id'],
-            'nome'       => (string)$row['nome'],
-            'cnpj'       => (string)$row['cnpj'],
-            'telefone'   => (string)$row['telefone'],
-            'email'      => (string)$row['email'],
-            'ativo'      => (int)$row['ativo'],
-            'observacao' => (string)$row['observacao'],
-            'criado_em'  => (string)$row['criado_em'],
-            'produtos'   => $produtos,
+            'id'             => (int)$row['id'],
+            'nome'           => (string)$row['nome'],
+            'cnpj'           => (string)$row['cnpj'],
+            'telefone'       => (string)$row['telefone'],
+            'email'          => (string)$row['email'],
+            'ativo'          => (int)$row['ativo'],
+            'observacao'     => (string)$row['observacao'],
+            'criado_em'      => (string)$row['criado_em'],
+            'total_produtos' => count($produtos),
+            'produtos'       => $produtos,
         ]);
     } catch (Throwable $e) {
         logError('fornecedores', 'Erro ao obter fornecedor', [

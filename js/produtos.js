@@ -44,6 +44,66 @@ let fornecedoresCadastrados = [];
 let modalInstance = null;
 let fornecedoresTemp = [];
 
+function setStatusMensagem(texto = "", tipo = "muted") {
+  const el = $("produtoStatus");
+  if (!el) return;
+
+  el.className = "small";
+  if (!texto) {
+    el.textContent = "";
+    return;
+  }
+
+  if (tipo === "erro") {
+    el.classList.add("text-danger");
+  } else if (tipo === "sucesso") {
+    el.classList.add("text-success");
+  } else if (tipo === "processando") {
+    el.classList.add("text-primary");
+  } else {
+    el.classList.add("text-muted");
+  }
+
+  el.textContent = texto;
+}
+
+function getFornecedorSelecionadosCount() {
+  return fornecedoresTemp.filter((f) => Number(f?.fornecedor_id ?? 0) > 0).length;
+}
+
+function atualizarResumoModal() {
+  const badge = $("produtoResumoFornecedorBadge");
+  const info = $("produtoResumoFornecedorTexto");
+
+  if (!badge || !info) return;
+
+  const totalLinhas = fornecedoresTemp.length;
+  const totalSelecionados = getFornecedorSelecionadosCount();
+  const principal = fornecedoresTemp.find(
+    (f) => Number(f?.fornecedor_id ?? 0) > 0 && Number(f?.principal ?? 0) === 1
+  );
+
+  badge.textContent = `${totalSelecionados} selecionado(s)`;
+
+  if (!totalLinhas) {
+    info.textContent = "Nenhum fornecedor adicionado ao produto.";
+    return;
+  }
+
+  if (!totalSelecionados) {
+    info.textContent = "Existem linhas de fornecedor abertas, mas nenhuma seleção foi feita ainda.";
+    return;
+  }
+
+  if (principal) {
+    const nome = principal.nome || "Fornecedor principal";
+    info.textContent = `Fornecedor principal atual: ${nome}.`;
+    return;
+  }
+
+  info.textContent = "Há fornecedores adicionados, mas nenhum principal válido foi identificado.";
+}
+
 function renderTabela(produtos) {
   const tbody = $("tabelaProdutos");
   if (!tbody) return;
@@ -141,6 +201,7 @@ async function carregarFornecedoresCadastrados() {
     if (!resp?.sucesso) {
       fornecedoresCadastrados = [];
       atualizarAvisoFornecedores();
+      atualizarResumoModal();
       return;
     }
 
@@ -148,9 +209,11 @@ async function carregarFornecedoresCadastrados() {
       .sort((a, b) => String(a?.nome ?? "").localeCompare(String(b?.nome ?? ""), "pt-BR"));
 
     atualizarAvisoFornecedores();
+    atualizarResumoModal();
   } catch (err) {
     fornecedoresCadastrados = [];
     atualizarAvisoFornecedores();
+    atualizarResumoModal();
 
     logJsError({
       origem: "produtos.js",
@@ -209,7 +272,6 @@ function garantirFornecedorPrincipal() {
   }
 
   const primeiroPrincipal = indicesValidos.find((f) => f.principal === 1);
-
   const indicePrincipal = primeiroPrincipal
     ? primeiroPrincipal.index
     : indicesValidos[0].index;
@@ -271,7 +333,7 @@ function atualizarFornecedor(index, campo, valor) {
     const fornecedorIdNum = Number(fornecedorId || 0);
 
     if (fornecedorIdNum > 0 && existeFornecedorDuplicado(index, fornecedorIdNum)) {
-      alert("O mesmo fornecedor não pode ser adicionado mais de uma vez para o mesmo produto.");
+      setStatusMensagem("O mesmo fornecedor não pode ser adicionado mais de uma vez para o mesmo produto.", "erro");
       renderListaFornecedores();
       return;
     }
@@ -282,6 +344,7 @@ function atualizarFornecedor(index, campo, valor) {
 
     garantirFornecedorPrincipal();
     renderListaFornecedores();
+    setStatusMensagem("", "muted");
     return;
   }
 
@@ -304,6 +367,8 @@ function atualizarFornecedor(index, campo, valor) {
   if (campo === "nome") {
     atualizarTituloFornecedorNoDOM(index, valor);
   }
+
+  atualizarResumoModal();
 }
 
 function removerFornecedor(index) {
@@ -349,12 +414,18 @@ function criarFornecedorCard(fornecedor, index) {
   const lucro = calcularLucro(precoCusto, precoVenda);
   const principal = Number(fornecedor?.principal || 0) === 1;
   const tituloFornecedor = escapeHtml((fornecedor?.nome ?? "").trim() || `Fornecedor ${index + 1}`);
+  const fornecedorSelecionado = Number(fornecedor?.fornecedor_id ?? 0) > 0;
 
   return `
-    <div class="card border mb-3 ${principal ? "border-primary" : ""}">
+    <div class="card fornecedor-card border mb-3 ${principal ? "border-primary shadow-sm" : ""}">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-          <strong data-titulo-fornecedor="${index}">${tituloFornecedor}</strong>
+          <div>
+            <strong data-titulo-fornecedor="${index}">${tituloFornecedor}</strong>
+            <div class="small text-muted">
+              ${fornecedorSelecionado ? "Fornecedor vinculado ao produto." : "Selecione um fornecedor para completar este bloco."}
+            </div>
+          </div>
 
           <div class="d-flex align-items-center gap-3">
             <div class="form-check m-0">
@@ -364,7 +435,7 @@ function criarFornecedorCard(fornecedor, index) {
                 name="fornecedorPrincipal"
                 ${principal ? "checked" : ""}
                 data-marcar-principal="${index}"
-                ${Number(fornecedor?.fornecedor_id ?? 0) <= 0 ? "disabled" : ""}
+                ${!fornecedorSelecionado ? "disabled" : ""}
               >
               <label class="form-check-label">Principal</label>
             </div>
@@ -483,6 +554,7 @@ function renderListaFornecedores() {
         Nenhum fornecedor adicionado.
       </div>
     `;
+    atualizarResumoModal();
     return;
   }
 
@@ -491,29 +563,29 @@ function renderListaFornecedores() {
   lista.innerHTML = fornecedoresTemp
     .map((fornecedor, index) => criarFornecedorCard(fornecedor, index))
     .join("");
+
+  atualizarResumoModal();
 }
 
 function adicionarFornecedor() {
   if (fornecedoresCadastrados.length === 0) {
-    const status = $("produtoStatus");
-    if (status) {
-      status.textContent = "Não há fornecedores cadastrados para adicionar.";
-    }
+    setStatusMensagem("Não há fornecedores cadastrados para adicionar.", "erro");
     return;
   }
 
   fornecedoresTemp.push(criarFornecedorVazio());
   garantirFornecedorPrincipal();
   renderListaFornecedores();
+  setStatusMensagem("Nova linha de fornecedor adicionada.", "muted");
 }
 
 function limparModal() {
   if ($("produtoId")) $("produtoId").value = "";
   if ($("produtoNome")) $("produtoNome").value = "";
   if ($("produtoEstoqueMinimo")) $("produtoEstoqueMinimo").value = "0";
-  if ($("produtoStatus")) $("produtoStatus").textContent = "";
   if ($("tituloModalProduto")) $("tituloModalProduto").textContent = "Novo Produto";
 
+  setStatusMensagem("");
   fornecedoresTemp = [];
   renderListaFornecedores();
 }
@@ -597,17 +669,16 @@ async function salvarProduto() {
   const produtoId = Number($("produtoId")?.value ?? 0);
   const nome = ($("produtoNome")?.value ?? "").trim();
   const estoqueMinimo = Number($("produtoEstoqueMinimo")?.value ?? 0);
-  const status = $("produtoStatus");
 
-  if (status) status.textContent = "";
+  setStatusMensagem("");
 
   if (!nome) {
-    if (status) status.textContent = "Informe o nome do produto.";
+    setStatusMensagem("Informe o nome do produto.", "erro");
     return;
   }
 
   if (!Number.isFinite(estoqueMinimo) || estoqueMinimo < 0) {
-    if (status) status.textContent = "Informe um estoque mínimo válido.";
+    setStatusMensagem("Informe um estoque mínimo válido.", "erro");
     return;
   }
 
@@ -618,7 +689,7 @@ async function salvarProduto() {
   );
 
   if (fornecedoresComErro) {
-    if (status) status.textContent = "Os preços dos fornecedores devem ser maiores ou iguais a zero.";
+    setStatusMensagem("Os preços dos fornecedores devem ser maiores ou iguais a zero.", "erro");
     return;
   }
 
@@ -627,7 +698,7 @@ async function salvarProduto() {
   );
 
   if (fornecedorDuplicado) {
-    if (status) status.textContent = "O mesmo fornecedor não pode ser adicionado mais de uma vez para o mesmo produto.";
+    setStatusMensagem("O mesmo fornecedor não pode ser adicionado mais de uma vez para o mesmo produto.", "erro");
     return;
   }
 
@@ -641,9 +712,10 @@ async function salvarProduto() {
     }
   }
 
-  if (status) {
-    status.textContent = produtoId > 0 ? "Atualizando produto..." : "Salvando produto...";
-  }
+  setStatusMensagem(
+    produtoId > 0 ? "Atualizando produto..." : "Salvando produto...",
+    "processando"
+  );
 
   try {
     let resp;
@@ -671,15 +743,16 @@ async function salvarProduto() {
     }
 
     if (!resp?.sucesso) {
-      if (status) status.textContent = resp?.mensagem || "Erro ao salvar produto.";
+      setStatusMensagem(resp?.mensagem || "Erro ao salvar produto.", "erro");
       return;
     }
 
-    if (status) {
-      status.textContent = produtoId > 0
+    setStatusMensagem(
+      produtoId > 0
         ? "Produto atualizado com sucesso."
-        : "Produto cadastrado com sucesso.";
-    }
+        : "Produto cadastrado com sucesso.",
+      "sucesso"
+    );
 
     await carregarProdutos();
 
@@ -696,7 +769,7 @@ async function salvarProduto() {
       fornecedores: fornecedores.length
     });
   } catch (err) {
-    if (status) status.textContent = "Erro inesperado ao salvar produto.";
+    setStatusMensagem("Erro inesperado ao salvar produto.", "erro");
 
     logJsError({
       origem: "produtos.js",
@@ -786,12 +859,36 @@ function bindModal() {
   });
 }
 
+function bindModalEventos() {
+  const modalEl = $("modalProduto");
+  if (!modalEl) return;
+
+  modalEl.addEventListener("hidden.bs.modal", () => {
+    limparModal();
+  });
+}
+
+async function abrirProdutoViaQueryStringSeExistir() {
+  const url = new URL(window.location.href);
+  const produtoId = Number(url.searchParams.get("produto_id") || 0);
+
+  if (produtoId <= 0) return;
+
+  await abrirModalProdutoExistente(produtoId);
+
+  url.searchParams.delete("produto_id");
+  window.history.replaceState({}, "", url.toString());
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   bindTabelaAcoes();
   bindBusca();
   bindAcoesTopo();
   bindModal();
+  bindModalEventos();
+
   renderListaFornecedores();
   await carregarFornecedoresCadastrados();
   await carregarProdutos();
+  await abrirProdutoViaQueryStringSeExistir();
 });

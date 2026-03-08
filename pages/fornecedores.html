@@ -2,13 +2,13 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>Fornecedores</title>
+  <title>Cadastro de Fornecedores</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="/estoque/css/base.css?v=20260307">
-  <link rel="stylesheet" href="/estoque/css/layout.css?v=20260307">
-  <link rel="stylesheet" href="/estoque/css/produtos.css?v=20260307">
+  <link rel="stylesheet" href="/estoque/css/base.css?v=20260308">
+  <link rel="stylesheet" href="/estoque/css/layout.css?v=20260308">
+  <link rel="stylesheet" href="/estoque/css/fornecedores.css?v=20260308b">
 </head>
 
 <body>
@@ -22,9 +22,9 @@
         <div class="d-flex align-items-center gap-3 flex-wrap">
           <div class="page-icon">🏷️</div>
           <div>
-            <h1 class="page-title mb-0">Fornecedores</h1>
+            <h1 class="page-title mb-0">Cadastro de Fornecedores</h1>
             <div class="page-subtitle text-muted">
-              Gerencie os fornecedores cadastrados no sistema
+              Gerencie os fornecedores cadastrados e visualize produtos vinculados
             </div>
           </div>
         </div>
@@ -57,6 +57,9 @@
             <button id="btnAtualizarFornecedores" class="btn btn-outline-primary" type="button">
               🔄 Atualizar
             </button>
+            <a href="/estoque/pages/produtos.html" class="btn btn-outline-dark">
+              🧾 Ir para produtos
+            </a>
           </div>
         </div>
       </section>
@@ -64,7 +67,7 @@
       <section class="card p-3">
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
           <h5 class="mb-0">Fornecedores cadastrados</h5>
-          <small class="text-muted">Clique em editar para abrir o cadastro</small>
+          <small class="text-muted">Clique em um fornecedor para abrir o cadastro</small>
         </div>
 
         <div class="table-responsive">
@@ -73,13 +76,14 @@
               <tr>
                 <th style="width: 90px;">ID</th>
                 <th>Fornecedor</th>
-                <th style="width: 140px;">Status</th>
+                <th style="width: 130px;" class="text-center">Produtos</th>
+                <th style="width: 120px;">Status</th>
                 <th style="width: 140px;">Ações</th>
               </tr>
             </thead>
             <tbody id="tabelaFornecedores">
               <tr>
-                <td colspan="4" class="text-center text-muted">Carregando...</td>
+                <td colspan="5" class="text-center text-muted">Carregando...</td>
               </tr>
             </tbody>
           </table>
@@ -90,30 +94,35 @@
         <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
           <div class="modal-content">
             <div class="modal-header">
-              <h5 class="modal-title" id="tituloModalFornecedor">Novo Fornecedor</h5>
+              <div>
+                <h5 class="modal-title mb-0" id="tituloModalFornecedor">Novo Fornecedor</h5>
+                <small class="text-muted">Cadastre, revise e consulte vínculos com produtos.</small>
+              </div>
               <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
 
             <div class="modal-body">
               <input type="hidden" id="fornecedorId">
 
-              <div class="row g-3">
+              <div class="row g-3 mb-4">
                 <div class="col-12 col-lg-6">
-                  <label class="form-label">Nome do fornecedor</label>
-                  <input
-                    id="fornecedorNome"
-                    class="form-control"
-                    placeholder="Digite o nome do fornecedor..."
-                  >
+                  <label class="form-label">Nome</label>
+                  <input id="fornecedorNome" class="form-control" placeholder="Digite o nome do fornecedor...">
                 </div>
 
                 <div class="col-12 col-lg-3">
                   <label class="form-label">CNPJ</label>
-                  <input
-                    id="fornecedorCnpj"
-                    class="form-control"
-                    placeholder="00.000.000/0000-00"
-                  >
+                  <input id="fornecedorCnpj" class="form-control" placeholder="00.000.000/0000-00">
+                </div>
+
+                <div class="col-12 col-lg-3">
+                  <label class="form-label">Telefone</label>
+                  <input id="fornecedorTelefone" class="form-control" placeholder="(14) 0000-0000">
+                </div>
+
+                <div class="col-12 col-lg-6">
+                  <label class="form-label">E-mail</label>
+                  <input id="fornecedorEmail" class="form-control" placeholder="fornecedor@empresa.com">
                 </div>
 
                 <div class="col-12 col-lg-3">
@@ -124,55 +133,41 @@
                   </select>
                 </div>
 
-                <div class="col-12 col-lg-4">
-                  <label class="form-label">Telefone</label>
-                  <input
-                    id="fornecedorTelefone"
-                    class="form-control"
-                    placeholder="(14) 99999-9999"
-                  >
-                </div>
-
-                <div class="col-12 col-lg-8">
-                  <label class="form-label">E-mail</label>
-                  <input
-                    id="fornecedorEmail"
-                    type="email"
-                    class="form-control"
-                    placeholder="fornecedor@empresa.com.br"
-                  >
-                </div>
-
                 <div class="col-12">
                   <label class="form-label">Observação</label>
-                  <textarea
-                    id="fornecedorObservacao"
-                    class="form-control"
-                    rows="4"
-                    placeholder="Digite uma observação sobre este fornecedor..."
-                  ></textarea>
+                  <textarea id="fornecedorObservacao" class="form-control" rows="3" placeholder="Informações adicionais sobre o fornecedor..."></textarea>
                 </div>
+              </div>
 
-                <div class="col-12">
-                  <hr class="my-1">
-                </div>
-
-                <div class="col-12">
-                  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-                    <div>
-                      <h6 class="mb-0">Produtos vinculados</h6>
-                      <small class="text-muted">Produtos já associados a este fornecedor</small>
+              <div class="fornecedor-resumo-box mb-4">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                  <div>
+                    <div class="fornecedor-resumo-titulo">Produtos vinculados</div>
+                    <div class="fornecedor-resumo-texto">
+                      Acompanhe quais produtos utilizam este fornecedor.
                     </div>
                   </div>
+                  <span class="badge text-bg-light border" id="fornecedorResumoProdutos">0 produto(s) vinculado(s)</span>
+                </div>
+              </div>
 
-                  <div id="fornecedorProdutosVinculados" class="border rounded p-3 bg-light">
-                    <div class="text-muted small">Salve o fornecedor ou abra um fornecedor existente para visualizar os produtos vinculados.</div>
+              <div class="card border-0 bg-light-subtle">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                    <h6 class="mb-0">Produtos vinculados</h6>
+                    <small class="text-muted">Você pode abrir o produto diretamente desta tela.</small>
+                  </div>
+
+                  <div id="fornecedorProdutosVinculados">
+                    <div class="text-muted small">
+                      Salve o fornecedor ou abra um fornecedor existente para visualizar os produtos vinculados.
+                    </div>
                   </div>
                 </div>
+              </div>
 
-                <div class="col-12">
-                  <div class="small text-muted" id="fornecedorStatus"></div>
-                </div>
+              <div class="col-12 mt-3">
+                <div class="small text-muted" id="fornecedorStatus"></div>
               </div>
             </div>
 
@@ -192,9 +187,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-  <script type="module" src="/estoque/js/api.js?v=20260307"></script>
-  <script type="module" src="/estoque/js/logout.js?v=20260307"></script>
-  <script type="module" src="/estoque/js/main.js?v=20260307"></script>
-  <script type="module" src="/estoque/js/fornecedores.js?v=20260307"></script>
+  <script type="module" src="/estoque/js/api.js?v=20260308"></script>
+  <script type="module" src="/estoque/js/logout.js?v=20260308"></script>
+  <script type="module" src="/estoque/js/main.js?v=20260308"></script>
+  <script type="module" src="/estoque/js/fornecedores.js?v=20260308b"></script>
 </body>
 </html>
