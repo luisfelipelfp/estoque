@@ -62,7 +62,7 @@ async function carregarNavbar() {
   if (!host) return;
 
   try {
-    const resp = await fetch("/estoque/components/navbar.html?v=20260307", {
+    const resp = await fetch("/estoque/components/navbar.html?v=20260308", {
       cache: "no-store",
       credentials: "same-origin"
     });
@@ -527,7 +527,7 @@ function bindAcoesTopo() {
   });
 
   $("movVerHistorico")?.addEventListener("click", () => {
-    window.location.href = "/estoque/relatorios.html";
+    window.location.href = "/estoque/pages/relatorios.html";
   });
 }
 
@@ -614,4 +614,4 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindAcoesTopo();
   bindModal();
   carregarProdutos();
-});
+}); 
