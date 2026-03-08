@@ -1,0 +1,58 @@
+.resumo-card {
+  border-radius: 16px;
+  padding: 16px 18px;
+  min-height: 104px;
+  border: 1px solid #e9ecef;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.resumo-card-label {
+  font-size: 0.9rem;
+  color: #6c757d;
+  margin-bottom: 8px;
+}
+
+.resumo-card-valor {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: #212529;
+  line-height: 1.2;
+}
+
+.resumo-card-info {
+  background: linear-gradient(180deg, #eef7ff 0%, #ffffff 100%);
+}
+
+.resumo-card-secondary {
+  background: linear-gradient(180deg, #f4f5f7 0%, #ffffff 100%);
+}
+
+.resumo-card-light {
+  background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+}
+
+.resumo-card-dark {
+  background: linear-gradient(180deg, #f1f3f5 0%, #ffffff 100%);
+}
+
+.chart-box {
+  position: relative;
+  width: 100%;
+  min-height: 360px;
+  height: 420px;
+}
+
+@media (max-width: 991px) {
+  .chart-box {
+    min-height: 300px;
+    height: 340px;
+  }
+}
+
+.table td,
+.table th {
+  vertical-align: middle;
+}

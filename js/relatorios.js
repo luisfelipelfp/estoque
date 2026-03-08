@@ -7,13 +7,20 @@ let graficoTemporal = null;
 const DEFAULT_RANGE_DAYS = 30;
 const MAX_POINTS_CHART = 120;
 const DEFAULT_LIMITE_TABELA = 200;
+const APP_BASE = "/estoque";
 
 function formatBRL(valor) {
   const n = Number(valor || 0);
-  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return n.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
 }
 
-function pad2(n) { return String(n).padStart(2, "0"); }
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
 function toYMD(dateObj) {
   return `${dateObj.getFullYear()}-${pad2(dateObj.getMonth() + 1)}-${pad2(dateObj.getDate())}`;
 }
@@ -42,9 +49,24 @@ function getFiltros() {
   };
 }
 
-/* =========================
-   EXPORTAÇÃO (CSV/PDF)
-   ========================= */
+function setTexto(id, valor) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.textContent = String(valor ?? "");
+  }
+}
+
+function setBtnLoading(id, loading, textoOriginal = "") {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+
+  if (!btn.dataset.originalText) {
+    btn.dataset.originalText = textoOriginal || btn.textContent || "";
+  }
+
+  btn.disabled = !!loading;
+  btn.textContent = loading ? "Processando..." : btn.dataset.originalText;
+}
 
 function buildQuery(params) {
   const usp = new URLSearchParams();
@@ -56,11 +78,9 @@ function buildQuery(params) {
   return usp.toString();
 }
 
-function setBtnLoading(id, loading) {
-  const btn = document.getElementById(id);
-  if (!btn) return;
-  btn.disabled = !!loading;
-}
+/* =========================
+   EXPORTAÇÃO
+   ========================= */
 
 function exportarCSV() {
   const filtros = getFiltros();
@@ -68,33 +88,30 @@ function exportarCSV() {
   delete filtros.limite;
 
   const qs = buildQuery(filtros);
-  const url = `api/exportar_csv.php${qs ? `?${qs}` : ""}`;
+  const url = `${APP_BASE}/api/exportar_csv.php${qs ? `?${qs}` : ""}`;
 
   setBtnLoading("btnExportarCSV", true);
-  setTimeout(() => setBtnLoading("btnExportarCSV", false), 1500);
+  setTimeout(() => setBtnLoading("btnExportarCSV", false), 1200);
 
   window.location.href = url;
 }
 
 function exportarPDF() {
-  // ✅ preferir endpoint (você disse que api/exportar_pdf.php já existe)
   const filtros = getFiltros();
   delete filtros.pagina;
   delete filtros.limite;
 
   const qs = buildQuery(filtros);
-  const url = `api/exportar_pdf.php${qs ? `?${qs}` : ""}`;
+  const url = `${APP_BASE}/api/exportar_pdf.php${qs ? `?${qs}` : ""}`;
 
   setBtnLoading("btnExportarPDF", true);
-  setTimeout(() => setBtnLoading("btnExportarPDF", false), 1500);
+  setTimeout(() => setBtnLoading("btnExportarPDF", false), 1200);
 
-  // Se o endpoint estiver OK, baixa PDF
-  // Se der erro no endpoint, você ainda pode usar o print como fallback
   window.location.href = url;
 }
 
 /* =========================
-   LIMPAR FILTROS (NOVO)
+   FILTROS
    ========================= */
 
 function limparFiltros() {
@@ -106,7 +123,6 @@ function limparFiltros() {
   if (elFim) elFim.value = "";
   if (elTipo) elTipo.value = "";
 
-  // volta pro padrão de 30 dias
   setDefaultDatesIfEmpty();
   carregarRelatorio();
 
@@ -123,65 +139,63 @@ function limparFiltros() {
 function renderEstoqueAtualLoading() {
   const tbody = document.getElementById("tabelaEstoqueAtual");
   if (!tbody) return;
+
   tbody.innerHTML = `
     <tr>
       <td colspan="5" class="text-center text-muted">Carregando estoque...</td>
-    </tr>`;
+    </tr>
+  `;
 }
 
 function renderEstoqueAtualErro(msg) {
   const tbody = document.getElementById("tabelaEstoqueAtual");
   if (!tbody) return;
+
+  setTexto("estoqueTotalQtd", "0");
+  setTexto("estoqueTotalValor", "0,00");
+
   tbody.innerHTML = `
     <tr>
       <td colspan="5" class="text-center text-danger">
         ${msg || "Falha ao carregar estoque atual."}
       </td>
-    </tr>`;
+    </tr>
+  `;
 }
 
 function renderEstoqueAtual(payload) {
-  const totalQtdEl = document.getElementById("estoqueTotalQtd");
-  const totalValorEl = document.getElementById("estoqueTotalValor");
   const tbody = document.getElementById("tabelaEstoqueAtual");
 
-  const itens = payload?.itens || [];
+  const itens = Array.isArray(payload?.itens) ? payload.itens : [];
   const totais = payload?.totais || {};
 
   const totalQtd = Number(totais?.total_qtd ?? 0);
   const totalValor = Number(totais?.total_valor ?? 0);
 
-  if (totalQtdEl) totalQtdEl.textContent = String(totalQtd);
-  if (totalValorEl) totalValorEl.textContent = formatBRL(totalValor);
+  setTexto("estoqueTotalQtd", totalQtd);
+  setTexto("estoqueTotalValor", formatBRL(totalValor));
 
   if (!tbody) return;
 
-  if (!Array.isArray(itens) || itens.length === 0) {
+  if (itens.length === 0) {
     tbody.innerHTML = `
       <tr>
         <td colspan="5" class="text-center text-muted">Nenhum item de estoque encontrado.</td>
-      </tr>`;
+      </tr>
+    `;
     return;
   }
 
-  tbody.innerHTML = "";
-
-  for (const item of itens) {
+  tbody.innerHTML = itens.map((item) => {
     const id = item?.id ?? "-";
     const nome = item?.nome ?? "-";
     const qtd = Number(item?.quantidade ?? 0);
-
-    const preco = item?.preco_custo === null || item?.preco_custo === undefined
-      ? 0
-      : Number(item.preco_custo);
-
-    const valorEstimado = item?.valor_estimado === null || item?.valor_estimado === undefined
+    const preco = item?.preco_custo == null ? 0 : Number(item.preco_custo);
+    const valorEstimado = item?.valor_estimado == null
       ? (qtd * preco)
       : Number(item.valor_estimado);
 
-    tbody.insertAdjacentHTML(
-      "beforeend",
-      `
+    return `
       <tr>
         <td>${id}</td>
         <td>${nome}</td>
@@ -189,18 +203,17 @@ function renderEstoqueAtual(payload) {
         <td>R$ ${formatBRL(preco)}</td>
         <td>R$ ${formatBRL(valorEstimado)}</td>
       </tr>
-      `
-    );
-  }
+    `;
+  }).join("");
 }
 
 async function carregarEstoqueAtual() {
   renderEstoqueAtualLoading();
 
   try {
-    const resp = await fetch("api/estoque_atual.php", {
+    const resp = await fetch(`${APP_BASE}/api/estoque_atual.php`, {
       method: "GET",
-      headers: { "Accept": "application/json" },
+      headers: { Accept: "application/json" },
       cache: "no-store",
       credentials: "same-origin"
     });
@@ -225,9 +238,9 @@ async function carregarEstoqueAtual() {
       total_itens: json?.dados?.itens?.length ?? 0,
       total_qtd: json?.dados?.totais?.total_qtd ?? 0
     });
-
   } catch (err) {
     renderEstoqueAtualErro("Erro inesperado ao carregar estoque atual.");
+
     logJsError({
       origem: "relatorios.js",
       mensagem: "Erro inesperado ao carregar estoque atual",
@@ -242,10 +255,24 @@ async function carregarEstoqueAtual() {
    ========================= */
 
 function renderTotais(totais) {
-  const elQtd = document.getElementById("totalQtd");
-  const elValor = document.getElementById("totalValor");
-  if (elQtd) elQtd.textContent = String(totais?.total_qtd ?? 0);
-  if (elValor) elValor.textContent = formatBRL(totais?.total_valor ?? 0);
+  const totalQtd = Number(totais?.total_qtd ?? 0);
+  const totalValor = Number(totais?.total_valor ?? 0);
+
+  setTexto("totalQtd", totalQtd);
+  setTexto("totalValor", formatBRL(totalValor));
+  setTexto("totalQtdResumo", totalQtd);
+  setTexto("totalValorResumo", formatBRL(totalValor));
+}
+
+function renderTabelaLoading() {
+  const tbody = document.getElementById("tabelaMov");
+  if (!tbody) return;
+
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="8" class="text-center text-muted">Carregando movimentações...</td>
+    </tr>
+  `;
 }
 
 function renderTabela(dados = []) {
@@ -254,16 +281,18 @@ function renderTabela(dados = []) {
 
   if (!Array.isArray(dados) || dados.length === 0) {
     tbody.innerHTML = `
-      <tr><td colspan="8" class="text-center text-muted">
-        Nenhum registro encontrado com os filtros aplicados.
-      </td></tr>`;
+      <tr>
+        <td colspan="8" class="text-center text-muted">
+          Nenhum registro encontrado com os filtros aplicados.
+        </td>
+      </tr>
+    `;
     return;
   }
 
-  tbody.innerHTML = "";
-
-  for (const item of dados) {
+  tbody.innerHTML = dados.map((item) => {
     const tipo = item?.tipo || "-";
+
     const tipoBadge =
       tipo === "entrada"
         ? `<span class="badge bg-success">entrada</span>`
@@ -274,18 +303,16 @@ function renderTabela(dados = []) {
         : `<span class="badge bg-secondary">${tipo}</span>`;
 
     const valorUnit =
-      item?.valor_unitario === null || item?.valor_unitario === undefined
+      item?.valor_unitario == null
         ? "-"
         : `R$ ${formatBRL(item.valor_unitario)}`;
 
     const valorTot =
-      item?.valor_total === null || item?.valor_total === undefined
+      item?.valor_total == null
         ? "-"
         : `R$ ${formatBRL(item.valor_total)}`;
 
-    tbody.insertAdjacentHTML(
-      "beforeend",
-      `
+    return `
       <tr>
         <td>${item?.id ?? "-"}</td>
         <td>${item?.produto_nome ?? "-"}</td>
@@ -296,9 +323,8 @@ function renderTabela(dados = []) {
         <td>${item?.data ?? "-"}</td>
         <td>${item?.usuario ?? "Sistema"}</td>
       </tr>
-      `
-    );
-  }
+    `;
+  }).join("");
 }
 
 function toNumArray(arr, len) {
@@ -315,7 +341,11 @@ function downsample({ labels, entrada, saida, remocao, outros }, maxPoints) {
   if (n <= maxPoints) return { labels, entrada, saida, remocao, outros };
 
   const bucket = Math.ceil(n / maxPoints);
-  const L = [], E = [], S = [], R = [], O = [];
+  const L = [];
+  const E = [];
+  const S = [];
+  const R = [];
+  const O = [];
 
   for (let i = 0; i < n; i += bucket) {
     const end = Math.min(i + bucket, n);
@@ -332,7 +362,10 @@ function downsample({ labels, entrada, saida, remocao, outros }, maxPoints) {
     const last = labels[end - 1];
     L.push(i === end - 1 ? String(first) : `${first}..${last}`);
 
-    E.push(se); S.push(ss); R.push(sr); O.push(so);
+    E.push(se);
+    S.push(ss);
+    R.push(sr);
+    O.push(so);
   }
 
   return { labels: L, entrada: E, saida: S, remocao: R, outros: O };
@@ -346,7 +379,24 @@ function resetCanvas(canvas) {
 }
 
 function sum(arr) {
-  return Array.isArray(arr) ? arr.reduce((a, b) => a + (Number(b) || 0), 0) : 0;
+  return Array.isArray(arr)
+    ? arr.reduce((a, b) => a + (Number(b) || 0), 0)
+    : 0;
+}
+
+function renderGraficoTemporalVazio() {
+  const canvas = document.getElementById("graficoTemporal");
+  if (!canvas) return;
+
+  if (graficoTemporal) {
+    graficoTemporal.destroy();
+    graficoTemporal = null;
+  }
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
 function renderGraficoTemporal(graf) {
@@ -358,25 +408,35 @@ function renderGraficoTemporal(graf) {
 
   let labels = Array.isArray(graf?.labels) ? graf.labels : [];
   if (!labels.length) {
-    if (graficoTemporal) {
-      graficoTemporal.destroy();
-      graficoTemporal = null;
-    }
+    renderGraficoTemporalVazio();
     return;
   }
 
   let entrada = toNumArray(graf?.entrada, labels.length);
-  let saida   = toNumArray(graf?.saida, labels.length);
+  let saida = toNumArray(graf?.saida, labels.length);
   let remocao = toNumArray(graf?.remocao, labels.length);
-  let outros  = toNumArray(graf?.outros, labels.length);
+  let outros = toNumArray(graf?.outros, labels.length);
 
   if (labels.length > MAX_POINTS_CHART) {
     const r = downsample({ labels, entrada, saida, remocao, outros }, MAX_POINTS_CHART);
-    labels = r.labels; entrada = r.entrada; saida = r.saida; remocao = r.remocao; outros = r.outros;
+    labels = r.labels;
+    entrada = r.entrada;
+    saida = r.saida;
+    remocao = r.remocao;
+    outros = r.outros;
   }
 
-  const sE = sum(entrada), sS = sum(saida), sR = sum(remocao), sO = sum(outros);
-  console.log("[grafico] labels:", labels.length, "sum:", { entrada: sE, saida: sS, remocao: sR, outros: sO });
+  const sE = sum(entrada);
+  const sS = sum(saida);
+  const sR = sum(remocao);
+  const sO = sum(outros);
+
+  console.log("[grafico] labels:", labels.length, "sum:", {
+    entrada: sE,
+    saida: sS,
+    remocao: sR,
+    outros: sO
+  });
 
   if (graficoTemporal) {
     graficoTemporal.destroy();
@@ -387,6 +447,7 @@ function renderGraficoTemporal(graf) {
 
   requestAnimationFrame(() => {
     const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
     const data = {
       labels,
@@ -412,20 +473,24 @@ function renderGraficoTemporal(graf) {
       }
     };
 
-    graficoTemporal = new Chart(ctx, { type: "bar", data, options });
+    graficoTemporal = new Chart(ctx, {
+      type: "bar",
+      data,
+      options
+    });
   });
 }
 
 async function carregarRelatorio() {
   const filtros = getFiltros();
 
-  const tbody = document.getElementById("tabelaMov");
-  if (tbody) {
-    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted">Carregando...</td></tr>`;
-  }
+  renderTabelaLoading();
+  setBtnLoading("btnAplicarFiltros", true);
+  setBtnLoading("btnAplicarFiltrosTopo", true);
 
   try {
     const resp = await apiRequest("relatorio_movimentacoes", filtros, "GET");
+
     if (!resp?.sucesso) {
       renderTotais({ total_qtd: 0, total_valor: 0 });
       renderTabela([]);
@@ -434,8 +499,9 @@ async function carregarRelatorio() {
     }
 
     const payload = resp?.dados || {};
+
     renderTotais(payload?.totais);
-    renderTabela(payload?.dados);
+    renderTabela(payload?.dados || []);
     renderGraficoTemporal(payload?.grafico_temporal);
 
     console.log("grafico_temporal.meta:", payload?.grafico_temporal?.meta);
@@ -457,6 +523,9 @@ async function carregarRelatorio() {
       detalhe: err?.message,
       stack: err?.stack
     });
+  } finally {
+    setBtnLoading("btnAplicarFiltros", false);
+    setBtnLoading("btnAplicarFiltrosTopo", false);
   }
 }
 
@@ -469,8 +538,8 @@ function debounce(fn, delay = 350) {
 }
 
 function bindEventos() {
-  // filtros
   document.getElementById("btnAplicarFiltros")?.addEventListener("click", carregarRelatorio);
+  document.getElementById("btnAplicarFiltrosTopo")?.addEventListener("click", carregarRelatorio);
   document.getElementById("btnLimparFiltros")?.addEventListener("click", limparFiltros);
 
   const d = debounce(carregarRelatorio, 350);
@@ -478,7 +547,6 @@ function bindEventos() {
   document.getElementById("dataFim")?.addEventListener("change", d);
   document.getElementById("tipo")?.addEventListener("change", d);
 
-  // exportação
   document.getElementById("btnExportarCSV")?.addEventListener("click", exportarCSV);
   document.getElementById("btnExportarPDF")?.addEventListener("click", exportarPDF);
 }
@@ -487,9 +555,6 @@ document.addEventListener("DOMContentLoaded", () => {
   bindEventos();
   setDefaultDatesIfEmpty();
 
-  // Estoque atual
   carregarEstoqueAtual();
-
-  // Relatório movimentações
   carregarRelatorio();
 });
