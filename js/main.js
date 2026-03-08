@@ -20,7 +20,7 @@ function obterPaginaAtual() {
   if (path.includes("/pages/estoque.html")) return "estoque";
   if (path.includes("/pages/produtos.html")) return "produtos";
   if (path.includes("/pages/fornecedores.html")) return "fornecedores";
-  if (path.includes("/relatorios.html")) return "relatorios";
+  if (path.includes("/pages/relatorios.html")) return "relatorios";
   if (path.includes("/pages/usuarios.html")) return "usuarios";
   if (path.includes("/pages/movimentacoes.html")) return "movimentacoes";
   if (path.includes("/pages/login.html")) return "login";
@@ -144,7 +144,7 @@ function linkCorrespondePaginaAtual(link, paginaAtual) {
     (paginaAtual === "estoque" && href.includes("/pages/estoque.html")) ||
     (paginaAtual === "produtos" && href.includes("/pages/produtos.html")) ||
     (paginaAtual === "fornecedores" && href.includes("/pages/fornecedores.html")) ||
-    (paginaAtual === "relatorios" && href.includes("/relatorios.html")) ||
+    (paginaAtual === "relatorios" && href.includes("/pages/relatorios.html")) ||
     (paginaAtual === "usuarios" && href.includes("/pages/usuarios.html")) ||
     (paginaAtual === "movimentacoes" && href.includes("/pages/movimentacoes.html"))
   );

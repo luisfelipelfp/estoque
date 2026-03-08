@@ -3,10 +3,15 @@ import { apiRequest } from "./api.js";
 import { logJsInfo, logJsError } from "./logger.js";
 
 let graficoTemporal = null;
+let modalFiltrosInstance = null;
 
 const DEFAULT_RANGE_DAYS = 30;
 const MAX_POINTS_CHART = 120;
 const DEFAULT_LIMITE_TABELA = 200;
+
+function $(id) {
+  return document.getElementById(id);
+}
 
 function formatBRL(valor) {
   const n = Number(valor || 0);
@@ -24,9 +29,62 @@ function toYMD(dateObj) {
   return `${dateObj.getFullYear()}-${pad2(dateObj.getMonth() + 1)}-${pad2(dateObj.getDate())}`;
 }
 
+function setTexto(id, valor) {
+  const el = $(id);
+  if (el) {
+    el.textContent = String(valor ?? "");
+  }
+}
+
+function setStatusRelatorio(texto = "", tipo = "muted") {
+  const el = $("statusRelatorio");
+  if (!el) return;
+
+  el.className = "small";
+  if (!texto) {
+    el.textContent = "";
+    return;
+  }
+
+  if (tipo === "erro") {
+    el.classList.add("text-danger");
+  } else if (tipo === "sucesso") {
+    el.classList.add("text-success");
+  } else if (tipo === "processando") {
+    el.classList.add("text-primary");
+  } else {
+    el.classList.add("text-muted");
+  }
+
+  el.textContent = texto;
+}
+
+function setBtnLoading(id, loading, textoOriginal = "") {
+  const btn = $(id);
+  if (!btn) return;
+
+  if (!btn.dataset.originalText) {
+    btn.dataset.originalText = textoOriginal || btn.textContent || "";
+  }
+
+  btn.disabled = !!loading;
+  btn.textContent = loading ? "Processando..." : btn.dataset.originalText;
+}
+
+function getModalFiltros() {
+  const el = $("modalFiltrosRelatorio");
+  if (!el || !window.bootstrap?.Modal) return null;
+
+  if (!modalFiltrosInstance) {
+    modalFiltrosInstance = new window.bootstrap.Modal(el);
+  }
+
+  return modalFiltrosInstance;
+}
+
 function setDefaultDatesIfEmpty() {
-  const elIni = document.getElementById("dataInicio");
-  const elFim = document.getElementById("dataFim");
+  const elIni = $("dataInicio");
+  const elFim = $("dataFim");
   if (!elIni || !elFim) return;
   if (elIni.value || elFim.value) return;
 
@@ -40,32 +98,48 @@ function setDefaultDatesIfEmpty() {
 
 function getFiltros() {
   return {
-    data_inicio: document.getElementById("dataInicio")?.value || "",
-    data_fim: document.getElementById("dataFim")?.value || "",
-    tipo: document.getElementById("tipo")?.value || "",
+    data_inicio: $("dataInicio")?.value || "",
+    data_fim: $("dataFim")?.value || "",
+    tipo: $("tipo")?.value || "",
     pagina: 1,
     limite: DEFAULT_LIMITE_TABELA
   };
 }
 
-function setTexto(id, valor) {
-  const el = document.getElementById(id);
-  if (el) {
-    el.textContent = String(valor ?? "");
+function atualizarResumoFiltros() {
+  const filtros = getFiltros();
+
+  const partes = [];
+  const badgePartes = [];
+
+  if (filtros.data_inicio && filtros.data_fim) {
+    partes.push(`período de ${filtros.data_inicio} até ${filtros.data_fim}`);
+    badgePartes.push(`${filtros.data_inicio} → ${filtros.data_fim}`);
+  } else if (filtros.data_inicio) {
+    partes.push(`a partir de ${filtros.data_inicio}`);
+    badgePartes.push(`desde ${filtros.data_inicio}`);
+  } else if (filtros.data_fim) {
+    partes.push(`até ${filtros.data_fim}`);
+    badgePartes.push(`até ${filtros.data_fim}`);
+  } else {
+    partes.push("período padrão dos últimos 30 dias");
+    badgePartes.push("Últimos 30 dias");
   }
+
+  if (filtros.tipo) {
+    partes.push(`tipo ${filtros.tipo}`);
+    badgePartes.push(filtros.tipo);
+  } else {
+    partes.push("todos os tipos");
+  }
+
+  setTexto("resumoFiltrosTexto", `${partes.join(", ")}.`);
+  setTexto("badgePeriodoRelatorio", badgePartes.join(" • "));
 }
 
-function setBtnLoading(id, loading, textoOriginal = "") {
-  const btn = document.getElementById(id);
-  if (!btn) return;
-
-  if (!btn.dataset.originalText) {
-    btn.dataset.originalText = textoOriginal || btn.textContent || "";
-  }
-
-  btn.disabled = !!loading;
-  btn.textContent = loading ? "Processando..." : btn.dataset.originalText;
-}
+/* =========================
+   EXPORTAÇÃO
+   ========================= */
 
 function avisarExportacaoNaoDisponivel(tipo) {
   const msg = `${tipo} ainda não está implementado no backend atual.`;
@@ -77,10 +151,6 @@ function avisarExportacaoNaoDisponivel(tipo) {
     tipo
   });
 }
-
-/* =========================
-   EXPORTAÇÃO
-   ========================= */
 
 function exportarCSV() {
   avisarExportacaoNaoDisponivel("Exportação CSV");
@@ -95,15 +165,12 @@ function exportarPDF() {
    ========================= */
 
 function limparFiltros() {
-  const elIni = document.getElementById("dataInicio");
-  const elFim = document.getElementById("dataFim");
-  const elTipo = document.getElementById("tipo");
-
-  if (elIni) elIni.value = "";
-  if (elFim) elFim.value = "";
-  if (elTipo) elTipo.value = "";
+  if ($("dataInicio")) $("dataInicio").value = "";
+  if ($("dataFim")) $("dataFim").value = "";
+  if ($("tipo")) $("tipo").value = "";
 
   setDefaultDatesIfEmpty();
+  atualizarResumoFiltros();
   carregarRelatorio();
 
   logJsInfo({
@@ -113,187 +180,8 @@ function limparFiltros() {
 }
 
 /* =========================
-   ESTOQUE ATUAL
+   GRÁFICO
    ========================= */
-
-function renderEstoqueAtualLoading() {
-  const tbody = document.getElementById("tabelaEstoqueAtual");
-  if (!tbody) return;
-
-  tbody.innerHTML = `
-    <tr>
-      <td colspan="5" class="text-center text-muted">Carregando estoque...</td>
-    </tr>
-  `;
-}
-
-function renderEstoqueAtualErro(msg) {
-  const tbody = document.getElementById("tabelaEstoqueAtual");
-  if (!tbody) return;
-
-  setTexto("estoqueTotalQtd", "0");
-  setTexto("estoqueTotalValor", "0,00");
-
-  tbody.innerHTML = `
-    <tr>
-      <td colspan="5" class="text-center text-danger">
-        ${msg || "Falha ao carregar estoque atual."}
-      </td>
-    </tr>
-  `;
-}
-
-function renderEstoqueAtual(payload) {
-  const tbody = document.getElementById("tabelaEstoqueAtual");
-
-  const itens = Array.isArray(payload?.itens) ? payload.itens : [];
-  const totais = payload?.totais || {};
-
-  const totalQtd = Number(totais?.total_qtd ?? 0);
-  const totalValor = Number(totais?.total_valor ?? 0);
-
-  setTexto("estoqueTotalQtd", totalQtd);
-  setTexto("estoqueTotalValor", formatBRL(totalValor));
-
-  if (!tbody) return;
-
-  if (itens.length === 0) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="5" class="text-center text-muted">Nenhum item de estoque encontrado.</td>
-      </tr>
-    `;
-    return;
-  }
-
-  tbody.innerHTML = itens.map((item) => {
-    const id = item?.id ?? "-";
-    const nome = item?.nome ?? "-";
-    const qtd = Number(item?.quantidade ?? 0);
-    const preco = item?.preco_custo == null ? 0 : Number(item.preco_custo);
-    const valorEstimado = item?.valor_estimado == null
-      ? (qtd * preco)
-      : Number(item.valor_estimado);
-
-    return `
-      <tr>
-        <td>${id}</td>
-        <td>${nome}</td>
-        <td>${qtd}</td>
-        <td>R$ ${formatBRL(preco)}</td>
-        <td>R$ ${formatBRL(valorEstimado)}</td>
-      </tr>
-    `;
-  }).join("");
-}
-
-async function carregarEstoqueAtual() {
-  renderEstoqueAtualLoading();
-
-  try {
-    const resp = await apiRequest("estoque_atual", {}, "GET");
-
-    if (!resp?.sucesso) {
-      renderEstoqueAtualErro(resp?.mensagem || "Erro ao gerar estoque atual.");
-      return;
-    }
-
-    renderEstoqueAtual(resp?.dados);
-
-    logJsInfo({
-      origem: "relatorios.js",
-      mensagem: "Estoque atual carregado",
-      total_itens: resp?.dados?.itens?.length ?? 0,
-      total_qtd: resp?.dados?.totais?.total_qtd ?? 0
-    });
-  } catch (err) {
-    renderEstoqueAtualErro("Erro inesperado ao carregar estoque atual.");
-
-    logJsError({
-      origem: "relatorios.js",
-      mensagem: "Erro inesperado ao carregar estoque atual",
-      detalhe: err?.message,
-      stack: err?.stack
-    });
-  }
-}
-
-/* =========================
-   RELATÓRIO MOVIMENTAÇÕES
-   ========================= */
-
-function renderTotais(totais) {
-  const totalQtd = Number(totais?.total_qtd ?? 0);
-  const totalValor = Number(totais?.total_valor ?? 0);
-
-  setTexto("totalQtd", totalQtd);
-  setTexto("totalValor", formatBRL(totalValor));
-  setTexto("totalQtdResumo", totalQtd);
-  setTexto("totalValorResumo", formatBRL(totalValor));
-}
-
-function renderTabelaLoading() {
-  const tbody = document.getElementById("tabelaMov");
-  if (!tbody) return;
-
-  tbody.innerHTML = `
-    <tr>
-      <td colspan="8" class="text-center text-muted">Carregando movimentações...</td>
-    </tr>
-  `;
-}
-
-function renderTabela(dados = []) {
-  const tbody = document.getElementById("tabelaMov");
-  if (!tbody) return;
-
-  if (!Array.isArray(dados) || dados.length === 0) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="8" class="text-center text-muted">
-          Nenhum registro encontrado com os filtros aplicados.
-        </td>
-      </tr>
-    `;
-    return;
-  }
-
-  tbody.innerHTML = dados.map((item) => {
-    const tipo = item?.tipo || "-";
-
-    const tipoBadge =
-      tipo === "entrada"
-        ? `<span class="badge bg-success">entrada</span>`
-        : tipo === "saida"
-        ? `<span class="badge bg-danger">saída</span>`
-        : tipo === "remocao"
-        ? `<span class="badge bg-warning text-dark">remoção</span>`
-        : `<span class="badge bg-secondary">${tipo}</span>`;
-
-    const valorUnit =
-      item?.valor_unitario == null
-        ? "-"
-        : `R$ ${formatBRL(item.valor_unitario)}`;
-
-    const valorTot =
-      item?.valor_total == null
-        ? "-"
-        : `R$ ${formatBRL(item.valor_total)}`;
-
-    return `
-      <tr>
-        <td>${item?.id ?? "-"}</td>
-        <td>${item?.produto_nome ?? "-"}</td>
-        <td>${tipoBadge}</td>
-        <td>${item?.quantidade ?? 0}</td>
-        <td>${valorUnit}</td>
-        <td>${valorTot}</td>
-        <td>${item?.data ?? "-"}</td>
-        <td>${item?.usuario ?? "Sistema"}</td>
-      </tr>
-    `;
-  }).join("");
-}
 
 function toNumArray(arr, len) {
   const out = new Array(len);
@@ -353,7 +241,7 @@ function sum(arr) {
 }
 
 function renderGraficoTemporalVazio() {
-  const canvas = document.getElementById("graficoTemporal");
+  const canvas = $("graficoTemporal");
   if (!canvas) return;
 
   if (graficoTemporal) {
@@ -368,7 +256,7 @@ function renderGraficoTemporalVazio() {
 }
 
 function renderGraficoTemporal(graf) {
-  let canvas = document.getElementById("graficoTemporal");
+  let canvas = $("graficoTemporal");
   if (!canvas) return;
 
   const Chart = window.Chart;
@@ -449,30 +337,42 @@ function renderGraficoTemporal(graf) {
   });
 }
 
+/* =========================
+   RELATÓRIO
+   ========================= */
+
+function renderTotais(totais) {
+  const totalQtd = Number(totais?.total_qtd ?? 0);
+  const totalValor = Number(totais?.total_valor ?? 0);
+
+  setTexto("totalQtd", totalQtd);
+  setTexto("totalValor", formatBRL(totalValor));
+}
+
 async function carregarRelatorio() {
   const filtros = getFiltros();
 
-  renderTabelaLoading();
+  setStatusRelatorio("Carregando relatório...", "processando");
   setBtnLoading("btnAplicarFiltros", true);
-  setBtnLoading("btnAplicarFiltrosTopo", true);
+  setBtnLoading("btnAbrirFiltros", true);
+  setBtnLoading("btnAtualizarRelatorio", true);
 
   try {
     const resp = await apiRequest("relatorio_movimentacoes", filtros, "GET");
 
     if (!resp?.sucesso) {
       renderTotais({ total_qtd: 0, total_valor: 0 });
-      renderTabela([]);
       renderGraficoTemporal({ labels: [], entrada: [], saida: [], remocao: [], outros: [] });
+      setStatusRelatorio(resp?.mensagem || "Não foi possível carregar o relatório.", "erro");
       return;
     }
 
     const payload = resp?.dados || {};
 
     renderTotais(payload?.totais);
-    renderTabela(payload?.dados || []);
     renderGraficoTemporal(payload?.grafico_temporal);
-
-    console.log("grafico_temporal.meta:", payload?.grafico_temporal?.meta);
+    atualizarResumoFiltros();
+    setStatusRelatorio("Relatório carregado com sucesso.", "sucesso");
 
     logJsInfo({
       origem: "relatorios.js",
@@ -482,8 +382,8 @@ async function carregarRelatorio() {
     });
   } catch (err) {
     renderTotais({ total_qtd: 0, total_valor: 0 });
-    renderTabela([]);
     renderGraficoTemporal({ labels: [], entrada: [], saida: [], remocao: [], outros: [] });
+    setStatusRelatorio("Erro inesperado ao carregar relatório.", "erro");
 
     logJsError({
       origem: "relatorios.js",
@@ -493,7 +393,8 @@ async function carregarRelatorio() {
     });
   } finally {
     setBtnLoading("btnAplicarFiltros", false);
-    setBtnLoading("btnAplicarFiltrosTopo", false);
+    setBtnLoading("btnAbrirFiltros", false);
+    setBtnLoading("btnAtualizarRelatorio", false);
   }
 }
 
@@ -506,23 +407,43 @@ function debounce(fn, delay = 350) {
 }
 
 function bindEventos() {
-  document.getElementById("btnAplicarFiltros")?.addEventListener("click", carregarRelatorio);
-  document.getElementById("btnAplicarFiltrosTopo")?.addEventListener("click", carregarRelatorio);
-  document.getElementById("btnLimparFiltros")?.addEventListener("click", limparFiltros);
+  $("btnAbrirFiltros")?.addEventListener("click", () => {
+    getModalFiltros()?.show();
+  });
 
-  const d = debounce(carregarRelatorio, 350);
-  document.getElementById("dataInicio")?.addEventListener("change", d);
-  document.getElementById("dataFim")?.addEventListener("change", d);
-  document.getElementById("tipo")?.addEventListener("change", d);
+  $("btnAplicarFiltros")?.addEventListener("click", async () => {
+    atualizarResumoFiltros();
+    await carregarRelatorio();
+    getModalFiltros()?.hide();
+  });
 
-  document.getElementById("btnExportarCSV")?.addEventListener("click", exportarCSV);
-  document.getElementById("btnExportarPDF")?.addEventListener("click", exportarPDF);
+  $("btnLimparFiltros")?.addEventListener("click", () => {
+    limparFiltros();
+  });
+
+  $("btnLimparFiltrosRapido")?.addEventListener("click", () => {
+    limparFiltros();
+  });
+
+  $("btnAtualizarRelatorio")?.addEventListener("click", () => {
+    carregarRelatorio();
+  });
+
+  const d = debounce(() => {
+    atualizarResumoFiltros();
+  }, 200);
+
+  $("dataInicio")?.addEventListener("change", d);
+  $("dataFim")?.addEventListener("change", d);
+  $("tipo")?.addEventListener("change", d);
+
+  $("btnExportarCSV")?.addEventListener("click", exportarCSV);
+  $("btnExportarPDF")?.addEventListener("click", exportarPDF);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   bindEventos();
   setDefaultDatesIfEmpty();
-
-  carregarEstoqueAtual();
+  atualizarResumoFiltros();
   carregarRelatorio();
 });

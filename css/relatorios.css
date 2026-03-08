@@ -1,7 +1,7 @@
 .resumo-card {
   border-radius: 16px;
-  padding: 16px 18px;
-  min-height: 104px;
+  padding: 18px 20px;
+  min-height: 112px;
   border: 1px solid #e9ecef;
   background: #fff;
   display: flex;
@@ -10,24 +10,16 @@
 }
 
 .resumo-card-label {
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   color: #6c757d;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .resumo-card-valor {
-  font-size: 1.45rem;
+  font-size: 1.7rem;
   font-weight: 700;
   color: #212529;
   line-height: 1.2;
-}
-
-.resumo-card-info {
-  background: linear-gradient(180deg, #eef7ff 0%, #ffffff 100%);
-}
-
-.resumo-card-secondary {
-  background: linear-gradient(180deg, #f4f5f7 0%, #ffffff 100%);
 }
 
 .resumo-card-light {
@@ -41,8 +33,16 @@
 .chart-box {
   position: relative;
   width: 100%;
-  min-height: 360px;
-  height: 420px;
+  min-height: 380px;
+  height: 460px;
+}
+
+#statusRelatorio {
+  min-height: 20px;
+}
+
+#modalFiltrosRelatorio .modal-content {
+  border-radius: 20px;
 }
 
 @media (max-width: 991px) {
@@ -50,9 +50,4 @@
     min-height: 300px;
     height: 340px;
   }
-}
-
-.table td,
-.table th {
-  vertical-align: middle;
 }
