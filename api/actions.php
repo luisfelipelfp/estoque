@@ -99,6 +99,112 @@ function require_auth(): array
     return $_SESSION['usuario'];
 }
 
+/**
+ * Valida e normaliza fornecedores enviados pelo frontend.
+ *
+ * Regras:
+ * - produto pode ficar sem fornecedor
+ * - não permite fornecedor_id inválido
+ * - não permite fornecedor duplicado no mesmo produto
+ * - mantém apenas um principal
+ * - sempre usa o nome oficial vindo do banco
+ */
+function normalizar_fornecedores_payload(mysqli $conn, mixed $fornecedoresRaw): array
+{
+    if (!is_array($fornecedoresRaw) || empty($fornecedoresRaw)) {
+        return [];
+    }
+
+    $normalizados = [];
+    $idsUsados = [];
+
+    foreach ($fornecedoresRaw as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $fornecedorId = (int)($item['fornecedor_id'] ?? 0);
+
+        // permite "linha vazia" no front sem quebrar o save
+        if ($fornecedorId <= 0) {
+            continue;
+        }
+
+        if (in_array($fornecedorId, $idsUsados, true)) {
+            throw new InvalidArgumentException('O mesmo fornecedor não pode ser adicionado mais de uma vez para o mesmo produto.');
+        }
+
+        $stmt = $conn->prepare("
+            SELECT id, nome, ativo
+            FROM fornecedores
+            WHERE id = ?
+            LIMIT 1
+        ");
+        $stmt->bind_param('i', $fornecedorId);
+        $stmt->execute();
+        $fornecedorDb = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        if (!$fornecedorDb) {
+            throw new InvalidArgumentException('Fornecedor informado não existe.');
+        }
+
+        $precoCusto = isset($item['preco_custo']) && $item['preco_custo'] !== ''
+            ? (float)$item['preco_custo']
+            : 0.0;
+
+        $precoVenda = isset($item['preco_venda']) && $item['preco_venda'] !== ''
+            ? (float)$item['preco_venda']
+            : 0.0;
+
+        if ($precoCusto < 0 || $precoVenda < 0) {
+            throw new InvalidArgumentException('Os preços dos fornecedores devem ser maiores ou iguais a zero.');
+        }
+
+        $normalizados[] = [
+            'fornecedor_id' => $fornecedorId,
+            'nome'          => (string)$fornecedorDb['nome'],
+            'codigo'        => trim((string)($item['codigo'] ?? '')),
+            'preco_custo'   => $precoCusto,
+            'preco_venda'   => $precoVenda,
+            'observacao'    => trim((string)($item['observacao'] ?? '')),
+            'principal'     => !empty($item['principal']) ? 1 : 0,
+        ];
+
+        $idsUsados[] = $fornecedorId;
+    }
+
+    if (empty($normalizados)) {
+        return [];
+    }
+
+    $temPrincipal = false;
+    foreach ($normalizados as $f) {
+        if ((int)$f['principal'] === 1) {
+            $temPrincipal = true;
+            break;
+        }
+    }
+
+    if (!$temPrincipal) {
+        $normalizados[0]['principal'] = 1;
+    } else {
+        $achou = false;
+        foreach ($normalizados as $i => $f) {
+            if ((int)$f['principal'] === 1) {
+                if (!$achou) {
+                    $achou = true;
+                    $normalizados[$i]['principal'] = 1;
+                } else {
+                    $normalizados[$i]['principal'] = 0;
+                }
+            }
+        }
+    }
+
+    return $normalizados;
+}
+
 // ======================
 // EXECUÇÃO
 // ======================
@@ -298,16 +404,18 @@ try {
                 ? (float)$body['preco_venda']
                 : null;
 
-            $fornecedores = (isset($body['fornecedores']) && is_array($body['fornecedores']))
-                ? $body['fornecedores']
-                : [];
-
             if ($qtd < 0) {
                 json_response(false, 'Quantidade inválida.', null, 400);
             }
 
             if ($estoque_minimo < 0) {
                 json_response(false, 'Estoque mínimo inválido.', null, 400);
+            }
+
+            try {
+                $fornecedores = normalizar_fornecedores_payload($conn, $body['fornecedores'] ?? []);
+            } catch (InvalidArgumentException $e) {
+                json_response(false, $e->getMessage(), null, 400);
             }
 
             $res = produtos_adicionar(
@@ -340,10 +448,6 @@ try {
                 ? (float)$body['preco_venda']
                 : 0.0;
 
-            $fornecedores = (isset($body['fornecedores']) && is_array($body['fornecedores']))
-                ? $body['fornecedores']
-                : [];
-
             if ($produto_id <= 0) {
                 json_response(false, 'Produto inválido.', null, 400);
             }
@@ -362,6 +466,12 @@ try {
 
             if ($preco_custo < 0 || $preco_venda < 0) {
                 json_response(false, 'Preços inválidos.', null, 400);
+            }
+
+            try {
+                $fornecedores = normalizar_fornecedores_payload($conn, $body['fornecedores'] ?? []);
+            } catch (InvalidArgumentException $e) {
+                json_response(false, $e->getMessage(), null, 400);
             }
 
             $res = produtos_atualizar(
