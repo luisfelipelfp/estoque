@@ -8,90 +8,102 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 
   <link rel="stylesheet" href="/estoque/css/base.css?v=20260308">
-  <link rel="stylesheet" href="/estoque/css/login.css?v=20260308">
+  <link rel="stylesheet" href="/estoque/css/login.css?v=20260308b">
 </head>
 
 <body class="login-page">
-  <div class="login-bg-shape login-bg-shape-1"></div>
-  <div class="login-bg-shape login-bg-shape-2"></div>
+  <div class="login-bg login-bg-1"></div>
+  <div class="login-bg login-bg-2"></div>
 
   <main class="login-wrapper">
-    <section class="login-card card border-0 shadow-lg">
-      <div class="card-body p-4 p-md-5">
-        <div class="text-center mb-4">
-          <div class="login-brand-icon mb-3">📦</div>
-          <h1 class="login-title mb-2">Bem-vindo ao Estoque</h1>
-          <p class="login-subtitle text-muted mb-0">
-            Faça login para acessar o sistema.
-          </p>
+    <section class="login-panel">
+      <div class="login-brand">
+        <div class="login-brand-icon">📦</div>
+        <div>
+          <div class="login-brand-title">Estoque</div>
+          <div class="login-brand-subtitle">Sistema de controle de estoque</div>
         </div>
+      </div>
 
-        <form id="formLogin" novalidate>
-          <div class="mb-3">
-            <label for="login" class="form-label fw-semibold">Usuário ou E-mail</label>
-            <input
-              type="text"
-              class="form-control form-control-lg"
-              id="login"
-              name="login"
-              autocomplete="username"
-              placeholder="Digite seu usuário ou e-mail"
-              required
-            >
+      <div class="login-card card border-0">
+        <div class="card-body p-4 p-lg-5">
+          <div class="login-header mb-4">
+            <h1 class="login-title mb-2">Bem-vindo de volta</h1>
+            <p class="login-subtitle mb-0">
+              Entre com seu usuário para acessar o ambiente.
+            </p>
           </div>
 
-          <div class="mb-3">
-            <label for="senha" class="form-label fw-semibold">Senha</label>
-            <div class="input-group input-group-lg">
+          <form id="formLogin" novalidate>
+            <div class="mb-3">
+              <label for="login" class="form-label login-label">Usuário ou e-mail</label>
               <input
-                type="password"
-                class="form-control"
-                id="senha"
-                name="senha"
-                autocomplete="current-password"
-                placeholder="Digite sua senha"
+                type="text"
+                class="form-control form-control-lg"
+                id="login"
+                name="login"
+                autocomplete="username"
+                placeholder="Digite seu usuário ou e-mail"
                 required
+                autofocus
               >
-              <button
-                class="btn btn-outline-secondary"
-                type="button"
-                id="btnToggleSenha"
-                aria-label="Mostrar ou ocultar senha"
-                title="Mostrar ou ocultar senha"
-              >
-                👁️
-              </button>
             </div>
-          </div>
 
-          <button id="btnEntrar" type="submit" class="btn btn-primary btn-lg w-100 fw-bold mt-2">
-            Entrar no sistema
-          </button>
+            <div class="mb-3">
+              <label for="senha" class="form-label login-label">Senha</label>
+              <div class="input-group input-group-lg login-password-group">
+                <input
+                  type="password"
+                  class="form-control"
+                  id="senha"
+                  name="senha"
+                  autocomplete="current-password"
+                  placeholder="Digite sua senha"
+                  required
+                >
+                <button
+                  id="btnMostrarSenha"
+                  class="btn btn-outline-secondary"
+                  type="button"
+                  aria-label="Mostrar senha"
+                  title="Mostrar senha"
+                >
+                  👁️
+                </button>
+              </div>
+            </div>
 
-          <div id="msgErro" class="alert alert-danger mt-3 d-none mb-0" role="alert"></div>
+            <button id="btnEntrar" type="submit" class="btn btn-primary btn-lg w-100 fw-bold login-submit">
+              Entrar no sistema
+            </button>
 
-          <div class="login-footer-note text-center mt-4">
-            <small class="text-muted">
-              Caso alguma alteração não apareça, atualize com <strong>Ctrl + F5</strong>.
-            </small>
-          </div>
-        </form>
+            <div id="msgErro" class="alert alert-danger mt-3 d-none mb-0" role="alert"></div>
+
+            <div class="login-help text-center mt-4">
+              <small class="text-muted">
+                Se alguma atualização não aparecer, use <strong>Ctrl + F5</strong>.
+              </small>
+            </div>
+          </form>
+        </div>
       </div>
     </section>
   </main>
 
   <script>
     document.addEventListener("DOMContentLoaded", () => {
-      const btn = document.getElementById("btnToggleSenha");
-      const input = document.getElementById("senha");
+      const btnMostrarSenha = document.getElementById("btnMostrarSenha");
+      const inputSenha = document.getElementById("senha");
 
-      if (!btn || !input) return;
-
-      btn.addEventListener("click", () => {
-        const mostrando = input.type === "text";
-        input.type = mostrando ? "password" : "text";
-        btn.textContent = mostrando ? "👁️" : "🙈";
-      });
+      if (btnMostrarSenha && inputSenha) {
+        btnMostrarSenha.addEventListener("click", () => {
+          const mostrando = inputSenha.type === "text";
+          inputSenha.type = mostrando ? "password" : "text";
+          btnMostrarSenha.textContent = mostrando ? "👁️" : "🙈";
+          btnMostrarSenha.setAttribute("aria-label", mostrando ? "Mostrar senha" : "Ocultar senha");
+          btnMostrarSenha.setAttribute("title", mostrando ? "Mostrar senha" : "Ocultar senha");
+        });
+      }
     });
   </script>
 

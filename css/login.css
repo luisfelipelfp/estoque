@@ -1,180 +1,249 @@
 /* =========================
    Página de login
    ========================= */
-
 .login-page {
   min-height: 100vh;
+  margin: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-
-  background:
-    radial-gradient(circle at top left, rgba(82,98,140,0.15), transparent 40%),
-    radial-gradient(circle at bottom right, rgba(82,98,140,0.12), transparent 45%),
-    linear-gradient(180deg, #eef2f8 0%, #f6f8fc 100%);
-
   position: relative;
   overflow: hidden;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(82, 98, 140, 0.18), transparent 32%),
+    radial-gradient(circle at bottom right, rgba(82, 98, 140, 0.14), transparent 34%),
+    linear-gradient(180deg, #eef2f8 0%, #f7f9fc 100%);
 }
 
-
 /* =========================
-   Shapes decorativos
+   Elementos de fundo
    ========================= */
-
-.login-bg-shape {
+.login-bg {
   position: absolute;
-  border-radius: 50%;
-  filter: blur(60px);
-  opacity: 0.6;
-  z-index: 0;
+  border-radius: 999px;
+  filter: blur(70px);
+  opacity: 0.55;
+  pointer-events: none;
 }
 
-.login-bg-shape-1 {
-  width: 420px;
-  height: 420px;
-  background: #c7d2fe;
-  top: -120px;
-  left: -120px;
+.login-bg-1 {
+  width: 360px;
+  height: 360px;
+  background: rgba(99, 102, 241, 0.18);
+  top: -90px;
+  left: -70px;
 }
 
-.login-bg-shape-2 {
-  width: 420px;
-  height: 420px;
-  background: #dbeafe;
-  bottom: -140px;
-  right: -140px;
+.login-bg-2 {
+  width: 340px;
+  height: 340px;
+  background: rgba(59, 130, 246, 0.16);
+  bottom: -90px;
+  right: -70px;
 }
-
 
 /* =========================
-   Container central
+   Estrutura central
    ========================= */
-
 .login-wrapper {
   width: 100%;
-  max-width: 420px;
-  padding: 20px;
+  max-width: 470px;
+  padding: 24px;
+  position: relative;
   z-index: 1;
 }
 
-
-/* =========================
-   Card do login
-   ========================= */
-
-.login-card {
-  border-radius: 20px;
-  background: #ffffff;
-  box-shadow:
-    0 20px 45px rgba(0,0,0,0.08),
-    0 8px 20px rgba(0,0,0,0.04);
-
-  animation: loginFade 0.35s ease;
+.login-panel {
+  width: 100%;
 }
 
-
-@keyframes loginFade {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-
 /* =========================
-   Branding
+   Marca
    ========================= */
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 0 4px;
+}
 
 .login-brand-icon {
-  width: 60px;
-  height: 60px;
+  width: 58px;
+  height: 58px;
+  min-width: 58px;
   border-radius: 16px;
-
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  font-size: 1.55rem;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at top left, rgba(255,255,255,0.18), transparent 45%),
+    linear-gradient(180deg, #151a28 0%, #1b2233 55%, #151a28 100%);
+  box-shadow:
+    0 12px 24px rgba(21, 26, 40, 0.22),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+}
 
-  font-size: 1.8rem;
+.login-brand-title {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.1;
+}
 
-  background: linear-gradient(135deg, #eef2ff, #e2e8f0);
-  border: 1px solid #dbe3f0;
+.login-brand-subtitle {
+  font-size: 0.92rem;
+  color: #6b7280;
+  margin-top: 2px;
+}
 
-  box-shadow: 0 8px 20px rgba(15,23,42,0.08);
+/* =========================
+   Card principal
+   ========================= */
+.login-card {
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(233, 237, 243, 0.9);
+  box-shadow:
+    0 24px 60px rgba(15, 23, 42, 0.12),
+    0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.login-header {
+  text-align: center;
 }
 
 .login-title {
-  font-size: 1.5rem;
+  font-size: 1.85rem;
   font-weight: 700;
-  color: #1f2937;
+  color: #111827;
+  letter-spacing: -0.02em;
 }
 
 .login-subtitle {
-  font-size: 0.95rem;
+  font-size: 0.98rem;
+  color: #6b7280;
 }
 
-
 /* =========================
-   Inputs
+   Campos
    ========================= */
+.login-label {
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+}
 
 .login-card .form-control {
-  border-radius: 12px;
-  border: 1px solid #dfe3ea;
+  border-radius: 14px;
+  border: 1px solid #d9e0ea;
+  background: #ffffff;
+  color: #111827;
+  min-height: 54px;
+  padding-left: 14px;
+  padding-right: 14px;
+  transition: all 0.18s ease;
+}
+
+.login-card .form-control::placeholder {
+  color: #9aa4b2;
 }
 
 .login-card .form-control:focus {
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 0.15rem rgba(79,70,229,0.2);
+  border-color: #6b7cff;
+  box-shadow: 0 0 0 0.18rem rgba(99, 102, 241, 0.14);
 }
 
+.login-password-group .form-control {
+  border-right: 0;
+  border-radius: 14px 0 0 14px;
+}
+
+.login-password-group .btn {
+  min-width: 60px;
+  border-radius: 0 14px 14px 0;
+  border: 1px solid #d9e0ea;
+  border-left: 0;
+  background: #ffffff;
+  color: #495057;
+}
+
+.login-password-group .btn:hover {
+  background: #f8fafc;
+  color: #111827;
+}
+
+.login-password-group .btn:focus {
+  box-shadow: none;
+}
 
 /* =========================
-   Botão
+   Botão principal
    ========================= */
-
-#btnEntrar {
-  border-radius: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-
-  padding: 12px;
-
-  transition: all 0.15s ease;
+.login-submit {
+  margin-top: 10px;
+  min-height: 54px;
+  border-radius: 14px;
+  border: 0;
+  background:
+    radial-gradient(circle at top left, rgba(255,255,255,0.12), transparent 35%),
+    linear-gradient(180deg, #1b2233 0%, #151a28 100%);
+  box-shadow: 0 14px 28px rgba(21, 26, 40, 0.18);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
 }
 
-#btnEntrar:hover {
+.login-submit:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 18px rgba(0,0,0,0.12);
+  box-shadow: 0 18px 34px rgba(21, 26, 40, 0.22);
 }
 
+.login-submit:active {
+  transform: translateY(0);
+}
 
 /* =========================
    Rodapé
    ========================= */
-
-.login-footer-note {
-  font-size: 0.85rem;
+.login-help {
+  line-height: 1.5;
 }
 
+/* =========================
+   Alerta
+   ========================= */
+#msgErro {
+  border-radius: 14px;
+  font-size: 0.95rem;
+}
 
 /* =========================
    Responsivo
    ========================= */
-
-@media (max-width: 480px) {
-
+@media (max-width: 575.98px) {
   .login-wrapper {
-    padding: 16px;
+    padding: 18px;
+  }
+
+  .login-card .card-body {
+    padding: 26px 20px !important;
   }
 
   .login-title {
-    font-size: 1.35rem;
+    font-size: 1.55rem;
   }
 
+  .login-brand-title {
+    font-size: 1.25rem;
+  }
+
+  .login-brand-icon {
+    width: 52px;
+    height: 52px;
+    min-width: 52px;
+    font-size: 1.35rem;
+  }
 }
