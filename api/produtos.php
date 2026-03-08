@@ -36,15 +36,26 @@ function coluna_existe(mysqli $conn, string $tabela, string $coluna): bool
     return $ok;
 }
 
+/**
+ * Normaliza a estrutura de fornecedores recebida da actions.php.
+ *
+ * Regras:
+ * - exige fornecedor_id > 0
+ * - não usa nome para criar fornecedor
+ * - garante apenas um principal
+ * - sanitiza preços e textos
+ */
 function normalizar_fornecedores(array $fornecedores): array
 {
     $out = [];
+    $idsUsados = [];
 
     foreach ($fornecedores as $f) {
         if (!is_array($f)) {
             continue;
         }
 
+        $fornecedorId = (int)($f['fornecedor_id'] ?? 0);
         $nome = trim((string)($f['nome'] ?? ''));
         $codigo = trim((string)($f['codigo'] ?? ''));
         $precoCusto = (float)($f['preco_custo'] ?? 0);
@@ -52,7 +63,11 @@ function normalizar_fornecedores(array $fornecedores): array
         $observacao = trim((string)($f['observacao'] ?? ''));
         $principal = !empty($f['principal']) ? 1 : 0;
 
-        if ($nome === '') {
+        if ($fornecedorId <= 0) {
+            continue;
+        }
+
+        if (in_array($fornecedorId, $idsUsados, true)) {
             continue;
         }
 
@@ -65,13 +80,16 @@ function normalizar_fornecedores(array $fornecedores): array
         }
 
         $out[] = [
-            'nome'        => $nome,
-            'codigo'      => $codigo,
-            'preco_custo' => $precoCusto,
-            'preco_venda' => $precoVenda,
-            'observacao'  => $observacao,
-            'principal'   => $principal,
+            'fornecedor_id' => $fornecedorId,
+            'nome'          => $nome,
+            'codigo'        => $codigo,
+            'preco_custo'   => $precoCusto,
+            'preco_venda'   => $precoVenda,
+            'observacao'    => $observacao,
+            'principal'     => $principal,
         ];
+
+        $idsUsados[] = $fornecedorId;
     }
 
     if (!empty($out)) {
@@ -104,30 +122,41 @@ function normalizar_fornecedores(array $fornecedores): array
     return $out;
 }
 
-function fornecedor_obter_ou_criar(mysqli $conn, string $nome): int
+/**
+ * Garante que todos os fornecedores informados realmente existam.
+ */
+function validar_fornecedores_existentes(mysqli $conn, array $fornecedores): void
 {
-    $stmtSel = $conn->prepare('SELECT id FROM fornecedores WHERE nome = ? LIMIT 1');
-    $stmtSel->bind_param('s', $nome);
-    $stmtSel->execute();
-    $row = $stmtSel->get_result()->fetch_assoc();
-    $stmtSel->close();
-
-    if ($row) {
-        return (int)$row['id'];
+    if (empty($fornecedores)) {
+        return;
     }
 
-    $stmtIns = $conn->prepare('INSERT INTO fornecedores (nome, ativo) VALUES (?, 1)');
-    $stmtIns->bind_param('s', $nome);
-    $stmtIns->execute();
-    $id = (int)$stmtIns->insert_id;
-    $stmtIns->close();
+    $stmt = $conn->prepare('SELECT id FROM fornecedores WHERE id = ? LIMIT 1');
 
-    return $id;
+    foreach ($fornecedores as $f) {
+        $fornecedorId = (int)($f['fornecedor_id'] ?? 0);
+
+        if ($fornecedorId <= 0) {
+            throw new InvalidArgumentException('Fornecedor inválido informado para o produto.');
+        }
+
+        $stmt->bind_param('i', $fornecedorId);
+        $stmt->execute();
+        $existe = $stmt->get_result()->fetch_assoc();
+
+        if (!$existe) {
+            $stmt->close();
+            throw new InvalidArgumentException('Fornecedor informado não existe.');
+        }
+    }
+
+    $stmt->close();
 }
 
 function produto_fornecedores_salvar(mysqli $conn, int $produto_id, array $fornecedores): void
 {
     $fornecedores = normalizar_fornecedores($fornecedores);
+    validar_fornecedores_existentes($conn, $fornecedores);
 
     $stmtDel = $conn->prepare('DELETE FROM produto_fornecedores WHERE produto_id = ?');
     $stmtDel->bind_param('i', $produto_id);
@@ -145,7 +174,7 @@ function produto_fornecedores_salvar(mysqli $conn, int $produto_id, array $forne
     );
 
     foreach ($fornecedores as $f) {
-        $fornecedorId = fornecedor_obter_ou_criar($conn, (string)$f['nome']);
+        $fornecedorId = (int)$f['fornecedor_id'];
         $codigo = $f['codigo'] !== '' ? (string)$f['codigo'] : null;
         $precoCusto = (float)$f['preco_custo'];
         $precoVenda = (float)$f['preco_venda'];
@@ -194,14 +223,14 @@ function produto_fornecedores_listar(mysqli $conn, int $produto_id): array
     $dados = [];
     while ($row = $res->fetch_assoc()) {
         $dados[] = [
-            'id'           => (int)$row['id'],
-            'fornecedor_id'=> (int)$row['fornecedor_id'],
-            'nome'         => (string)$row['fornecedor_nome'],
-            'codigo'       => (string)$row['codigo_produto_fornecedor'],
-            'preco_custo'  => (float)$row['preco_custo'],
-            'preco_venda'  => (float)$row['preco_venda'],
-            'observacao'   => (string)$row['observacao'],
-            'principal'    => (int)$row['principal'],
+            'id'            => (int)$row['id'],
+            'fornecedor_id' => (int)$row['fornecedor_id'],
+            'nome'          => (string)$row['fornecedor_nome'],
+            'codigo'        => (string)$row['codigo_produto_fornecedor'],
+            'preco_custo'   => (float)$row['preco_custo'],
+            'preco_venda'   => (float)$row['preco_venda'],
+            'observacao'    => (string)$row['observacao'],
+            'principal'     => (int)$row['principal'],
         ];
     }
 
@@ -490,9 +519,10 @@ function produtos_adicionar(
             return resposta(false, 'Dados inválidos para o produto.', null);
         }
 
-        $conn->begin_transaction();
-
         $fornecedoresNormalizados = normalizar_fornecedores($fornecedores);
+        validar_fornecedores_existentes($conn, $fornecedoresNormalizados);
+
+        $conn->begin_transaction();
 
         $precos = !empty($fornecedoresNormalizados)
             ? fornecedor_principal_preco($fornecedoresNormalizados)
@@ -521,7 +551,19 @@ function produtos_adicionar(
 
         return resposta(true, 'Produto adicionado com sucesso', ['id' => $id]);
     } catch (Throwable $e) {
-        $conn->rollback();
+        if ($conn->errno === 0) {
+            try {
+                $conn->rollback();
+            } catch (Throwable $rollbackError) {
+                // ignora
+            }
+        } else {
+            try {
+                $conn->rollback();
+            } catch (Throwable $rollbackError) {
+                // ignora
+            }
+        }
 
         logError('produtos', 'Erro ao adicionar produto', [
             'arquivo'        => $e->getFile(),
@@ -558,6 +600,9 @@ function produtos_atualizar(
             return resposta(false, 'Dados inválidos para atualização do produto.', null);
         }
 
+        $fornecedoresNormalizados = normalizar_fornecedores($fornecedores);
+        validar_fornecedores_existentes($conn, $fornecedoresNormalizados);
+
         $conn->begin_transaction();
 
         $stmtChk = $conn->prepare('SELECT id FROM produtos WHERE id = ? LIMIT 1');
@@ -570,8 +615,6 @@ function produtos_atualizar(
             $conn->rollback();
             return resposta(false, 'Produto não encontrado.', null);
         }
-
-        $fornecedoresNormalizados = normalizar_fornecedores($fornecedores);
 
         $precos = !empty($fornecedoresNormalizados)
             ? fornecedor_principal_preco($fornecedoresNormalizados)
@@ -598,7 +641,11 @@ function produtos_atualizar(
 
         return resposta(true, 'Produto atualizado com sucesso', ['id' => $produto_id]);
     } catch (Throwable $e) {
-        $conn->rollback();
+        try {
+            $conn->rollback();
+        } catch (Throwable $rollbackError) {
+            // ignora
+        }
 
         logError('produtos', 'Erro ao atualizar produto', [
             'arquivo'        => $e->getFile(),
@@ -655,7 +702,11 @@ function produtos_remover(
 
         return resposta(true, 'Produto removido com sucesso', null);
     } catch (Throwable $e) {
-        $conn->rollback();
+        try {
+            $conn->rollback();
+        } catch (Throwable $rollbackError) {
+            // ignora
+        }
 
         logError('produtos', 'Erro ao remover produto', [
             'arquivo'    => $e->getFile(),
