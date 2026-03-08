@@ -1,45 +1,180 @@
-/* ===== Estilos exclusivos da tela de login ===== */
+/* =========================
+   Página de login
+   ========================= */
 
-/* Centralização da página (já temos via Bootstrap, aqui é só reforço) */
-body {
-    background-color: #f8f9fa;
-    font-family: Verdana, sans-serif;
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background:
+    radial-gradient(circle at top left, rgba(82,98,140,0.15), transparent 40%),
+    radial-gradient(circle at bottom right, rgba(82,98,140,0.12), transparent 45%),
+    linear-gradient(180deg, #eef2f8 0%, #f6f8fc 100%);
+
+  position: relative;
+  overflow: hidden;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
-/* Card do login */
-.card {
-    border-radius: 12px;
-    border: 1px solid #dee2e6;
-    background-color: #ffffff;
+
+/* =========================
+   Shapes decorativos
+   ========================= */
+
+.login-bg-shape {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.6;
+  z-index: 0;
 }
 
-/* Título */
-.card h3 {
-    font-weight: bold;
-    color: #0d6efd;
+.login-bg-shape-1 {
+  width: 420px;
+  height: 420px;
+  background: #c7d2fe;
+  top: -120px;
+  left: -120px;
 }
 
-/* Botão de login */
-.card button[type="submit"] {
-    height: 45px;
-    font-weight: bold;
-    font-size: 1rem;
-    transition: 0.2s ease-in-out;
+.login-bg-shape-2 {
+  width: 420px;
+  height: 420px;
+  background: #dbeafe;
+  bottom: -140px;
+  right: -140px;
 }
 
-.card button[type="submit"]:hover {
-    opacity: 0.9;
-    transform: scale(1.02);
+
+/* =========================
+   Container central
+   ========================= */
+
+.login-wrapper {
+  width: 100%;
+  max-width: 420px;
+  padding: 20px;
+  z-index: 1;
 }
 
-/* Campos de input */
-.card input.form-control {
-    height: 45px;
-    border-radius: 8px;
+
+/* =========================
+   Card do login
+   ========================= */
+
+.login-card {
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow:
+    0 20px 45px rgba(0,0,0,0.08),
+    0 8px 20px rgba(0,0,0,0.04);
+
+  animation: loginFade 0.35s ease;
 }
 
-/* Mensagem de erro */
-#msgErro {
-    font-size: 0.9rem;
-    font-weight: bold;
+
+@keyframes loginFade {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+/* =========================
+   Branding
+   ========================= */
+
+.login-brand-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 1.8rem;
+
+  background: linear-gradient(135deg, #eef2ff, #e2e8f0);
+  border: 1px solid #dbe3f0;
+
+  box-shadow: 0 8px 20px rgba(15,23,42,0.08);
+}
+
+.login-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.login-subtitle {
+  font-size: 0.95rem;
+}
+
+
+/* =========================
+   Inputs
+   ========================= */
+
+.login-card .form-control {
+  border-radius: 12px;
+  border: 1px solid #dfe3ea;
+}
+
+.login-card .form-control:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 0.15rem rgba(79,70,229,0.2);
+}
+
+
+/* =========================
+   Botão
+   ========================= */
+
+#btnEntrar {
+  border-radius: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+
+  padding: 12px;
+
+  transition: all 0.15s ease;
+}
+
+#btnEntrar:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.12);
+}
+
+
+/* =========================
+   Rodapé
+   ========================= */
+
+.login-footer-note {
+  font-size: 0.85rem;
+}
+
+
+/* =========================
+   Responsivo
+   ========================= */
+
+@media (max-width: 480px) {
+
+  .login-wrapper {
+    padding: 16px;
+  }
+
+  .login-title {
+    font-size: 1.35rem;
+  }
+
 }
