@@ -9,53 +9,61 @@ declare(strict_types=1);
 
 const LOG_DIR = __DIR__ . '/../logs_api';
 
-static $LOG_INITIALIZED = [];
+/**
+ * Controle interno de contextos já inicializados
+ */
+$GLOBALS['LOG_INITIALIZED'] = $GLOBALS['LOG_INITIALIZED'] ?? [];
+
+/**
+ * Garante que o diretório de logs exista
+ */
+function ensureLogDir(): void
+{
+    if (!is_dir(LOG_DIR)) {
+        @mkdir(LOG_DIR, 0775, true);
+    }
+}
 
 /**
  * Inicializa o log de um contexto
  */
 function initLog(string $contexto): void
 {
-    global $LOG_INITIALIZED;
-
-    if (isset($LOG_INITIALIZED[$contexto])) {
+    if (isset($GLOBALS['LOG_INITIALIZED'][$contexto])) {
         return;
     }
 
-    if (!is_dir(LOG_DIR)) {
-        mkdir(LOG_DIR, 0775, true);
-    }
+    ensureLogDir();
 
     $arquivo = LOG_DIR . "/{$contexto}.log";
 
     if (!file_exists($arquivo)) {
-        touch($arquivo);
-        chmod($arquivo, 0664);
+        @touch($arquivo);
+        @chmod($arquivo, 0664);
     }
 
-    // Captura exceções não tratadas
     set_exception_handler(function (Throwable $e) use ($contexto): void {
-        logError(
-            $contexto,
-            'EXCEPTION',
-            [
-                'mensagem' => $e->getMessage(),
-                'arquivo'  => $e->getFile(),
-                'linha'    => $e->getLine(),
-                'trace'    => $e->getTraceAsString()
-            ]
-        );
+        logError($contexto, 'EXCEPTION', [
+            'mensagem' => $e->getMessage(),
+            'arquivo'  => $e->getFile(),
+            'linha'    => $e->getLine(),
+            'trace'    => $e->getTraceAsString()
+        ]);
 
-        http_response_code(500);
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: application/json; charset=utf-8');
+        }
+
         echo json_encode([
             'sucesso'  => false,
-            'mensagem' => 'Erro interno no servidor.'
-        ], JSON_UNESCAPED_UNICODE);
+            'mensagem' => 'Erro interno no servidor.',
+            'dados'    => null
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         exit;
     });
 
-    // Captura fatal errors
     register_shutdown_function(function () use ($contexto): void {
         $error = error_get_last();
 
@@ -64,15 +72,11 @@ function initLog(string $contexto): void
             [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR],
             true
         )) {
-            logError(
-                $contexto,
-                'FATAL ERROR',
-                $error
-            );
+            logError($contexto, 'FATAL ERROR', $error);
         }
     });
 
-    $LOG_INITIALIZED[$contexto] = true;
+    $GLOBALS['LOG_INITIALIZED'][$contexto] = true;
 }
 
 /**
@@ -80,28 +84,33 @@ function initLog(string $contexto): void
  */
 function writeLog(string $contexto, string $nivel, string $mensagem): void
 {
+    ensureLogDir();
+
+    $arquivo = LOG_DIR . "/{$contexto}.log";
     $data = date('Y-m-d H:i:s');
     $linha = "[$data] [$contexto] $nivel: $mensagem" . PHP_EOL;
 
-    file_put_contents(
-        LOG_DIR . "/{$contexto}.log",
-        $linha,
-        FILE_APPEND | LOCK_EX
-    );
+    $ok = @file_put_contents($arquivo, $linha, FILE_APPEND | LOCK_EX);
+
+    if ($ok === false) {
+        error_log("[{$contexto}] {$nivel}: {$mensagem}");
+    }
 }
 
 /**
- * Log de erro (VERSÃO FLEXÍVEL E SEGURA)
+ * Log de erro
  */
 function logError(string $contexto, string $mensagem, array $dados = []): void
 {
     $texto = $mensagem;
 
-    if ($dados) {
-        $texto .= ' | ' . json_encode(
+    if (!empty($dados)) {
+        $json = json_encode(
             $dados,
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
         );
+
+        $texto .= ' | ' . ($json !== false ? $json : 'Falha ao serializar dados do log');
     }
 
     writeLog($contexto, 'ERROR', $texto);
@@ -112,11 +121,13 @@ function logError(string $contexto, string $mensagem, array $dados = []): void
  */
 function logInfo(string $contexto, string $mensagem, array $dados = []): void
 {
-    if ($dados) {
-        $mensagem .= ' | ' . json_encode(
+    if (!empty($dados)) {
+        $json = json_encode(
             $dados,
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
         );
+
+        $mensagem .= ' | ' . ($json !== false ? $json : 'Falha ao serializar dados do log');
     }
 
     writeLog($contexto, 'INFO', $mensagem);
@@ -127,11 +138,13 @@ function logInfo(string $contexto, string $mensagem, array $dados = []): void
  */
 function logWarning(string $contexto, string $mensagem, array $dados = []): void
 {
-    if ($dados) {
-        $mensagem .= ' | ' . json_encode(
+    if (!empty($dados)) {
+        $json = json_encode(
             $dados,
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
         );
+
+        $mensagem .= ' | ' . ($json !== false ? $json : 'Falha ao serializar dados do log');
     }
 
     writeLog($contexto, 'WARNING', $mensagem);

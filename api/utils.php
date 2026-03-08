@@ -24,14 +24,14 @@ function json_response(
     mixed $dados = null,
     int $httpCode = 200
 ): never {
-
-    // 🔥 Limpa buffers ANTES de headers
     while (ob_get_level() > 0) {
-        ob_end_clean();
+        @ob_end_clean();
     }
 
-    http_response_code($httpCode);
-    header('Content-Type: application/json; charset=utf-8');
+    if (!headers_sent()) {
+        http_response_code($httpCode);
+        header('Content-Type: application/json; charset=utf-8');
+    }
 
     $payload = resposta($sucesso, $mensagem, $dados);
 
@@ -41,15 +41,10 @@ function json_response(
     );
 
     if ($json === false) {
-
-        logError(
-            'utils',
-            'Erro ao gerar JSON',
-            [
-                'erro' => json_last_error_msg(),
-                'payload' => $payload
-            ]
-        );
+        logError('utils', 'Erro ao gerar JSON', [
+            'erro'    => json_last_error_msg(),
+            'payload' => $payload
+        ]);
 
         echo '{"sucesso":false,"mensagem":"Erro interno","dados":null}';
         exit;

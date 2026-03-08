@@ -3,18 +3,25 @@ declare(strict_types=1);
 
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
+ini_set('log_errors', '1');
 
 // ======================
 // SESSÃO
 // ======================
 if (session_status() === PHP_SESSION_NONE) {
+    $isHttps = (
+        (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (($_SERVER['SERVER_PORT'] ?? '') === '443')
+    );
+
     session_set_cookie_params([
         'lifetime' => 0,
         'path'     => '/',
-        'secure'   => false,
+        'secure'   => $isHttps,
         'httponly' => true,
         'samesite' => 'Lax'
     ]);
+
     session_start();
 }
 
@@ -37,7 +44,7 @@ initLog('actions');
 // ======================
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Credentials: true');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 
 function set_cors_origin(): void
@@ -48,15 +55,16 @@ function set_cors_origin(): void
         'https://192.168.15.100',
     ];
 
-    if ($origin && in_array($origin, $allowed, true)) {
+    if ($origin !== '' && in_array($origin, $allowed, true)) {
         header("Access-Control-Allow-Origin: {$origin}");
-    } else {
-        header('Access-Control-Allow-Origin: https://192.168.15.100');
+        return;
     }
+
+    header('Access-Control-Allow-Origin: https://192.168.15.100');
 }
 set_cors_origin();
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
@@ -66,17 +74,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // ======================
 function read_body(): array
 {
-    $raw  = file_get_contents('php://input');
+    $contentType = strtolower(trim((string)($_SERVER['CONTENT_TYPE'] ?? '')));
+    $raw = file_get_contents('php://input');
+
+    if (str_contains($contentType, 'application/json')) {
+        $json = json_decode($raw, true);
+        return is_array($json) ? $json : [];
+    }
+
+    if (!empty($_POST)) {
+        return $_POST;
+    }
+
     $json = json_decode($raw, true);
-    return is_array($json) ? $json : $_POST;
+    return is_array($json) ? $json : [];
 }
 
 function require_auth(): array
 {
     if (empty($_SESSION['usuario']) || !is_array($_SESSION['usuario'])) {
         json_response(false, 'Usuário não autenticado.', null, 401);
-        exit;
     }
+
     return $_SESSION['usuario'];
 }
 
@@ -85,13 +104,19 @@ function require_auth(): array
 // ======================
 try {
     $conn = db();
-    $acao = $_REQUEST['acao'] ?? '';
+    $acao = (string)($_GET['acao'] ?? $_POST['acao'] ?? '');
     $body = read_body();
 
+    if ($acao === '' && isset($body['acao'])) {
+        $acao = (string)$body['acao'];
+    }
+
     logInfo('actions', 'Requisição recebida', [
-        'acao' => $acao,
-        'body' => $body,
-        'get'  => $_GET
+        'acao'   => $acao,
+        'method' => $_SERVER['REQUEST_METHOD'] ?? 'CLI',
+        'get'    => $_GET,
+        'post'   => $_POST,
+        'body'   => $body
     ]);
 
     switch ($acao) {
@@ -99,12 +124,11 @@ try {
         // ================= AUTH =================
 
         case 'login': {
-            $login = trim((string)($body['login'] ?? ''));
-            $senha = (string)($body['senha'] ?? '');
+            $login = trim((string)($body['login'] ?? $body['email'] ?? $body['usuario'] ?? ''));
+            $senha = (string)($body['senha'] ?? $body['password'] ?? '');
 
             if ($login === '' || $senha === '') {
                 json_response(false, 'Informe login e senha.', null, 400);
-                exit;
             }
 
             $stmt = $conn->prepare("
@@ -115,19 +139,21 @@ try {
             ");
             $stmt->bind_param('ss', $login, $login);
             $stmt->execute();
-            $user = $stmt->get_result()->fetch_assoc();
+            $result = $stmt->get_result();
+            $user = $result ? $result->fetch_assoc() : null;
             $stmt->close();
 
             if (!$user) {
                 json_response(false, 'Usuário ou senha inválidos.', null, 401);
-                exit;
             }
 
-            $hash = (string)$user['senha'];
-            if (!password_verify($senha, $hash)) {
+            $hash = (string)($user['senha'] ?? '');
+
+            if ($hash === '' || !password_verify($senha, $hash)) {
                 json_response(false, 'Usuário ou senha inválidos.', null, 401);
-                exit;
             }
+
+            session_regenerate_id(true);
 
             $_SESSION['usuario'] = [
                 'id'    => (int)$user['id'],
@@ -138,33 +164,31 @@ try {
             $_SESSION['LAST_ACTIVITY'] = time();
 
             json_response(true, 'OK', ['usuario' => $_SESSION['usuario']]);
-            exit;
         }
 
         case 'usuario_atual': {
             $u = require_auth();
             json_response(true, 'OK', ['usuario' => $u]);
-            exit;
         }
 
         case 'logout': {
             $_SESSION = [];
-            if (ini_get("session.use_cookies")) {
+
+            if (ini_get('session.use_cookies')) {
                 $params = session_get_cookie_params();
                 setcookie(
                     session_name(),
                     '',
                     time() - 42000,
-                    $params["path"],
-                    $params["domain"] ?? '',
-                    (bool)$params["secure"],
-                    (bool)$params["httponly"]
+                    $params['path'] ?? '/',
+                    $params['domain'] ?? '',
+                    (bool)($params['secure'] ?? false),
+                    (bool)($params['httponly'] ?? true)
                 );
             }
-            session_destroy();
 
+            session_destroy();
             json_response(true, 'OK', null);
-            exit;
         }
 
         // ================= FORNECEDORES =================
@@ -173,7 +197,6 @@ try {
             require_auth();
             $res = fornecedores_listar($conn);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
-            exit;
         }
 
         case 'obter_fornecedor': {
@@ -182,12 +205,10 @@ try {
             $fornecedor_id = (int)($_GET['fornecedor_id'] ?? $body['fornecedor_id'] ?? 0);
             if ($fornecedor_id <= 0) {
                 json_response(false, 'Fornecedor inválido.', null, 400);
-                exit;
             }
 
             $res = fornecedor_obter($conn, $fornecedor_id);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
-            exit;
         }
 
         case 'salvar_fornecedor': {
@@ -203,12 +224,10 @@ try {
 
             if ($nome === '') {
                 json_response(false, 'Nome do fornecedor obrigatório.', null, 400);
-                exit;
             }
 
             if (!in_array($ativo, [0, 1], true)) {
                 json_response(false, 'Status inválido.', null, 400);
-                exit;
             }
 
             $res = fornecedor_salvar(
@@ -224,7 +243,6 @@ try {
             );
 
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
-            exit;
         }
 
         // ================= PRODUTOS =================
@@ -233,7 +251,6 @@ try {
             require_auth();
             $res = produtos_listar($conn);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
-            exit;
         }
 
         case 'obter_produto': {
@@ -242,12 +259,10 @@ try {
             $produto_id = (int)($_GET['produto_id'] ?? $body['produto_id'] ?? 0);
             if ($produto_id <= 0) {
                 json_response(false, 'Produto inválido.', null, 400);
-                exit;
             }
 
             $res = produto_obter($conn, $produto_id);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
-            exit;
         }
 
         case 'adicionar_produto': {
@@ -257,13 +272,11 @@ try {
             $qtd  = (int)($body['quantidade'] ?? 0);
 
             if ($nome === '') {
-                json_response(false, 'Nome do produto obrigatório.');
-                exit;
+                json_response(false, 'Nome do produto obrigatório.', null, 400);
             }
 
             $res = produtos_adicionar($conn, $nome, $qtd, 0, (int)$usuario['id']);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
-            exit;
         }
 
         case 'criar_produto': {
@@ -271,8 +284,7 @@ try {
 
             $nome = trim((string)($body['nome'] ?? ''));
             if ($nome === '') {
-                json_response(false, 'Nome do produto obrigatório.');
-                exit;
+                json_response(false, 'Nome do produto obrigatório.', null, 400);
             }
 
             $qtd = (int)($body['quantidade'] ?? 0);
@@ -286,18 +298,16 @@ try {
                 ? (float)$body['preco_venda']
                 : null;
 
-            $fornecedores = isset($body['fornecedores']) && is_array($body['fornecedores'])
+            $fornecedores = (isset($body['fornecedores']) && is_array($body['fornecedores']))
                 ? $body['fornecedores']
                 : [];
 
             if ($qtd < 0) {
                 json_response(false, 'Quantidade inválida.', null, 400);
-                exit;
             }
 
             if ($estoque_minimo < 0) {
                 json_response(false, 'Estoque mínimo inválido.', null, 400);
-                exit;
             }
 
             $res = produtos_adicionar(
@@ -312,7 +322,6 @@ try {
             );
 
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
-            exit;
         }
 
         case 'atualizar_produto': {
@@ -331,33 +340,28 @@ try {
                 ? (float)$body['preco_venda']
                 : 0.0;
 
-            $fornecedores = isset($body['fornecedores']) && is_array($body['fornecedores'])
+            $fornecedores = (isset($body['fornecedores']) && is_array($body['fornecedores']))
                 ? $body['fornecedores']
                 : [];
 
             if ($produto_id <= 0) {
                 json_response(false, 'Produto inválido.', null, 400);
-                exit;
             }
 
             if ($nome === '') {
                 json_response(false, 'Nome do produto obrigatório.', null, 400);
-                exit;
             }
 
             if ($qtd < 0) {
                 json_response(false, 'Quantidade inválida.', null, 400);
-                exit;
             }
 
             if ($estoque_minimo < 0) {
                 json_response(false, 'Estoque mínimo inválido.', null, 400);
-                exit;
             }
 
             if ($preco_custo < 0 || $preco_venda < 0) {
                 json_response(false, 'Preços inválidos.', null, 400);
-                exit;
             }
 
             $res = produtos_atualizar(
@@ -373,7 +377,6 @@ try {
             );
 
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
-            exit;
         }
 
         case 'remover_produto': {
@@ -381,13 +384,11 @@ try {
 
             $produto_id = (int)($body['produto_id'] ?? 0);
             if ($produto_id <= 0) {
-                json_response(false, 'Produto inválido.');
-                exit;
+                json_response(false, 'Produto inválido.', null, 400);
             }
 
             $res = produtos_remover($conn, $produto_id, (int)$usuario['id']);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
-            exit;
         }
 
         case 'buscar_produtos': {
@@ -399,7 +400,6 @@ try {
 
             $res = produtos_buscar($conn, $q, $limit);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
-            exit;
         }
 
         case 'produto_resumo': {
@@ -407,13 +407,11 @@ try {
 
             $produto_id = (int)($_GET['produto_id'] ?? $body['produto_id'] ?? 0);
             if ($produto_id <= 0) {
-                json_response(false, 'Produto inválido.');
-                exit;
+                json_response(false, 'Produto inválido.', null, 400);
             }
 
             $res = produto_resumo($conn, $produto_id);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
-            exit;
         }
 
         // ================= MOVIMENTAÇÕES =================
@@ -423,7 +421,6 @@ try {
 
             $res = mov_listar($conn, $_GET);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
-            exit;
         }
 
         case 'registrar_movimentacao': {
@@ -446,13 +443,11 @@ try {
                 : null;
 
             if ($produto_id <= 0 || $quantidade <= 0) {
-                json_response(false, 'Dados inválidos.');
-                exit;
+                json_response(false, 'Dados inválidos.', null, 400);
             }
 
             if (!in_array($tipo, ['entrada', 'saida', 'remocao'], true)) {
-                json_response(false, 'Tipo inválido.');
-                exit;
+                json_response(false, 'Tipo inválido.', null, 400);
             }
 
             if ($valor_unitario === null && $preco_custo !== null) {
@@ -471,7 +466,6 @@ try {
             );
 
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
-            exit;
         }
 
         // ================= RELATÓRIOS =================
@@ -485,12 +479,10 @@ try {
             $res = relatorio($conn, $filtros);
 
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
-            exit;
         }
 
         default:
-            json_response(false, 'Ação inválida.');
-            exit;
+            json_response(false, 'Ação inválida.', null, 400);
     }
 
 } catch (Throwable $e) {
@@ -501,5 +493,4 @@ try {
     ]);
 
     json_response(false, 'Erro interno no servidor.', null, 500);
-    exit;
 }
