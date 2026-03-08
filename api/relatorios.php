@@ -59,6 +59,65 @@ function normalizaTipoMov(?string $tipo): string
     return '';
 }
 
+/**
+ * Estoque atual
+ * Retorna lista de produtos com quantidade, preço de custo e valor estimado.
+ */
+function relatorio_estoque_atual(mysqli $conn): array
+{
+    try {
+        $sql = "
+            SELECT
+                p.id,
+                p.nome,
+                COALESCE(p.quantidade, 0) AS quantidade,
+                COALESCE(p.preco_custo, 0) AS preco_custo,
+                (COALESCE(p.quantidade, 0) * COALESCE(p.preco_custo, 0)) AS valor_estimado
+            FROM produtos p
+            ORDER BY p.nome ASC
+        ";
+
+        $res = $conn->query($sql);
+
+        $itens = [];
+        $totalQtd = 0;
+        $totalValor = 0.0;
+
+        while ($row = $res->fetch_assoc()) {
+            $quantidade = (int)($row['quantidade'] ?? 0);
+            $precoCusto = (float)($row['preco_custo'] ?? 0);
+            $valorEstimado = (float)($row['valor_estimado'] ?? 0);
+
+            $itens[] = [
+                'id'            => (int)$row['id'],
+                'nome'          => (string)$row['nome'],
+                'quantidade'    => $quantidade,
+                'preco_custo'   => $precoCusto,
+                'valor_estimado'=> $valorEstimado,
+            ];
+
+            $totalQtd += $quantidade;
+            $totalValor += $valorEstimado;
+        }
+
+        return resposta(true, 'Estoque atual gerado com sucesso.', [
+            'itens' => $itens,
+            'totais' => [
+                'total_qtd' => $totalQtd,
+                'total_valor' => $totalValor,
+            ],
+        ]);
+    } catch (Throwable $e) {
+        logError('relatorios', 'Erro ao gerar estoque atual', [
+            'arquivo' => $e->getFile(),
+            'linha'   => $e->getLine(),
+            'erro'    => $e->getMessage(),
+        ]);
+
+        return resposta(false, 'Erro interno ao gerar estoque atual.', null);
+    }
+}
+
 function relatorio(mysqli $conn, array $filtros): array
 {
     $pagina = max(1, (int)($filtros['pagina'] ?? 1));
@@ -235,7 +294,7 @@ function relatorio(mysqli $conn, array $filtros): array
                 'sum_remocao'         => array_sum($remocao),
                 'sum_outros'          => array_sum($outros),
                 'sum_total_grafico'   => array_sum($entrada) + array_sum($saida) + array_sum($remocao) + array_sum($outros),
-                'debug_version'       => 'relatorios.php-ajustado'
+                'debug_version'       => 'relatorios.php-ajustado-estoque'
             ]
         ];
 

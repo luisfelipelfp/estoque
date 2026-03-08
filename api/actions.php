@@ -101,13 +101,6 @@ function require_auth(): array
 
 /**
  * Valida e normaliza fornecedores enviados pelo frontend.
- *
- * Regras:
- * - produto pode ficar sem fornecedor
- * - não permite fornecedor_id inválido
- * - não permite fornecedor duplicado no mesmo produto
- * - mantém apenas um principal
- * - sempre usa o nome oficial vindo do banco
  */
 function normalizar_fornecedores_payload(mysqli $conn, mixed $fornecedoresRaw): array
 {
@@ -125,7 +118,6 @@ function normalizar_fornecedores_payload(mysqli $conn, mixed $fornecedoresRaw): 
 
         $fornecedorId = (int)($item['fornecedor_id'] ?? 0);
 
-        // permite "linha vazia" no front sem quebrar o save
         if ($fornecedorId <= 0) {
             continue;
         }
@@ -579,6 +571,15 @@ try {
         }
 
         // ================= RELATÓRIOS =================
+
+        case 'estoque_atual':
+        case 'relatorio_estoque':
+        case 'relatorio_estoque_atual': {
+            require_auth();
+
+            $res = relatorio_estoque_atual($conn);
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
+        }
 
         case 'relatorio':
         case 'relatorios':
