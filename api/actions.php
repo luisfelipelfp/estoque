@@ -25,6 +25,7 @@ require_once __DIR__ . '/log.php';
 require_once __DIR__ . '/utils.php';
 require_once __DIR__ . '/db.php';
 
+require_once __DIR__ . '/fornecedores.php';
 require_once __DIR__ . '/produtos.php';
 require_once __DIR__ . '/movimentacoes.php';
 require_once __DIR__ . '/relatorios.php';
@@ -94,6 +95,8 @@ try {
     ]);
 
     switch ($acao) {
+
+        // ================= AUTH =================
 
         case 'login': {
             $login = trim((string)($body['login'] ?? ''));
@@ -491,7 +494,6 @@ try {
     }
 
 } catch (Throwable $e) {
-
     logError('actions', 'Erro fatal', [
         'arquivo' => $e->getFile(),
         'linha'   => $e->getLine(),

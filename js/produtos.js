@@ -24,6 +24,7 @@ function formatBRL(valor) {
 }
 
 let produtosCache = [];
+let fornecedoresCadastrados = [];
 let modalInstance = null;
 let fornecedoresTemp = [];
 
@@ -35,6 +36,7 @@ function formatMargem(precoCusto, precoVenda) {
   const venda = Number(precoVenda || 0);
   const lucro = calcularLucro(precoCusto, precoVenda);
   if (venda <= 0) return "0,00%";
+
   const margem = (lucro / venda) * 100;
   return `${margem.toLocaleString("pt-BR", {
     minimumFractionDigits: 2,
@@ -134,6 +136,38 @@ async function carregarProdutos() {
   }
 }
 
+async function carregarFornecedoresCadastrados() {
+  try {
+    const resp = await apiRequest("listar_fornecedores", {}, "GET");
+
+    if (!resp?.sucesso) {
+      fornecedoresCadastrados = [];
+      atualizarAvisoFornecedores();
+      return;
+    }
+
+    fornecedoresCadastrados = Array.isArray(resp?.dados) ? resp.dados : [];
+    atualizarAvisoFornecedores();
+  } catch (err) {
+    fornecedoresCadastrados = [];
+    atualizarAvisoFornecedores();
+
+    logJsError({
+      origem: "produtos.js",
+      mensagem: "Erro ao carregar fornecedores cadastrados",
+      detalhe: err?.message,
+      stack: err?.stack,
+    });
+  }
+}
+
+function atualizarAvisoFornecedores() {
+  const aviso = $("avisoFornecedoresCadastrados");
+  if (!aviso) return;
+
+  aviso.classList.toggle("d-none", fornecedoresCadastrados.length > 0);
+}
+
 function getModal() {
   const el = $("modalProduto");
   if (!el || !window.bootstrap?.Modal) return null;
@@ -146,6 +180,7 @@ function getModal() {
 
 function criarFornecedorVazio() {
   return {
+    fornecedor_id: "",
     nome: "",
     codigo: "",
     preco_custo: "",
@@ -203,8 +238,22 @@ function atualizarTituloFornecedorNoDOM(index, valor) {
   titulo.textContent = String(valor || "").trim() || `Fornecedor ${index + 1}`;
 }
 
+function obterNomeFornecedorPorId(fornecedorId) {
+  const item = fornecedoresCadastrados.find(
+    (f) => Number(f?.id ?? 0) === Number(fornecedorId)
+  );
+  return item?.nome ?? "";
+}
+
 function atualizarFornecedor(index, campo, valor) {
   if (!fornecedoresTemp[index]) return;
+
+  if (campo === "fornecedor_id") {
+    fornecedoresTemp[index].fornecedor_id = String(valor ?? "");
+    fornecedoresTemp[index].nome = obterNomeFornecedorPorId(valor);
+    atualizarTituloFornecedorNoDOM(index, fornecedoresTemp[index].nome);
+    return;
+  }
 
   fornecedoresTemp[index][campo] = valor;
 
@@ -233,6 +282,43 @@ function removerFornecedor(index) {
   renderListaFornecedores();
 }
 
+function montarOptionsFornecedor(fornecedor) {
+  const selecionadoId = Number(fornecedor?.fornecedor_id ?? 0);
+  const idsJaUsados = fornecedoresTemp
+    .map((f) => Number(f?.fornecedor_id ?? 0))
+    .filter((id) => id > 0);
+
+  const atualJaExiste = selecionadoId > 0 && !fornecedoresCadastrados.some(
+    (f) => Number(f?.id ?? 0) === selecionadoId
+  );
+
+  let options = `<option value="">Selecione um fornecedor...</option>`;
+
+  if (atualJaExiste) {
+    options += `
+      <option value="${selecionadoId}" selected>
+        ${escapeHtml(fornecedor?.nome ?? "Fornecedor não encontrado")}
+      </option>
+    `;
+  }
+
+  options += fornecedoresCadastrados.map((f) => {
+    const id = Number(f?.id ?? 0);
+    const nome = String(f?.nome ?? "");
+    const ativo = Number(f?.ativo ?? 1) === 1;
+    const selected = id === selecionadoId ? "selected" : "";
+    const disabled = !ativo ? "disabled" : "";
+
+    return `
+      <option value="${id}" ${selected} ${disabled}>
+        ${escapeHtml(nome)}${ativo ? "" : " (Inativo)"}
+      </option>
+    `;
+  }).join("");
+
+  return options;
+}
+
 function criarFornecedorCard(fornecedor, index) {
   const precoCusto = Number(fornecedor?.preco_custo || 0);
   const precoVenda = Number(fornecedor?.preco_venda || 0);
@@ -241,7 +327,7 @@ function criarFornecedorCard(fornecedor, index) {
   const tituloFornecedor = escapeHtml((fornecedor?.nome ?? "").trim() || `Fornecedor ${index + 1}`);
 
   return `
-    <div class="card border mb-3">
+    <div class="card border mb-3 ${principal ? "border-primary" : ""}">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
           <strong data-titulo-fornecedor="${index}">${tituloFornecedor}</strong>
@@ -267,16 +353,22 @@ function criarFornecedorCard(fornecedor, index) {
           </div>
         </div>
 
+        ${principal ? `
+          <div class="alert alert-primary py-2 mb-3">
+            Este é o fornecedor principal usado como referência do produto.
+          </div>
+        ` : ""}
+
         <div class="row g-3">
           <div class="col-12 col-lg-6">
-            <label class="form-label">Nome do fornecedor</label>
-            <input
-              class="form-control"
-              value="${escapeHtml(fornecedor?.nome ?? "")}"
-              data-campo="nome"
+            <label class="form-label">Fornecedor cadastrado</label>
+            <select
+              class="form-select"
+              data-campo="fornecedor_id"
               data-index="${index}"
-              placeholder="Digite o nome do fornecedor..."
             >
+              ${montarOptionsFornecedor(fornecedor)}
+            </select>
           </div>
 
           <div class="col-12 col-lg-6">
@@ -357,6 +449,8 @@ function renderListaFornecedores() {
   const lista = $("listaFornecedores");
   if (!lista) return;
 
+  atualizarAvisoFornecedores();
+
   if (!Array.isArray(fornecedoresTemp) || fornecedoresTemp.length === 0) {
     lista.innerHTML = `
       <div class="alert alert-light text-center text-muted mb-0">
@@ -390,13 +484,16 @@ function limparModal() {
   renderListaFornecedores();
 }
 
-function abrirModalNovoProduto() {
+async function abrirModalNovoProduto() {
+  await carregarFornecedoresCadastrados();
   limparModal();
   adicionarFornecedor();
   getModal()?.show();
 }
 
 async function abrirModalProdutoExistente(produtoId) {
+  await carregarFornecedoresCadastrados();
+
   let produto = produtosCache.find((p) => Number(p?.id ?? 0) === Number(produtoId));
 
   try {
@@ -425,6 +522,7 @@ async function abrirModalProdutoExistente(produtoId) {
 
   if (Array.isArray(produto.fornecedores) && produto.fornecedores.length > 0) {
     fornecedoresTemp = produto.fornecedores.map((f) => ({
+      fornecedor_id: String(f?.fornecedor_id ?? ""),
       nome: f?.nome ?? "",
       codigo: f?.codigo ?? "",
       preco_custo: String(Number(f?.preco_custo ?? 0)),
@@ -442,15 +540,23 @@ async function abrirModalProdutoExistente(produtoId) {
 
 function fornecedoresValidosParaEnvio() {
   return (fornecedoresTemp || [])
-    .map((f) => ({
-      nome: String(f?.nome ?? "").trim(),
-      codigo: String(f?.codigo ?? "").trim(),
-      preco_custo: Number(f?.preco_custo || 0),
-      preco_venda: Number(f?.preco_venda || 0),
-      observacao: String(f?.observacao ?? "").trim(),
-      principal: Number(f?.principal ?? 0) === 1 ? 1 : 0
-    }))
-    .filter((f) => f.nome !== "");
+    .map((f) => {
+      const fornecedorId = Number(f?.fornecedor_id ?? 0);
+      const nome = fornecedorId > 0
+        ? obterNomeFornecedorPorId(fornecedorId)
+        : "";
+
+      return {
+        fornecedor_id: fornecedorId,
+        nome: String(nome ?? "").trim(),
+        codigo: String(f?.codigo ?? "").trim(),
+        preco_custo: Number(f?.preco_custo || 0),
+        preco_venda: Number(f?.preco_venda || 0),
+        observacao: String(f?.observacao ?? "").trim(),
+        principal: Number(f?.principal ?? 0) === 1 ? 1 : 0
+      };
+    })
+    .filter((f) => f.fornecedor_id > 0 && f.nome !== "");
 }
 
 async function salvarProduto() {
@@ -479,6 +585,15 @@ async function salvarProduto() {
 
   if (fornecedoresComErro) {
     if (status) status.textContent = "Os preços dos fornecedores devem ser maiores ou iguais a zero.";
+    return;
+  }
+
+  const fornecedorDuplicado = fornecedores.find((f, index) =>
+    fornecedores.findIndex((x) => Number(x.fornecedor_id) === Number(f.fornecedor_id)) !== index
+  );
+
+  if (fornecedorDuplicado) {
+    if (status) status.textContent = "O mesmo fornecedor não pode ser adicionado mais de uma vez para o mesmo produto.";
     return;
   }
 
@@ -571,9 +686,19 @@ function bindBusca() {
 }
 
 function bindAcoesTopo() {
-  $("btnAtualizarProdutos")?.addEventListener("click", carregarProdutos);
+  $("btnAtualizarProdutos")?.addEventListener("click", async () => {
+    await carregarFornecedoresCadastrados();
+    await carregarProdutos();
+  });
+
   $("btnNovoProduto")?.addEventListener("click", abrirModalNovoProduto);
-  $("btnAdicionarFornecedor")?.addEventListener("click", adicionarFornecedor);
+
+  $("btnAdicionarFornecedor")?.addEventListener("click", async () => {
+    if (fornecedoresCadastrados.length === 0) {
+      await carregarFornecedoresCadastrados();
+    }
+    adicionarFornecedor();
+  });
 }
 
 function bindModal() {
@@ -587,6 +712,22 @@ function bindModal() {
     const campo = input.dataset.campo || "";
 
     atualizarFornecedor(index, campo, input.value);
+  });
+
+  $("listaFornecedores")?.addEventListener("change", (ev) => {
+    const field = ev.target.closest("[data-campo][data-index]");
+    if (field) {
+      const index = Number(field.dataset.index || 0);
+      const campo = field.dataset.campo || "";
+      atualizarFornecedor(index, campo, field.value);
+      return;
+    }
+
+    const radioPrincipal = ev.target.closest("[data-marcar-principal]");
+    if (radioPrincipal) {
+      const index = Number(radioPrincipal.dataset.marcarPrincipal || 0);
+      atualizarFornecedor(index, "principal", 1);
+    }
   });
 
   $("listaFornecedores")?.addEventListener("click", (ev) => {
@@ -603,14 +744,6 @@ function bindModal() {
       atualizarFornecedor(index, "principal", 1);
     }
   });
-
-  $("listaFornecedores")?.addEventListener("change", (ev) => {
-    const radioPrincipal = ev.target.closest("[data-marcar-principal]");
-    if (radioPrincipal) {
-      const index = Number(radioPrincipal.dataset.marcarPrincipal || 0);
-      atualizarFornecedor(index, "principal", 1);
-    }
-  });
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -619,5 +752,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindAcoesTopo();
   bindModal();
   renderListaFornecedores();
-  carregarProdutos();
+  await carregarFornecedoresCadastrados();
+  await carregarProdutos();
 });
