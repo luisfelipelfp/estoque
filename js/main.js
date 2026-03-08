@@ -23,29 +23,59 @@ function obterPaginaAtual() {
   if (path.includes("/relatorios.html")) return "relatorios";
   if (path.includes("/pages/usuarios.html")) return "usuarios";
   if (path.includes("/pages/movimentacoes.html")) return "movimentacoes";
+  if (path.includes("/pages/login.html")) return "login";
 
   return "";
+}
+
+function salvarUsuarioLocal(usuario) {
+  try {
+    localStorage.setItem("usuario", JSON.stringify(usuario));
+  } catch (err) {
+    logJsError({
+      origem: "main.js",
+      mensagem: "Erro ao salvar usuário no localStorage",
+      detalhe: err?.message || String(err),
+      stack: err?.stack || null
+    });
+  }
+}
+
+function removerUsuarioLocal() {
+  try {
+    localStorage.removeItem("usuario");
+  } catch (err) {
+    logJsError({
+      origem: "main.js",
+      mensagem: "Erro ao remover usuário do localStorage",
+      detalhe: err?.message || String(err),
+      stack: err?.stack || null
+    });
+  }
 }
 
 async function verificarLogin() {
   try {
     const resp = await apiRequest("usuario_atual", null, "GET");
+    const usuario = resp?.dados?.usuario || resp?.usuario || null;
 
-    const usuario = resp?.dados?.usuario || resp?.usuario;
     if (!resp?.sucesso || !usuario) {
+      removerUsuarioLocal();
       redirectToLogin();
       return null;
     }
 
-    localStorage.setItem("usuario", JSON.stringify(usuario));
+    salvarUsuarioLocal(usuario);
     return usuario;
   } catch (err) {
     logJsError({
       origem: "main.js",
       mensagem: "Erro ao verificar login",
       detalhe: err?.message || String(err),
-      stack: err?.stack || null,
+      stack: err?.stack || null
     });
+
+    removerUsuarioLocal();
     redirectToLogin();
     return null;
   }
@@ -54,14 +84,14 @@ async function verificarLogin() {
 async function carregarComponente(seletorOuId, url) {
   const el =
     document.querySelector(seletorOuId) ||
-    document.getElementById(seletorOuId.replace(/^#/, ""));
+    document.getElementById(String(seletorOuId).replace(/^#/, ""));
 
   if (!el) return null;
 
   try {
     const resp = await fetch(url, {
       cache: "no-store",
-      credentials: "same-origin",
+      credentials: "same-origin"
     });
 
     if (!resp.ok) {
@@ -69,7 +99,7 @@ async function carregarComponente(seletorOuId, url) {
       logJsError({
         origem: "main.js",
         mensagem: "Falha ao carregar componente",
-        detalhe: `HTTP ${resp.status} - ${url}`,
+        detalhe: `HTTP ${resp.status} - ${url}`
       });
       return null;
     }
@@ -83,7 +113,7 @@ async function carregarComponente(seletorOuId, url) {
       origem: "main.js",
       mensagem: `Erro ao carregar componente: ${url}`,
       detalhe: err?.message || String(err),
-      stack: err?.stack || null,
+      stack: err?.stack || null
     });
     return null;
   }
@@ -92,17 +122,32 @@ async function carregarComponente(seletorOuId, url) {
 function preencherUsuario(usuario) {
   const nome = String(usuario?.nome ?? "").trim();
   const nivel = String(usuario?.nivel ?? "").trim();
-  const textoUsuario = nivel ? `${nome} (${nivel})` : nome;
+  const textoUsuario = nivel ? `${nome} (${nivel})` : nome || "Usuário";
 
   const navbarUser = $("usuarioLogado");
   if (navbarUser) {
-    navbarUser.textContent = textoUsuario || "Usuário";
+    navbarUser.textContent = textoUsuario;
+    navbarUser.setAttribute("title", textoUsuario);
   }
 
   const sidebarUser = $("sidebarUsuarioNome");
   if (sidebarUser) {
-    sidebarUser.textContent = textoUsuario || "Usuário";
+    sidebarUser.textContent = textoUsuario;
+    sidebarUser.setAttribute("title", textoUsuario);
   }
+}
+
+function linkCorrespondePaginaAtual(link, paginaAtual) {
+  const href = String(link.getAttribute("href") || "").toLowerCase();
+
+  return (
+    (paginaAtual === "estoque" && href.includes("/pages/estoque.html")) ||
+    (paginaAtual === "produtos" && href.includes("/pages/produtos.html")) ||
+    (paginaAtual === "fornecedores" && href.includes("/pages/fornecedores.html")) ||
+    (paginaAtual === "relatorios" && href.includes("/relatorios.html")) ||
+    (paginaAtual === "usuarios" && href.includes("/pages/usuarios.html")) ||
+    (paginaAtual === "movimentacoes" && href.includes("/pages/movimentacoes.html"))
+  );
 }
 
 function marcarLinkAtivoSidebar() {
@@ -122,15 +167,7 @@ function marcarLinkAtivoSidebar() {
   });
 
   document.querySelectorAll(".navbar .nav-link").forEach((link) => {
-    const href = String(link.getAttribute("href") || "").toLowerCase();
-
-    const ativo =
-      (paginaAtual === "estoque" && href.includes("/pages/estoque.html")) ||
-      (paginaAtual === "produtos" && href.includes("/pages/produtos.html")) ||
-      (paginaAtual === "fornecedores" && href.includes("/pages/fornecedores.html")) ||
-      (paginaAtual === "relatorios" && href.includes("/relatorios.html")) ||
-      (paginaAtual === "usuarios" && href.includes("/pages/usuarios.html")) ||
-      (paginaAtual === "movimentacoes" && href.includes("/pages/movimentacoes.html"));
+    const ativo = linkCorrespondePaginaAtual(link, paginaAtual);
 
     link.classList.toggle("active", ativo);
 
@@ -150,10 +187,10 @@ async function executarLogout() {
       origem: "main.js",
       mensagem: "Erro ao executar logout",
       detalhe: err?.message || String(err),
-      stack: err?.stack || null,
+      stack: err?.stack || null
     });
   } finally {
-    localStorage.removeItem("usuario");
+    removerUsuarioLocal();
     window.location.replace(`${APP_BASE}/pages/login.html`);
   }
 }
@@ -170,19 +207,29 @@ function bindLogout() {
 }
 
 async function carregarLayout(usuario) {
-  await carregarComponente("#navbar", `${APP_BASE}/components/navbar.html?v=20260307`);
-  const sidebarEl = await carregarComponente("#sidebar", `${APP_BASE}/components/sidebar.html?v=20260307`);
+  const navbarEl = await carregarComponente("#navbar", `${APP_BASE}/components/navbar.html?v=20260308`);
+  const sidebarEl = await carregarComponente("#sidebar", `${APP_BASE}/components/sidebar.html?v=20260308`);
 
   if (sidebarEl) {
     sidebarEl.classList.remove("d-none");
   }
 
-  preencherUsuario(usuario);
-  marcarLinkAtivoSidebar();
-  bindLogout();
+  if (navbarEl || sidebarEl) {
+    preencherUsuario(usuario);
+    marcarLinkAtivoSidebar();
+    bindLogout();
+  }
+}
+
+function paginaExigeAutenticacao() {
+  return obterPaginaAtual() !== "login";
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  if (!paginaExigeAutenticacao()) {
+    return;
+  }
+
   const usuario = await verificarLogin();
   if (!usuario) return;
 
@@ -192,5 +239,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     origem: "main.js",
     mensagem: "Usuário autenticado",
     usuario: usuario.nome || null,
+    pagina: obterPaginaAtual()
   });
 });
