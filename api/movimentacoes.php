@@ -9,10 +9,14 @@ initLog('movimentacoes');
 function coluna_existe_mov(mysqli $conn, string $tabela, string $coluna): bool
 {
     static $cache = [];
-    $db = (string)(($conn->query("SELECT DATABASE() AS db")->fetch_assoc()['db'] ?? ''));
 
+    $dbRow = $conn->query("SELECT DATABASE() AS db")->fetch_assoc();
+    $db = (string)($dbRow['db'] ?? '');
     $key = $db . '|' . $tabela . '|' . $coluna;
-    if (array_key_exists($key, $cache)) return (bool)$cache[$key];
+
+    if (array_key_exists($key, $cache)) {
+        return (bool)$cache[$key];
+    }
 
     $sql = "
         SELECT 1
@@ -42,7 +46,6 @@ function mov_registrar(
     ?float $valor_unitario = null,
     ?string $observacao = null
 ): array {
-
     if ($produto_id <= 0 || $quantidade <= 0) {
         logWarning('movimentacoes', 'Dados inválidos para movimentação', [
             'produto_id' => $produto_id,
@@ -57,9 +60,13 @@ function mov_registrar(
         return resposta(false, 'Tipo de movimentação inválido.');
     }
 
-    // normaliza
-    if ($preco_custo !== null && $preco_custo < 0) $preco_custo = null;
-    if ($valor_unitario !== null && $valor_unitario < 0) $valor_unitario = null;
+    if ($preco_custo !== null && $preco_custo < 0) {
+        $preco_custo = null;
+    }
+
+    if ($valor_unitario !== null && $valor_unitario < 0) {
+        $valor_unitario = null;
+    }
 
     $conn->begin_transaction();
 
@@ -88,6 +95,7 @@ function mov_registrar(
                 ]);
                 return resposta(false, 'Quantidade insuficiente em estoque.');
             }
+
             $sqlUpdate = 'UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?';
         }
 
@@ -96,7 +104,6 @@ function mov_registrar(
         $stmtUpd->execute();
         $stmtUpd->close();
 
-        // atualiza custo do produto
         if ($preco_custo !== null && coluna_existe_mov($conn, 'produtos', 'preco_custo')) {
             $stmtC = $conn->prepare('UPDATE produtos SET preco_custo = ? WHERE id = ?');
             $stmtC->bind_param('di', $preco_custo, $produto_id);
@@ -107,18 +114,17 @@ function mov_registrar(
         $nomeProduto = (string)$produto['nome'];
 
         $hasValorUnit = coluna_existe_mov($conn, 'movimentacoes', 'valor_unitario');
-        $hasObs       = coluna_existe_mov($conn, 'movimentacoes', 'observacao');
+        $hasObs = coluna_existe_mov($conn, 'movimentacoes', 'observacao');
 
         $cols  = ['produto_id', 'produto_nome', 'tipo', 'quantidade', 'usuario_id', 'data'];
         $vals  = ['?', '?', '?', '?', '?', 'NOW()'];
         $types = 'issii';
-        $bind  = [$produto_id, $nomeProduto, $tipo, $quantidade, $usuario_id];
+        $bind  = [$produto_id, $nomeProduto, $tipo, $quantidade, $usuario_id ?? 0];
 
         if ($hasValorUnit) {
             $cols[] = 'valor_unitario';
             $vals[] = '?';
             $types .= 'd';
-            // se não informou, grava 0? NÃO: melhor refletir "não informado"
             $bind[] = (float)($valor_unitario ?? 0.0);
         }
 
@@ -138,17 +144,16 @@ function mov_registrar(
         $conn->commit();
 
         logInfo('movimentacoes', 'Movimentação registrada', [
-            'produto_id' => $produto_id,
-            'tipo'       => $tipo,
-            'quantidade' => $quantidade,
-            'usuario_id' => $usuario_id,
-            'preco_custo'=> $preco_custo,
-            'valor_unitario' => $valor_unitario,
-            'observacao' => $observacao
+            'produto_id'      => $produto_id,
+            'tipo'            => $tipo,
+            'quantidade'      => $quantidade,
+            'usuario_id'      => $usuario_id,
+            'preco_custo'     => $preco_custo,
+            'valor_unitario'  => $valor_unitario,
+            'observacao'      => $observacao
         ]);
 
         return resposta(true, 'Movimentação registrada com sucesso.');
-
     } catch (Throwable $e) {
         $conn->rollback();
 
@@ -184,19 +189,19 @@ function mov_listar(mysqli $conn, array $f): array
 
     if (!empty($f['tipo']) && in_array($f['tipo'], ['entrada', 'saida', 'remocao'], true)) {
         $where[]  = 'm.tipo = ?';
-        $params[] = $f['tipo'];
+        $params[] = (string)$f['tipo'];
         $types   .= 's';
     }
 
     if (!empty($f['data_inicio'])) {
         $where[]  = 'm.data >= ?';
-        $params[] = $f['data_inicio'] . ' 00:00:00';
+        $params[] = (string)$f['data_inicio'] . ' 00:00:00';
         $types   .= 's';
     }
 
     if (!empty($f['data_fim'])) {
         $where[]  = 'm.data <= ?';
-        $params[] = $f['data_fim'] . ' 23:59:59';
+        $params[] = (string)$f['data_fim'] . ' 23:59:59';
         $types   .= 's';
     }
 
@@ -204,7 +209,9 @@ function mov_listar(mysqli $conn, array $f): array
 
     try {
         $stmtT = $conn->prepare("SELECT COUNT(*) AS total FROM movimentacoes m $whereSql");
-        if ($types) $stmtT->bind_param($types, ...$params);
+        if ($types !== '') {
+            $stmtT->bind_param($types, ...$params);
+        }
         $stmtT->execute();
         $total = (int)($stmtT->get_result()->fetch_assoc()['total'] ?? 0);
         $stmtT->close();
@@ -226,8 +233,8 @@ function mov_listar(mysqli $conn, array $f): array
             LIMIT ? OFFSET ?
         ";
 
-        $paramsPage   = $params;
-        $typesPage    = $types . 'ii';
+        $paramsPage = $params;
+        $typesPage = $types . 'ii';
         $paramsPage[] = $limite;
         $paramsPage[] = $offset;
 
@@ -235,7 +242,7 @@ function mov_listar(mysqli $conn, array $f): array
         $stmt->bind_param($typesPage, ...$paramsPage);
         $stmt->execute();
 
-        $res   = $stmt->get_result();
+        $res = $stmt->get_result();
         $dados = [];
 
         while ($row = $res->fetch_assoc()) {
@@ -259,7 +266,6 @@ function mov_listar(mysqli $conn, array $f): array
             'paginas' => (int)ceil($total / $limite),
             'dados'   => $dados
         ]);
-
     } catch (Throwable $e) {
         logError('movimentacoes', 'Erro ao listar movimentações', [
             'arquivo' => $e->getFile(),

@@ -4,6 +4,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/log.php';
 require_once __DIR__ . '/utils.php';
 
+initLog('produtos');
+
 function coluna_existe(mysqli $conn, string $tabela, string $coluna): bool
 {
     static $cache = [];
@@ -63,17 +65,18 @@ function normalizar_fornecedores(array $fornecedores): array
         }
 
         $out[] = [
-            'nome' => $nome,
-            'codigo' => $codigo,
+            'nome'        => $nome,
+            'codigo'      => $codigo,
             'preco_custo' => $precoCusto,
             'preco_venda' => $precoVenda,
-            'observacao' => $observacao,
-            'principal' => $principal,
+            'observacao'  => $observacao,
+            'principal'   => $principal,
         ];
     }
 
     if (!empty($out)) {
         $temPrincipal = false;
+
         foreach ($out as $f) {
             if ((int)$f['principal'] === 1) {
                 $temPrincipal = true;
@@ -191,14 +194,14 @@ function produto_fornecedores_listar(mysqli $conn, int $produto_id): array
     $dados = [];
     while ($row = $res->fetch_assoc()) {
         $dados[] = [
-            'id' => (int)$row['id'],
-            'fornecedor_id' => (int)$row['fornecedor_id'],
-            'nome' => (string)$row['fornecedor_nome'],
-            'codigo' => (string)$row['codigo_produto_fornecedor'],
-            'preco_custo' => (float)$row['preco_custo'],
-            'preco_venda' => (float)$row['preco_venda'],
-            'observacao' => (string)$row['observacao'],
-            'principal' => (int)$row['principal'],
+            'id'           => (int)$row['id'],
+            'fornecedor_id'=> (int)$row['fornecedor_id'],
+            'nome'         => (string)$row['fornecedor_nome'],
+            'codigo'       => (string)$row['codigo_produto_fornecedor'],
+            'preco_custo'  => (float)$row['preco_custo'],
+            'preco_venda'  => (float)$row['preco_venda'],
+            'observacao'   => (string)$row['observacao'],
+            'principal'    => (int)$row['principal'],
         ];
     }
 
@@ -232,255 +235,6 @@ function fornecedor_principal_preco(array $fornecedores): array
     ];
 }
 
-/* =========================
-   FORNECEDORES
-   ========================= */
-
-function fornecedores_listar(mysqli $conn): array
-{
-    try {
-        $hasCnpj = coluna_existe($conn, 'fornecedores', 'cnpj');
-        $hasTelefone = coluna_existe($conn, 'fornecedores', 'telefone');
-        $hasEmail = coluna_existe($conn, 'fornecedores', 'email');
-        $hasObservacao = coluna_existe($conn, 'fornecedores', 'observacao');
-
-        $sql = "
-            SELECT
-                f.id,
-                f.nome,
-                f.ativo
-                " . ($hasCnpj ? ", COALESCE(f.cnpj, '') AS cnpj" : ", '' AS cnpj") . "
-                " . ($hasTelefone ? ", COALESCE(f.telefone, '') AS telefone" : ", '' AS telefone") . "
-                " . ($hasEmail ? ", COALESCE(f.email, '') AS email" : ", '' AS email") . "
-                " . ($hasObservacao ? ", COALESCE(f.observacao, '') AS observacao" : ", '' AS observacao") . "
-            FROM fornecedores f
-            ORDER BY f.nome ASC
-        ";
-
-        $res = $conn->query($sql);
-
-        return [
-            'sucesso' => true,
-            'mensagem' => 'OK',
-            'dados' => $res->fetch_all(MYSQLI_ASSOC),
-        ];
-    } catch (Throwable $e) {
-        logError('produtos', 'Erro ao listar fornecedores', [
-            'arquivo' => $e->getFile(),
-            'linha'   => $e->getLine(),
-            'erro'    => $e->getMessage()
-        ]);
-
-        return [
-            'sucesso' => false,
-            'mensagem' => 'Erro ao buscar fornecedores',
-            'dados' => []
-        ];
-    }
-}
-
-function fornecedor_produtos_vinculados(mysqli $conn, int $fornecedor_id): array
-{
-    $sql = "
-        SELECT
-            p.id AS produto_id,
-            p.nome AS produto_nome,
-            COALESCE(pf.codigo_produto_fornecedor, '') AS codigo_produto_fornecedor,
-            COALESCE(pf.principal, 0) AS principal
-        FROM produto_fornecedores pf
-        INNER JOIN produtos p ON p.id = pf.produto_id
-        WHERE pf.fornecedor_id = ?
-        ORDER BY p.nome ASC
-    ";
-
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param('i', $fornecedor_id);
-    $stmt->execute();
-    $res = $stmt->get_result();
-
-    $dados = [];
-    while ($row = $res->fetch_assoc()) {
-        $dados[] = [
-            'produto_id' => (int)$row['produto_id'],
-            'produto_nome' => (string)$row['produto_nome'],
-            'codigo_produto_fornecedor' => (string)$row['codigo_produto_fornecedor'],
-            'principal' => (int)$row['principal'],
-        ];
-    }
-
-    $stmt->close();
-    return $dados;
-}
-
-function fornecedor_obter(mysqli $conn, int $fornecedor_id): array
-{
-    try {
-        $hasCnpj = coluna_existe($conn, 'fornecedores', 'cnpj');
-        $hasTelefone = coluna_existe($conn, 'fornecedores', 'telefone');
-        $hasEmail = coluna_existe($conn, 'fornecedores', 'email');
-        $hasObservacao = coluna_existe($conn, 'fornecedores', 'observacao');
-
-        $sql = "
-            SELECT
-                id,
-                nome,
-                ativo
-                " . ($hasCnpj ? ", COALESCE(cnpj, '') AS cnpj" : ", '' AS cnpj") . "
-                " . ($hasTelefone ? ", COALESCE(telefone, '') AS telefone" : ", '' AS telefone") . "
-                " . ($hasEmail ? ", COALESCE(email, '') AS email" : ", '' AS email") . "
-                " . ($hasObservacao ? ", COALESCE(observacao, '') AS observacao" : ", '' AS observacao") . "
-            FROM fornecedores
-            WHERE id = ?
-            LIMIT 1
-        ";
-
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param('i', $fornecedor_id);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-
-        if (!$row) {
-            return [
-                'sucesso' => false,
-                'mensagem' => 'Fornecedor não encontrado.',
-                'dados' => null
-            ];
-        }
-
-        $produtos = fornecedor_produtos_vinculados($conn, $fornecedor_id);
-
-        return [
-            'sucesso' => true,
-            'mensagem' => 'OK',
-            'dados' => [
-                'id' => (int)$row['id'],
-                'nome' => (string)$row['nome'],
-                'cnpj' => (string)$row['cnpj'],
-                'telefone' => (string)$row['telefone'],
-                'email' => (string)$row['email'],
-                'ativo' => (int)$row['ativo'],
-                'observacao' => (string)$row['observacao'],
-                'produtos' => $produtos,
-            ]
-        ];
-    } catch (Throwable $e) {
-        logError('produtos', 'Erro ao obter fornecedor', [
-            'arquivo' => $e->getFile(),
-            'linha'   => $e->getLine(),
-            'erro'    => $e->getMessage(),
-            'fornecedor_id' => $fornecedor_id
-        ]);
-
-        return [
-            'sucesso' => false,
-            'mensagem' => 'Erro ao obter fornecedor',
-            'dados' => null
-        ];
-    }
-}
-
-function fornecedor_salvar(
-    mysqli $conn,
-    int $fornecedor_id,
-    string $nome,
-    string $cnpj,
-    string $telefone,
-    string $email,
-    int $ativo,
-    string $observacao,
-    ?int $usuario_id
-): array {
-    try {
-        $cnpj = trim($cnpj);
-        $telefone = trim($telefone);
-        $email = trim($email);
-        $observacao = trim($observacao);
-
-        $stmtDup = $conn->prepare('SELECT id FROM fornecedores WHERE LOWER(nome) = LOWER(?) AND id <> ? LIMIT 1');
-        $stmtDup->bind_param('si', $nome, $fornecedor_id);
-        $stmtDup->execute();
-        $dup = $stmtDup->get_result()->fetch_assoc();
-        $stmtDup->close();
-
-        if ($dup) {
-            return [
-                'sucesso' => false,
-                'mensagem' => 'Já existe um fornecedor com esse nome.',
-                'dados' => null
-            ];
-        }
-
-        if ($fornecedor_id > 0) {
-            $stmt = $conn->prepare("
-                UPDATE fornecedores
-                SET nome = ?, cnpj = ?, telefone = ?, email = ?, ativo = ?, observacao = ?
-                WHERE id = ?
-            ");
-            $stmt->bind_param(
-                'ssssisi',
-                $nome,
-                $cnpj,
-                $telefone,
-                $email,
-                $ativo,
-                $observacao,
-                $fornecedor_id
-            );
-            $stmt->execute();
-            $stmt->close();
-
-            return [
-                'sucesso' => true,
-                'mensagem' => 'Fornecedor atualizado com sucesso',
-                'dados' => ['id' => $fornecedor_id]
-            ];
-        }
-
-        $stmt = $conn->prepare("
-            INSERT INTO fornecedores (nome, cnpj, telefone, email, ativo, observacao)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ");
-        $stmt->bind_param(
-            'ssssis',
-            $nome,
-            $cnpj,
-            $telefone,
-            $email,
-            $ativo,
-            $observacao
-        );
-        $stmt->execute();
-        $novoId = (int)$stmt->insert_id;
-        $stmt->close();
-
-        return [
-            'sucesso' => true,
-            'mensagem' => 'Fornecedor cadastrado com sucesso',
-            'dados' => ['id' => $novoId]
-        ];
-    } catch (Throwable $e) {
-        logError('produtos', 'Erro ao salvar fornecedor', [
-            'arquivo' => $e->getFile(),
-            'linha'   => $e->getLine(),
-            'erro'    => $e->getMessage(),
-            'fornecedor_id' => $fornecedor_id,
-            'nome' => $nome,
-            'usuario' => $usuario_id
-        ]);
-
-        return [
-            'sucesso' => false,
-            'mensagem' => 'Erro ao salvar fornecedor',
-            'dados' => null
-        ];
-    }
-}
-
-/* =========================
-   PRODUTOS
-   ========================= */
-
 function produtos_listar(mysqli $conn): array
 {
     try {
@@ -502,12 +256,21 @@ function produtos_listar(mysqli $conn): array
         ";
 
         $res = $conn->query($sql);
+        $dados = [];
 
-        return [
-            'sucesso'  => true,
-            'mensagem' => '',
-            'dados'    => $res->fetch_all(MYSQLI_ASSOC)
-        ];
+        while ($row = $res->fetch_assoc()) {
+            $dados[] = [
+                'id'             => (int)$row['id'],
+                'nome'           => (string)$row['nome'],
+                'quantidade'     => (int)$row['quantidade'],
+                'ativo'          => (int)$row['ativo'],
+                'estoque_minimo' => (int)$row['estoque_minimo'],
+                'preco_custo'    => (float)$row['preco_custo'],
+                'preco_venda'    => (float)$row['preco_venda'],
+            ];
+        }
+
+        return resposta(true, '', $dados);
     } catch (Throwable $e) {
         logError('produtos', 'Erro ao listar produtos', [
             'arquivo' => $e->getFile(),
@@ -515,11 +278,7 @@ function produtos_listar(mysqli $conn): array
             'erro'    => $e->getMessage()
         ]);
 
-        return [
-            'sucesso'  => false,
-            'mensagem' => 'Erro ao buscar produtos',
-            'dados'    => []
-        ];
+        return resposta(false, 'Erro ao buscar produtos', []);
     }
 }
 
@@ -551,29 +310,21 @@ function produto_obter(mysqli $conn, int $produto_id): array
         $stmt->close();
 
         if (!$row) {
-            return [
-                'sucesso'  => false,
-                'mensagem' => 'Produto não encontrado.',
-                'dados'    => null
-            ];
+            return resposta(false, 'Produto não encontrado.', null);
         }
 
         $fornecedores = produto_fornecedores_listar($conn, $produto_id);
 
-        return [
-            'sucesso'  => true,
-            'mensagem' => 'OK',
-            'dados'    => [
-                'id' => (int)$row['id'],
-                'nome' => (string)$row['nome'],
-                'quantidade' => (int)$row['quantidade'],
-                'estoque_minimo' => (int)$row['estoque_minimo'],
-                'ativo' => (int)$row['ativo'],
-                'preco_custo' => (float)$row['preco_custo'],
-                'preco_venda' => (float)$row['preco_venda'],
-                'fornecedores' => $fornecedores,
-            ]
-        ];
+        return resposta(true, 'OK', [
+            'id'             => (int)$row['id'],
+            'nome'           => (string)$row['nome'],
+            'quantidade'     => (int)$row['quantidade'],
+            'estoque_minimo' => (int)$row['estoque_minimo'],
+            'ativo'          => (int)$row['ativo'],
+            'preco_custo'    => (float)$row['preco_custo'],
+            'preco_venda'    => (float)$row['preco_venda'],
+            'fornecedores'   => $fornecedores,
+        ]);
     } catch (Throwable $e) {
         logError('produtos', 'Erro ao obter produto', [
             'arquivo'    => $e->getFile(),
@@ -582,11 +333,7 @@ function produto_obter(mysqli $conn, int $produto_id): array
             'produto_id' => $produto_id
         ]);
 
-        return [
-            'sucesso'  => false,
-            'mensagem' => 'Erro ao obter produto',
-            'dados'    => null
-        ];
+        return resposta(false, 'Erro ao obter produto', null);
     }
 }
 
@@ -621,20 +368,16 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
         $itens = [];
         while ($r = $res->fetch_assoc()) {
             $itens[] = [
-                'id' => (int)$r['id'],
-                'nome' => (string)$r['nome'],
-                'quantidade' => (int)$r['quantidade'],
+                'id'             => (int)$r['id'],
+                'nome'           => (string)$r['nome'],
+                'quantidade'     => (int)$r['quantidade'],
                 'estoque_minimo' => (int)$r['estoque_minimo'],
-                'preco_custo' => (float)$r['preco_custo'],
+                'preco_custo'    => (float)$r['preco_custo'],
             ];
         }
         $stmt->close();
 
-        return [
-            'sucesso' => true,
-            'mensagem'=> 'OK',
-            'dados'   => ['itens' => $itens]
-        ];
+        return resposta(true, 'OK', ['itens' => $itens]);
     } catch (Throwable $e) {
         logError('produtos', 'Erro ao buscar produtos (autocomplete)', [
             'arquivo' => $e->getFile(),
@@ -643,11 +386,7 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
             'q'       => $q
         ]);
 
-        return [
-            'sucesso' => false,
-            'mensagem'=> 'Erro ao buscar produtos',
-            'dados'   => ['itens' => []]
-        ];
+        return resposta(false, 'Erro ao buscar produtos', ['itens' => []]);
     }
 }
 
@@ -675,11 +414,7 @@ function produto_resumo(mysqli $conn, int $produto_id): array
         $stmtP->close();
 
         if (!$prod) {
-            return [
-                'sucesso' => false,
-                'mensagem' => 'Produto não encontrado.',
-                'dados' => null
-            ];
+            return resposta(false, 'Produto não encontrado.', null);
         }
 
         $sqlM = "
@@ -712,20 +447,16 @@ function produto_resumo(mysqli $conn, int $produto_id): array
         }
         $stmtM->close();
 
-        return [
-            'sucesso' => true,
-            'mensagem' => 'OK',
-            'dados' => [
-                'produto' => [
-                    'id'             => (int)$prod['id'],
-                    'nome'           => (string)$prod['nome'],
-                    'quantidade'     => (int)$prod['quantidade'],
-                    'estoque_minimo' => (int)$prod['estoque_minimo'],
-                    'preco_custo'    => (float)$prod['preco_custo'],
-                ],
-                'ultimas_movimentacoes' => $movs
-            ]
-        ];
+        return resposta(true, 'OK', [
+            'produto' => [
+                'id'             => (int)$prod['id'],
+                'nome'           => (string)$prod['nome'],
+                'quantidade'     => (int)$prod['quantidade'],
+                'estoque_minimo' => (int)$prod['estoque_minimo'],
+                'preco_custo'    => (float)$prod['preco_custo'],
+            ],
+            'ultimas_movimentacoes' => $movs
+        ]);
     } catch (Throwable $e) {
         logError('produtos', 'Erro ao gerar resumo do produto', [
             'arquivo'    => $e->getFile(),
@@ -734,11 +465,7 @@ function produto_resumo(mysqli $conn, int $produto_id): array
             'produto_id' => $produto_id
         ]);
 
-        return [
-            'sucesso' => false,
-            'mensagem' => 'Erro interno ao gerar resumo.',
-            'dados' => null
-        ];
+        return resposta(false, 'Erro interno ao gerar resumo.', null);
     }
 }
 
@@ -753,6 +480,16 @@ function produtos_adicionar(
     array $fornecedores = []
 ): array {
     try {
+        $nome = trim($nome);
+
+        if ($nome === '') {
+            return resposta(false, 'Nome do produto obrigatório.', null);
+        }
+
+        if ($quantidade < 0 || $estoque_minimo < 0) {
+            return resposta(false, 'Dados inválidos para o produto.', null);
+        }
+
         $conn->begin_transaction();
 
         $fornecedoresNormalizados = normalizar_fornecedores($fornecedores);
@@ -782,11 +519,7 @@ function produtos_adicionar(
 
         $conn->commit();
 
-        return [
-            'sucesso'  => true,
-            'mensagem' => 'Produto adicionado com sucesso',
-            'dados'    => ['id' => $id]
-        ];
+        return resposta(true, 'Produto adicionado com sucesso', ['id' => $id]);
     } catch (Throwable $e) {
         $conn->rollback();
 
@@ -803,11 +536,7 @@ function produtos_adicionar(
             'fornecedores'   => $fornecedores
         ]);
 
-        return [
-            'sucesso'  => false,
-            'mensagem' => 'Erro ao adicionar produto',
-            'dados'    => null
-        ];
+        return resposta(false, 'Erro ao adicionar produto', null);
     }
 }
 
@@ -823,6 +552,12 @@ function produtos_atualizar(
     array $fornecedores = []
 ): array {
     try {
+        $nome = trim($nome);
+
+        if ($produto_id <= 0 || $nome === '' || $quantidade < 0 || $estoque_minimo < 0 || $preco_custo < 0 || $preco_venda < 0) {
+            return resposta(false, 'Dados inválidos para atualização do produto.', null);
+        }
+
         $conn->begin_transaction();
 
         $stmtChk = $conn->prepare('SELECT id FROM produtos WHERE id = ? LIMIT 1');
@@ -833,11 +568,7 @@ function produtos_atualizar(
 
         if (!$exists) {
             $conn->rollback();
-            return [
-                'sucesso'  => false,
-                'mensagem' => 'Produto não encontrado.',
-                'dados'    => null
-            ];
+            return resposta(false, 'Produto não encontrado.', null);
         }
 
         $fornecedoresNormalizados = normalizar_fornecedores($fornecedores);
@@ -865,11 +596,7 @@ function produtos_atualizar(
 
         $conn->commit();
 
-        return [
-            'sucesso'  => true,
-            'mensagem' => 'Produto atualizado com sucesso',
-            'dados'    => ['id' => $produto_id]
-        ];
+        return resposta(true, 'Produto atualizado com sucesso', ['id' => $produto_id]);
     } catch (Throwable $e) {
         $conn->rollback();
 
@@ -887,11 +614,7 @@ function produtos_atualizar(
             'fornecedores'   => $fornecedores
         ]);
 
-        return [
-            'sucesso'  => false,
-            'mensagem' => 'Erro ao atualizar produto',
-            'dados'    => null
-        ];
+        return resposta(false, 'Erro ao atualizar produto', null);
     }
 }
 
@@ -901,7 +624,22 @@ function produtos_remover(
     ?int $usuario_id
 ): array {
     try {
+        if ($produto_id <= 0) {
+            return resposta(false, 'Produto inválido.', null);
+        }
+
         $conn->begin_transaction();
+
+        $stmtChk = $conn->prepare('SELECT id FROM produtos WHERE id = ? LIMIT 1');
+        $stmtChk->bind_param('i', $produto_id);
+        $stmtChk->execute();
+        $exists = $stmtChk->get_result()->fetch_assoc();
+        $stmtChk->close();
+
+        if (!$exists) {
+            $conn->rollback();
+            return resposta(false, 'Produto não encontrado.', null);
+        }
 
         $stmtDelRel = $conn->prepare('DELETE FROM produto_fornecedores WHERE produto_id = ?');
         $stmtDelRel->bind_param('i', $produto_id);
@@ -915,11 +653,7 @@ function produtos_remover(
 
         $conn->commit();
 
-        return [
-            'sucesso'  => true,
-            'mensagem' => 'Produto removido com sucesso',
-            'dados'    => null
-        ];
+        return resposta(true, 'Produto removido com sucesso', null);
     } catch (Throwable $e) {
         $conn->rollback();
 
@@ -931,10 +665,6 @@ function produtos_remover(
             'usuario'    => $usuario_id
         ]);
 
-        return [
-            'sucesso'  => false,
-            'mensagem' => 'Erro ao remover produto',
-            'dados'    => null
-        ];
+        return resposta(false, 'Erro ao remover produto', null);
     }
 }

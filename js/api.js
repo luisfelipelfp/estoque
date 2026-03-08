@@ -1,35 +1,67 @@
-// js/api.js
 const APP_BASE = "/estoque";
 const API_URL = `${APP_BASE}/api/actions.php`;
 
 export async function apiRequest(acao, dados = null, metodo = "GET") {
+  const method = String(metodo || "GET").toUpperCase();
   let url = `${API_URL}?acao=${encodeURIComponent(acao)}`;
 
   const options = {
-    method: metodo,
+    method,
     credentials: "include",
-    headers: { Accept: "application/json" }
+    headers: {
+      Accept: "application/json"
+    }
   };
 
-  if (metodo === "GET" && dados) {
-    const query = new URLSearchParams(dados).toString();
-    url += "&" + query;
+  if (method === "GET" && dados && typeof dados === "object") {
+    const query = new URLSearchParams();
+
+    for (const [chave, valor] of Object.entries(dados)) {
+      if (valor === undefined || valor === null || valor === "") continue;
+      query.append(chave, String(valor));
+    }
+
+    const qs = query.toString();
+    if (qs) {
+      url += `&${qs}`;
+    }
   }
 
-  if (metodo === "POST") {
+  if (method === "POST") {
     options.headers["Content-Type"] = "application/json";
     options.body = JSON.stringify(dados || {});
   }
 
   try {
     const resp = await fetch(url, options);
+    const contentType = (resp.headers.get("content-type") || "").toLowerCase();
 
-    const contentType = resp.headers.get("content-type") || "";
-    const payload = contentType.includes("application/json")
-      ? await resp.json()
-      : { sucesso: false, mensagem: await resp.text() };
+    let payload;
+    if (contentType.includes("application/json")) {
+      payload = await resp.json();
+    } else {
+      const texto = await resp.text();
+      payload = {
+        sucesso: false,
+        mensagem: texto || `Erro HTTP ${resp.status}`
+      };
+    }
 
-    // NÃO joga exception em 401: devolve payload para o caller decidir
+    if (typeof payload !== "object" || payload === null) {
+      payload = {
+        sucesso: false,
+        mensagem: "Resposta inválida do servidor."
+      };
+    }
+
+    if (!("sucesso" in payload)) {
+      payload.sucesso = resp.ok;
+    }
+
+    if (!resp.ok && (!payload.mensagem || payload.mensagem === "OK")) {
+      payload.mensagem = `Erro HTTP ${resp.status}`;
+    }
+
     return payload;
   } catch (err) {
     return {

@@ -4,6 +4,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/log.php';
 require_once __DIR__ . '/utils.php';
 
+initLog('fornecedores');
+
 function fornecedores_listar(mysqli $conn): array
 {
     try {
@@ -30,22 +32,18 @@ function fornecedores_listar(mysqli $conn): array
 
         while ($row = $res->fetch_assoc()) {
             $dados[] = [
-                'id'            => (int)$row['id'],
-                'nome'          => (string)$row['nome'],
-                'cnpj'          => (string)$row['cnpj'],
-                'telefone'      => (string)$row['telefone'],
-                'email'         => (string)$row['email'],
-                'ativo'         => (int)$row['ativo'],
-                'observacao'    => (string)$row['observacao'],
-                'total_produtos'=> (int)$row['total_produtos'],
+                'id'             => (int)$row['id'],
+                'nome'           => (string)$row['nome'],
+                'cnpj'           => (string)$row['cnpj'],
+                'telefone'       => (string)$row['telefone'],
+                'email'          => (string)$row['email'],
+                'ativo'          => (int)$row['ativo'],
+                'observacao'     => (string)$row['observacao'],
+                'total_produtos' => (int)$row['total_produtos'],
             ];
         }
 
-        return [
-            'sucesso'  => true,
-            'mensagem' => 'OK',
-            'dados'    => $dados
-        ];
+        return resposta(true, 'OK', $dados);
     } catch (Throwable $e) {
         logError('fornecedores', 'Erro ao listar fornecedores', [
             'arquivo' => $e->getFile(),
@@ -53,11 +51,7 @@ function fornecedores_listar(mysqli $conn): array
             'erro'    => $e->getMessage()
         ]);
 
-        return [
-            'sucesso'  => false,
-            'mensagem' => 'Erro ao listar fornecedores.',
-            'dados'    => []
-        ];
+        return resposta(false, 'Erro ao listar fornecedores.', []);
     }
 }
 
@@ -85,11 +79,11 @@ function fornecedor_produtos_listar(mysqli $conn, int $fornecedor_id): array
     $dados = [];
     while ($row = $res->fetch_assoc()) {
         $dados[] = [
-            'produto_id' => (int)$row['id'],
-            'produto_nome' => (string)$row['nome'],
+            'produto_id'                => (int)$row['id'],
+            'produto_nome'              => (string)$row['nome'],
             'codigo_produto_fornecedor' => (string)$row['codigo_produto_fornecedor'],
-            'observacao' => (string)$row['observacao'],
-            'principal' => (int)$row['principal'],
+            'observacao'                => (string)$row['observacao'],
+            'principal'                 => (int)$row['principal'],
         ];
     }
 
@@ -120,30 +114,22 @@ function fornecedor_obter(mysqli $conn, int $fornecedor_id): array
         $stmt->close();
 
         if (!$row) {
-            return [
-                'sucesso'  => false,
-                'mensagem' => 'Fornecedor não encontrado.',
-                'dados'    => null
-            ];
+            return resposta(false, 'Fornecedor não encontrado.', null);
         }
 
         $produtos = fornecedor_produtos_listar($conn, $fornecedor_id);
 
-        return [
-            'sucesso'  => true,
-            'mensagem' => 'OK',
-            'dados'    => [
-                'id'         => (int)$row['id'],
-                'nome'       => (string)$row['nome'],
-                'cnpj'       => (string)$row['cnpj'],
-                'telefone'   => (string)$row['telefone'],
-                'email'      => (string)$row['email'],
-                'ativo'      => (int)$row['ativo'],
-                'observacao' => (string)$row['observacao'],
-                'criado_em'  => (string)$row['criado_em'],
-                'produtos'   => $produtos,
-            ]
-        ];
+        return resposta(true, 'OK', [
+            'id'         => (int)$row['id'],
+            'nome'       => (string)$row['nome'],
+            'cnpj'       => (string)$row['cnpj'],
+            'telefone'   => (string)$row['telefone'],
+            'email'      => (string)$row['email'],
+            'ativo'      => (int)$row['ativo'],
+            'observacao' => (string)$row['observacao'],
+            'criado_em'  => (string)$row['criado_em'],
+            'produtos'   => $produtos,
+        ]);
     } catch (Throwable $e) {
         logError('fornecedores', 'Erro ao obter fornecedor', [
             'arquivo'       => $e->getFile(),
@@ -152,11 +138,7 @@ function fornecedor_obter(mysqli $conn, int $fornecedor_id): array
             'fornecedor_id' => $fornecedor_id
         ]);
 
-        return [
-            'sucesso'  => false,
-            'mensagem' => 'Erro ao obter fornecedor.',
-            'dados'    => null
-        ];
+        return resposta(false, 'Erro ao obter fornecedor.', null);
     }
 }
 
@@ -179,11 +161,7 @@ function fornecedor_salvar(
         $observacao = trim($observacao);
 
         if ($nome === '') {
-            return [
-                'sucesso'  => false,
-                'mensagem' => 'Nome do fornecedor obrigatório.',
-                'dados'    => null
-            ];
+            return resposta(false, 'Nome do fornecedor obrigatório.', null);
         }
 
         $stmtDup = $conn->prepare("
@@ -199,11 +177,7 @@ function fornecedor_salvar(
         $stmtDup->close();
 
         if ($dup) {
-            return [
-                'sucesso'  => false,
-                'mensagem' => 'Já existe um fornecedor com esse nome.',
-                'dados'    => null
-            ];
+            return resposta(false, 'Já existe um fornecedor com esse nome.', null);
         }
 
         if ($fornecedor_id > 0) {
@@ -231,11 +205,7 @@ function fornecedor_salvar(
             $stmt->execute();
             $stmt->close();
 
-            return [
-                'sucesso'  => true,
-                'mensagem' => 'Fornecedor atualizado com sucesso.',
-                'dados'    => ['id' => $fornecedor_id]
-            ];
+            return resposta(true, 'Fornecedor atualizado com sucesso.', ['id' => $fornecedor_id]);
         }
 
         $stmt = $conn->prepare("
@@ -257,11 +227,7 @@ function fornecedor_salvar(
         $novoId = (int)$stmt->insert_id;
         $stmt->close();
 
-        return [
-            'sucesso'  => true,
-            'mensagem' => 'Fornecedor cadastrado com sucesso.',
-            'dados'    => ['id' => $novoId]
-        ];
+        return resposta(true, 'Fornecedor cadastrado com sucesso.', ['id' => $novoId]);
     } catch (Throwable $e) {
         logError('fornecedores', 'Erro ao salvar fornecedor', [
             'arquivo'       => $e->getFile(),
@@ -272,10 +238,6 @@ function fornecedor_salvar(
             'usuario_id'    => $usuario_id
         ]);
 
-        return [
-            'sucesso'  => false,
-            'mensagem' => 'Erro ao salvar fornecedor.',
-            'dados'    => null
-        ];
+        return resposta(false, 'Erro ao salvar fornecedor.', null);
     }
 }
