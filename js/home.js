@@ -21,9 +21,20 @@ function montarSaudacao() {
 
   const usuario = obterUsuarioLocal();
   const nomeCompleto = String(usuario?.nome ?? "").trim();
-  const primeiroNome = nomeCompleto.split(" ").filter(Boolean)[0] || "seja bem-vindo";
+  const primeiroNome = nomeCompleto.split(" ").filter(Boolean)[0] || "Usuário";
 
-  el.textContent = `Bem-vindo, ${primeiroNome}.`;
+  const hora = new Date().getHours();
+
+  let prefixo = "Bem-vindo";
+  if (hora >= 5 && hora < 12) {
+    prefixo = "Bom dia";
+  } else if (hora >= 12 && hora < 18) {
+    prefixo = "Boa tarde";
+  } else {
+    prefixo = "Boa noite";
+  }
+
+  el.textContent = `${prefixo}, ${primeiroNome}.`;
 }
 
 function setEstado({ loading = false, erro = false } = {}) {
@@ -41,7 +52,7 @@ function preencherFrase(frase, autor) {
   const autorEl = $("homeAutor");
 
   if (fraseEl) {
-    fraseEl.textContent = frase ? `“${frase}”` : "“Sem frase disponível no momento.”";
+    fraseEl.textContent = frase || "Siga em frente, um passo de cada vez.";
   }
 
   if (autorEl) {
@@ -116,4 +127,4 @@ async function carregarHome() {
 document.addEventListener("DOMContentLoaded", async () => {
   montarSaudacao();
   await carregarHome();
-});
+}); 
