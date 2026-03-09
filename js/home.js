@@ -47,12 +47,23 @@ function setEstado({ loading = false, erro = false } = {}) {
   if (erroEl) erroEl.classList.toggle("d-none", !erro);
 }
 
+function montarTextoComAspas(frase) {
+  const texto = String(frase ?? "").trim() || "Siga em frente, um passo de cada vez.";
+
+  const semAspas = texto
+    .replace(/^["“”'‘’]+/, "")
+    .replace(/["“”'‘’]+$/, "")
+    .trim();
+
+  return `“${semAspas}”`;
+}
+
 function preencherFrase(frase, autor) {
   const fraseEl = $("homeFrase");
   const autorEl = $("homeAutor");
 
   if (fraseEl) {
-    fraseEl.textContent = frase || "Siga em frente, um passo de cada vez.";
+    fraseEl.textContent = montarTextoComAspas(frase);
   }
 
   if (autorEl) {
@@ -127,4 +138,4 @@ async function carregarHome() {
 document.addEventListener("DOMContentLoaded", async () => {
   montarSaudacao();
   await carregarHome();
-}); 
+});
