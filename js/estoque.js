@@ -142,7 +142,7 @@ function renderTabela(produtos) {
   if (!Array.isArray(produtos) || produtos.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="6" class="text-center text-muted">Nenhum produto encontrado.</td>
+        <td colspan="5" class="text-center text-muted">Nenhum produto encontrado.</td>
       </tr>
     `;
     return;
@@ -165,26 +165,6 @@ function renderTabela(produtos) {
         <td>${estoqueMinimo}</td>
         <td>
           <span class="badge ${status.badge}">${status.texto}</span>
-        </td>
-        <td class="text-nowrap">
-          <div class="d-flex gap-2 flex-wrap">
-            <button
-              class="btn btn-sm btn-outline-success"
-              data-acao="entrada"
-              data-id="${id}"
-              data-nome="${escapeHtml(p?.nome ?? "")}"
-            >
-              Entrada
-            </button>
-            <button
-              class="btn btn-sm btn-outline-danger"
-              data-acao="saida"
-              data-id="${id}"
-              data-nome="${escapeHtml(p?.nome ?? "")}"
-            >
-              Saída
-            </button>
-          </div>
         </td>
       </tr>
     `;
@@ -211,7 +191,7 @@ async function carregarProdutos() {
   if (tbody) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="6" class="text-center text-muted">Carregando...</td>
+        <td colspan="5" class="text-center text-muted">Carregando...</td>
       </tr>
     `;
   }
@@ -655,25 +635,6 @@ async function abrirModalSaida({ id = "", nome = "" } = {}) {
   modal.show();
 }
 
-function bindTabelaAcoes() {
-  $("tabelaEstoque")?.addEventListener("click", async (ev) => {
-    const btn = ev.target.closest("button[data-acao][data-id]");
-    if (!btn) return;
-
-    const payload = {
-      id: Number(btn.dataset.id || 0),
-      nome: btn.dataset.nome || ""
-    };
-
-    if (btn.dataset.acao === "entrada") {
-      await abrirModalEntrada(payload);
-      return;
-    }
-
-    await abrirModalSaida(payload);
-  });
-}
-
 function bindBusca() {
   $("buscaProduto")?.addEventListener("input", aplicarFiltro);
 
@@ -891,11 +852,10 @@ function bindModais() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  bindTabelaAcoes();
   bindBusca();
   bindAcoesTopo();
   bindModais();
 
   await carregarFornecedores();
   await carregarProdutos();
-}); 
+});
