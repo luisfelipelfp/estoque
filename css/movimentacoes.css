@@ -69,6 +69,10 @@
   background: #fbfbfc;
 }
 
+#filtroProdutoSugestoes .list-group-item {
+  cursor: pointer;
+}
+
 @media (max-width: 991.98px) {
   #modalDetalhesMovimentacao .modal-dialog {
     margin: 0.75rem;

@@ -7,6 +7,7 @@ const limitePorPagina = 10;
 let ultimoFiltroAplicado = {};
 let totalPaginasAtual = 0;
 let modalDetalhesInstance = null;
+let produtosAutocompleteCache = [];
 
 function $(id) {
   return document.getElementById(id);
@@ -53,6 +54,11 @@ function setResumoPagina(texto = "") {
   if (el) el.textContent = texto;
 }
 
+function setTextoDetalhe(id, valor) {
+  const el = $(id);
+  if (el) el.textContent = String(valor ?? "");
+}
+
 function getFiltrosTela() {
   return {
     produto: ($("filtroProduto")?.value ?? "").trim(),
@@ -63,10 +69,10 @@ function getFiltrosTela() {
   };
 }
 
-function montarPayloadConsulta(filtros, pagina) {
+function montarPayloadConsulta(filtros, pagina, limite = limitePorPagina) {
   const payload = {
     pagina,
-    limite: limitePorPagina
+    limite
   };
 
   if (filtros.produto) payload.produto = filtros.produto;
@@ -221,6 +227,83 @@ async function carregarFornecedoresFiltro() {
   }
 }
 
+function limparSugestoesProduto() {
+  const box = $("filtroProdutoSugestoes");
+  if (!box) return;
+  box.innerHTML = "";
+  box.style.display = "none";
+}
+
+function renderSugestoesProduto(produtos) {
+  const box = $("filtroProdutoSugestoes");
+  if (!box) return;
+
+  if (!Array.isArray(produtos) || produtos.length === 0) {
+    box.innerHTML = `
+      <button type="button" class="list-group-item list-group-item-action disabled">
+        Nenhum produto encontrado
+      </button>
+    `;
+    box.style.display = "block";
+    return;
+  }
+
+  box.innerHTML = produtos.map((p) => `
+    <button
+      type="button"
+      class="list-group-item list-group-item-action"
+      data-produto-nome="${escapeHtml(p?.nome ?? "")}"
+    >
+      ${escapeHtml(p?.nome ?? "")}
+    </button>
+  `).join("");
+
+  box.style.display = "block";
+}
+
+async function buscarProdutosAutocomplete(termo) {
+  const texto = String(termo || "").trim();
+
+  if (!texto) {
+    produtosAutocompleteCache = [];
+    limparSugestoesProduto();
+    return;
+  }
+
+  try {
+    const resp = await apiRequest("buscar_produtos", { q: texto, limit: 8 }, "GET");
+
+    if (!resp?.sucesso) {
+      produtosAutocompleteCache = [];
+      renderSugestoesProduto([]);
+      return;
+    }
+
+    produtosAutocompleteCache = Array.isArray(resp?.dados) ? resp.dados : [];
+    renderSugestoesProduto(produtosAutocompleteCache);
+  } catch (err) {
+    produtosAutocompleteCache = [];
+    limparSugestoesProduto();
+
+    logJsError({
+      origem: "movimentacoes.js",
+      mensagem: "Erro no autocomplete de produtos",
+      detalhe: err?.message,
+      stack: err?.stack
+    });
+  }
+}
+
+function debounce(fn, delay = 250) {
+  let t = null;
+  return (...args) => {
+    if (t) clearTimeout(t);
+    t = setTimeout(() => fn(...args), delay);
+  };
+}
+
+const buscarProdutosAutocompleteDebounced = debounce(buscarProdutosAutocomplete, 250);
+
 async function listarMovimentacoes(filtros = {}, pagina = 1) {
   const filtrosPossuemValor = Object.values(filtros).some((v) => String(v || "").trim() !== "");
 
@@ -295,22 +378,161 @@ async function listarMovimentacoes(filtros = {}, pagina = 1) {
   }
 }
 
-function limparFiltros() {
-  if ($("filtroProduto")) $("filtroProduto").value = "";
-  if ($("filtroFornecedor")) $("filtroFornecedor").value = "";
-  if ($("filtroTipo")) $("filtroTipo").value = "";
-  if ($("filtroDataInicio")) $("filtroDataInicio").value = "";
-  if ($("filtroDataFim")) $("filtroDataFim").value = "";
+async function buscarTodosRegistrosParaExportacao(filtros) {
+  const payload = montarPayloadConsulta(filtros, 1, 5000);
+  const resp = await apiRequest("listar_movimentacoes", payload, "GET");
 
-  ultimoFiltroAplicado = {};
-  paginaAtual = 1;
-  totalPaginasAtual = 0;
+  if (!resp?.sucesso) {
+    throw new Error(resp?.mensagem || "Não foi possível buscar os dados para exportação.");
+  }
 
-  renderMensagemTabela("Use os filtros para buscar movimentações.");
-  setStatus("Filtros limpos.");
-  setResumoPagina("Nenhuma consulta realizada.");
-  renderResumo({ total: 0, dados: [] });
-  atualizarEstadoPaginacao();
+  const dados = resp?.dados?.dados;
+  return Array.isArray(dados) ? dados : [];
+}
+
+function montarLinhasExportacao(registros) {
+  return registros.map((m) => ({
+    ID: Number(m?.id ?? 0),
+    Data: String(m?.data ?? ""),
+    Produto: String(m?.produto_nome ?? ""),
+    Fornecedor: String(m?.fornecedor_nome ?? ""),
+    Tipo: String(m?.tipo ?? ""),
+    Quantidade: Number(m?.quantidade ?? 0),
+    "Valor Unitário": m?.valor_unitario != null ? Number(m.valor_unitario) : "",
+    "Custo Unitário": m?.custo_unitario != null ? Number(m.custo_unitario) : "",
+    "Custo Total": m?.custo_total != null ? Number(m.custo_total) : "",
+    "Valor Total": m?.valor_total != null ? Number(m.valor_total) : "",
+    Lucro: m?.lucro != null ? Number(m.lucro) : "",
+    Usuário: String(m?.usuario ?? ""),
+    Observação: String(m?.observacao ?? "")
+  }));
+}
+
+async function exportarXlsx() {
+  const filtros = getFiltrosTela();
+  const filtrosPossuemValor = Object.values(filtros).some((v) => String(v || "").trim() !== "");
+
+  if (!filtrosPossuemValor) {
+    window.alert("Aplique pelo menos um filtro antes de exportar.");
+    return;
+  }
+
+  try {
+    setStatus("Preparando exportação XLSX...");
+
+    const registros = await buscarTodosRegistrosParaExportacao(filtros);
+
+    if (!registros.length) {
+      window.alert("Nenhum registro encontrado para exportar.");
+      setStatus("Nenhum registro encontrado para exportação.");
+      return;
+    }
+
+    const linhas = montarLinhasExportacao(registros);
+    const worksheet = window.XLSX.utils.json_to_sheet(linhas);
+    const workbook = window.XLSX.utils.book_new();
+
+    window.XLSX.utils.book_append_sheet(workbook, worksheet, "Movimentacoes");
+    window.XLSX.writeFile(workbook, "movimentacoes.xlsx");
+
+    setStatus(`Exportação XLSX concluída com ${registros.length} registro(s).`);
+  } catch (err) {
+    setStatus("Erro ao exportar XLSX.");
+
+    logJsError({
+      origem: "movimentacoes.js",
+      mensagem: "Erro ao exportar XLSX",
+      detalhe: err?.message,
+      stack: err?.stack
+    });
+
+    window.alert("Erro ao exportar XLSX.");
+  }
+}
+
+async function exportarPdf() {
+  const filtros = getFiltrosTela();
+  const filtrosPossuemValor = Object.values(filtros).some((v) => String(v || "").trim() !== "");
+
+  if (!filtrosPossuemValor) {
+    window.alert("Aplique pelo menos um filtro antes de exportar.");
+    return;
+  }
+
+  try {
+    setStatus("Preparando exportação PDF...");
+
+    const registros = await buscarTodosRegistrosParaExportacao(filtros);
+
+    if (!registros.length) {
+      window.alert("Nenhum registro encontrado para exportar.");
+      setStatus("Nenhum registro encontrado para exportação.");
+      return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
+    const head = [[
+      "ID",
+      "Data",
+      "Produto",
+      "Fornecedor",
+      "Tipo",
+      "Qtd",
+      "Custo Total",
+      "Valor Total",
+      "Lucro",
+      "Usuário"
+    ]];
+
+    const body = registros.map((m) => [
+      Number(m?.id ?? 0),
+      String(m?.data ?? ""),
+      String(m?.produto_nome ?? ""),
+      String(m?.fornecedor_nome ?? ""),
+      String(m?.tipo ?? ""),
+      Number(m?.quantidade ?? 0),
+      m?.custo_total != null ? formatBRL(m.custo_total) : "—",
+      m?.valor_total != null ? formatBRL(m.valor_total) : "—",
+      m?.lucro != null ? formatBRL(m.lucro) : "—",
+      String(m?.usuario ?? "")
+    ]);
+
+    doc.setFontSize(14);
+    doc.text("Relatório de Movimentações", 14, 15);
+
+    doc.setFontSize(9);
+    doc.text(`Gerado em: ${new Date().toLocaleString("pt-BR")}`, 14, 21);
+
+    doc.autoTable({
+      startY: 26,
+      head,
+      body,
+      styles: {
+        fontSize: 8,
+        cellPadding: 2
+      },
+      headStyles: {
+        fillColor: [52, 73, 94]
+      }
+    });
+
+    doc.save("movimentacoes.pdf");
+
+    setStatus(`Exportação PDF concluída com ${registros.length} registro(s).`);
+  } catch (err) {
+    setStatus("Erro ao exportar PDF.");
+
+    logJsError({
+      origem: "movimentacoes.js",
+      mensagem: "Erro ao exportar PDF",
+      detalhe: err?.message,
+      stack: err?.stack
+    });
+
+    window.alert("Erro ao exportar PDF.");
+  }
 }
 
 function preencherDetalhesMovimentacao(mov) {
@@ -328,11 +550,6 @@ function preencherDetalhesMovimentacao(mov) {
   setTextoDetalhe("detalheObservacao", mov?.observacao || "—");
 
   renderDetalhesLotes(Array.isArray(mov?.lotes) ? mov.lotes : []);
-}
-
-function setTextoDetalhe(id, valor) {
-  const el = $(id);
-  if (el) el.textContent = String(valor ?? "");
 }
 
 function renderDetalhesLotes(lotes) {
@@ -412,6 +629,75 @@ async function abrirDetalhesMovimentacao(movimentacaoId) {
   }
 }
 
+function limparFiltros() {
+  if ($("filtroProduto")) $("filtroProduto").value = "";
+  if ($("filtroFornecedor")) $("filtroFornecedor").value = "";
+  if ($("filtroTipo")) $("filtroTipo").value = "";
+  if ($("filtroDataInicio")) $("filtroDataInicio").value = "";
+  if ($("filtroDataFim")) $("filtroDataFim").value = "";
+
+  ultimoFiltroAplicado = {};
+  paginaAtual = 1;
+  totalPaginasAtual = 0;
+
+  limparSugestoesProduto();
+  renderMensagemTabela("Use os filtros para buscar movimentações.");
+  setStatus("Filtros limpos.");
+  setResumoPagina("Nenhuma consulta realizada.");
+  renderResumo({ total: 0, dados: [] });
+  atualizarEstadoPaginacao();
+}
+
+function bindAutocompleteProduto() {
+  const input = $("filtroProduto");
+  const box = $("filtroProdutoSugestoes");
+
+  if (!input || !box) return;
+
+  input.addEventListener("input", () => {
+    const termo = input.value.trim();
+
+    if (!termo) {
+      limparSugestoesProduto();
+      return;
+    }
+
+    buscarProdutosAutocompleteDebounced(termo);
+  });
+
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter") return;
+
+    const termo = input.value.trim();
+
+    if (!termo) return;
+
+    if (produtosAutocompleteCache.length > 0) {
+      ev.preventDefault();
+      input.value = produtosAutocompleteCache[0].nome || termo;
+      limparSugestoesProduto();
+    }
+  });
+
+  box.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("button[data-produto-nome]");
+    if (!btn) return;
+
+    input.value = btn.dataset.produtoNome || "";
+    limparSugestoesProduto();
+    input.focus();
+  });
+
+  document.addEventListener("click", (ev) => {
+    const clicouNoInput = ev.target.closest("#filtroProduto");
+    const clicouNaLista = ev.target.closest("#filtroProdutoSugestoes");
+
+    if (!clicouNoInput && !clicouNaLista) {
+      limparSugestoesProduto();
+    }
+  });
+}
+
 function bindEventos() {
   $("btnBuscarMovimentacoes")?.addEventListener("click", () => {
     const filtros = getFiltrosTela();
@@ -419,6 +705,8 @@ function bindEventos() {
   });
 
   $("btnLimparMovimentacoes")?.addEventListener("click", limparFiltros);
+  $("btnExportarXlsx")?.addEventListener("click", exportarXlsx);
+  $("btnExportarPdf")?.addEventListener("click", exportarPdf);
 
   $("btnPaginaAnterior")?.addEventListener("click", () => {
     if (paginaAtual <= 1) return;
@@ -448,6 +736,7 @@ function bindEventos() {
 
 document.addEventListener("DOMContentLoaded", async () => {
   bindEventos();
+  bindAutocompleteProduto();
   await carregarFornecedoresFiltro();
   atualizarEstadoPaginacao();
 });
