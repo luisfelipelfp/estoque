@@ -606,7 +606,9 @@ try {
         case 'listar_movimentacoes': {
             require_auth();
 
-            $res = mov_listar($conn, $_GET);
+            $filtros = array_merge($_GET, $body);
+            $res = mov_listar($conn, $filtros);
+
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
         }
 
@@ -616,6 +618,10 @@ try {
             $produto_id = (int)($body['produto_id'] ?? 0);
             $tipo       = (string)($body['tipo'] ?? '');
             $quantidade = (int)($body['quantidade'] ?? 0);
+
+            $fornecedor_id = isset($body['fornecedor_id']) && $body['fornecedor_id'] !== ''
+                ? (int)$body['fornecedor_id']
+                : null;
 
             $preco_custo = isset($body['preco_custo']) && $body['preco_custo'] !== ''
                 ? (float)$body['preco_custo']
@@ -637,8 +643,18 @@ try {
                 json_response(false, 'Tipo inválido.', null, 400);
             }
 
-            if ($valor_unitario === null && $preco_custo !== null) {
-                $valor_unitario = $preco_custo;
+            if ($tipo === 'entrada') {
+                if ($fornecedor_id === null || $fornecedor_id <= 0) {
+                    json_response(false, 'Na entrada é obrigatório informar o fornecedor.', null, 400);
+                }
+
+                if ($preco_custo === null || $preco_custo <= 0) {
+                    json_response(false, 'Na entrada é obrigatório informar um preço de custo válido.', null, 400);
+                }
+            }
+
+            if ($tipo !== 'entrada') {
+                $fornecedor_id = null;
             }
 
             $res = mov_registrar(
@@ -649,7 +665,8 @@ try {
                 (int)$usuario['id'],
                 $preco_custo,
                 $valor_unitario,
-                $observacao
+                $observacao,
+                $fornecedor_id
             );
 
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
@@ -689,4 +706,4 @@ try {
     ]);
 
     json_response(false, 'Erro interno no servidor.', null, 500);
-}
+} 
