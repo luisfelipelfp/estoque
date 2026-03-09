@@ -86,7 +86,7 @@ function atualizarResumoModal() {
   badge.textContent = `${totalSelecionados} selecionado(s)`;
 
   if (!totalLinhas) {
-    info.textContent = "Nenhum fornecedor adicionado ao produto.";
+    info.textContent = "";
     return;
   }
 
@@ -891,4 +891,4 @@ document.addEventListener("DOMContentLoaded", async () => {
   await carregarFornecedoresCadastrados();
   await carregarProdutos();
   await abrirProdutoViaQueryStringSeExistir();
-}); 
+});
