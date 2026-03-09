@@ -17,6 +17,7 @@ function redirectToLogin() {
 function obterPaginaAtual() {
   const path = window.location.pathname.toLowerCase();
 
+  if (path.endsWith("/estoque/") || path.endsWith("/estoque/index.html")) return "home";
   if (path.includes("/pages/home.html")) return "home";
   if (path.includes("/pages/estoque.html")) return "estoque";
   if (path.includes("/pages/produtos.html")) return "produtos";
@@ -123,7 +124,7 @@ async function carregarComponente(seletorOuId, url) {
 function preencherUsuario(usuario) {
   const nome = String(usuario?.nome ?? "").trim();
   const nivel = String(usuario?.nivel ?? "").trim();
-  const textoUsuario = nivel ? `${nome} (${nivel})` : nome || "Usuário";
+  const textoUsuario = nivel ? `${nome} (${nivel})` : (nome || "Usuário");
 
   const navbarUser = $("usuarioLogado");
   if (navbarUser) {
@@ -243,4 +244,4 @@ document.addEventListener("DOMContentLoaded", async () => {
     usuario: usuario.nome || null,
     pagina: obterPaginaAtual()
   });
-});
+}); 

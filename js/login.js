@@ -12,7 +12,11 @@ function getNextUrl() {
   const params = new URLSearchParams(window.location.search);
   const next = params.get("next");
 
-  if (next && next.startsWith("/")) {
+  if (
+    next &&
+    next.startsWith("/") &&
+    !next.includes("/pages/login.html")
+  ) {
     return next;
   }
 
