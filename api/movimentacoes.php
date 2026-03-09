@@ -629,7 +629,7 @@ function mov_listar(mysqli $conn, array $f): array
         while ($row = $res->fetch_assoc()) {
             $dados[] = [
                 'id'              => (int)$row['id'],
-                'produto_id'      => (int)$row['produto_id'],
+                'produto_id'      => $row['produto_id'] !== null ? (int)$row['produto_id'] : null,
                 'produto_nome'    => (string)$row['produto_nome'],
                 'fornecedor_id'   => $row['fornecedor_id'] !== null ? (int)$row['fornecedor_id'] : null,
                 'fornecedor_nome' => (string)$row['fornecedor_nome'],
@@ -727,13 +727,19 @@ function mov_obter(mysqli $conn, int $movimentacaoId): array
 
         $stmtLotes = $conn->prepare("
             SELECT
-                lote_id,
-                quantidade_consumida,
-                custo_unitario,
-                custo_total
-            FROM movimentacao_saida_lotes
-            WHERE movimentacao_saida_id = ?
-            ORDER BY id ASC
+                msl.lote_id,
+                msl.quantidade_consumida,
+                msl.custo_unitario,
+                msl.custo_total,
+                el.fornecedor_id,
+                COALESCE(f.nome, '') AS fornecedor_nome,
+                el.quantidade_entrada,
+                el.criado_em AS lote_criado_em
+            FROM movimentacao_saida_lotes msl
+            INNER JOIN estoque_lotes el ON el.id = msl.lote_id
+            LEFT JOIN fornecedores f ON f.id = el.fornecedor_id
+            WHERE msl.movimentacao_saida_id = ?
+            ORDER BY msl.id ASC
         ");
         $stmtLotes->bind_param('i', $movimentacaoId);
         $stmtLotes->execute();
@@ -744,7 +750,11 @@ function mov_obter(mysqli $conn, int $movimentacaoId): array
                 'lote_id'              => (int)$l['lote_id'],
                 'quantidade_consumida' => (int)$l['quantidade_consumida'],
                 'custo_unitario'       => (float)$l['custo_unitario'],
-                'custo_total'          => (float)$l['custo_total']
+                'custo_total'          => (float)$l['custo_total'],
+                'fornecedor_id'        => $l['fornecedor_id'] !== null ? (int)$l['fornecedor_id'] : null,
+                'fornecedor_nome'      => (string)($l['fornecedor_nome'] ?? ''),
+                'quantidade_entrada'   => (int)($l['quantidade_entrada'] ?? 0),
+                'lote_criado_em'       => (string)($l['lote_criado_em'] ?? '')
             ];
         }
 

@@ -21,13 +21,12 @@ function db(): mysqli
         $conn->set_charset('utf8mb4');
 
         logInfo('db', 'Conexão com banco estabelecida', [
-            'host'   => $host,
-            'banco'  => $dbname,
-            'usuario'=> $user
+            'host'    => $host,
+            'banco'   => $dbname,
+            'usuario' => $user
         ]);
 
         return $conn;
-
     } catch (mysqli_sql_exception $e) {
         logError('db', 'Erro ao conectar no banco', [
             'arquivo' => $e->getFile(),
