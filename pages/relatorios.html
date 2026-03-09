@@ -11,9 +11,9 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 
-  <link rel="stylesheet" href="/estoque/css/base.css?v=20260309-rel1">
-  <link rel="stylesheet" href="/estoque/css/layout.css?v=20260309-rel1">
-  <link rel="stylesheet" href="/estoque/css/relatorios.css?v=20260309-rel1">
+  <link rel="stylesheet" href="/estoque/css/base.css?v=20260309-rel2">
+  <link rel="stylesheet" href="/estoque/css/layout.css?v=20260309-rel2">
+  <link rel="stylesheet" href="/estoque/css/relatorios.css?v=20260309-rel2">
 </head>
 
 <body>
@@ -47,7 +47,7 @@
       <section class="card p-3 mb-4">
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
           <div>
-            <h5 class="mb-0">Resumo do relatório</h5>
+            <h5 class="mb-0">Resumo geral</h5>
             <small class="text-muted">Indicadores calculados com base nas movimentações filtradas</small>
           </div>
           <span class="badge text-bg-light border" id="badgePeriodoRelatorio">Últimos 30 dias</span>
@@ -89,11 +89,76 @@
         </div>
       </section>
 
-      <section class="card p-3">
+      <section class="card p-3 mb-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+          <div>
+            <h5 class="mb-0">Resumo por tipo</h5>
+            <small class="text-muted">Visão separada entre entradas, saídas e remoções</small>
+          </div>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-12 col-xl-4">
+            <div class="bloco-tipo bloco-tipo-entrada">
+              <div class="bloco-tipo-titulo">Entradas</div>
+              <div class="bloco-tipo-linha">
+                <span>Quantidade</span>
+                <strong id="entradaQtd">0</strong>
+              </div>
+              <div class="bloco-tipo-linha">
+                <span>Custo</span>
+                <strong id="entradaCusto">R$ 0,00</strong>
+              </div>
+              <div class="bloco-tipo-linha">
+                <span>Valor</span>
+                <strong id="entradaValor">R$ 0,00</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-xl-4">
+            <div class="bloco-tipo bloco-tipo-saida">
+              <div class="bloco-tipo-titulo">Saídas</div>
+              <div class="bloco-tipo-linha">
+                <span>Quantidade</span>
+                <strong id="saidaQtd">0</strong>
+              </div>
+              <div class="bloco-tipo-linha">
+                <span>Custo</span>
+                <strong id="saidaCusto">R$ 0,00</strong>
+              </div>
+              <div class="bloco-tipo-linha">
+                <span>Valor</span>
+                <strong id="saidaValor">R$ 0,00</strong>
+              </div>
+              <div class="bloco-tipo-linha">
+                <span>Lucro</span>
+                <strong id="saidaLucro">R$ 0,00</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-xl-4">
+            <div class="bloco-tipo bloco-tipo-remocao">
+              <div class="bloco-tipo-titulo">Remoções</div>
+              <div class="bloco-tipo-linha">
+                <span>Quantidade</span>
+                <strong id="remocaoQtd">0</strong>
+              </div>
+              <div class="bloco-tipo-linha">
+                <span>Custo</span>
+                <strong id="remocaoCusto">R$ 0,00</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card p-3 mb-4">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
           <div>
             <h5 class="mb-0">Evolução do período</h5>
-            <small class="text-muted">Alterne a visualização do gráfico conforme a análise desejada</small>
+            <small class="text-muted">Altere a métrica e o formato conforme a análise desejada</small>
           </div>
 
           <div class="d-flex gap-2 flex-wrap align-items-center">
@@ -131,6 +196,52 @@
         </div>
 
         <div class="small text-muted mt-3" id="statusRelatorio"></div>
+      </section>
+
+      <section class="mb-4">
+        <div class="row g-3">
+          <div class="col-12 col-xl-4">
+            <div class="card p-3 h-100">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  <h5 class="mb-0">Produtos mais vendidos</h5>
+                  <small class="text-muted">Ranking por quantidade</small>
+                </div>
+              </div>
+              <div id="rankingProdutosQtd" class="ranking-lista">
+                <div class="text-muted small">Nenhum dado disponível.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-xl-4">
+            <div class="card p-3 h-100">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  <h5 class="mb-0">Produtos com maior lucro</h5>
+                  <small class="text-muted">Ranking por lucro</small>
+                </div>
+              </div>
+              <div id="rankingProdutosLucro" class="ranking-lista">
+                <div class="text-muted small">Nenhum dado disponível.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-xl-4">
+            <div class="card p-3 h-100">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  <h5 class="mb-0">Fornecedores</h5>
+                  <small class="text-muted">Ranking por volume</small>
+                </div>
+              </div>
+              <div id="rankingFornecedores" class="ranking-lista">
+                <div class="text-muted small">Nenhum dado disponível.</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
   </div>
@@ -197,7 +308,7 @@
 
           <div class="alert alert-light border mt-3 mb-0">
             <strong>Observação:</strong>
-            os totais e o gráfico são calculados com base nas movimentações encontradas para os filtros informados.
+            os totais, rankings e gráfico são calculados com base nas movimentações encontradas para os filtros informados.
           </div>
         </div>
 
@@ -215,9 +326,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-  <script type="module" src="/estoque/js/api.js?v=20260309-rel1"></script>
-  <script type="module" src="/estoque/js/logout.js?v=20260309-rel1"></script>
-  <script type="module" src="/estoque/js/main.js?v=20260309-rel1"></script>
-  <script type="module" src="/estoque/js/relatorios.js?v=20260309-rel1"></script>
+  <script type="module" src="/estoque/js/api.js?v=20260309-rel2"></script>
+  <script type="module" src="/estoque/js/logout.js?v=20260309-rel2"></script>
+  <script type="module" src="/estoque/js/main.js?v=20260309-rel2"></script>
+  <script type="module" src="/estoque/js/relatorios.js?v=20260309-rel2"></script>
 </body>
 </html>

@@ -7,6 +7,7 @@ let modalFiltrosInstance = null;
 let ultimoGraficoPayload = null;
 let fornecedoresCache = [];
 let produtosCache = [];
+let ultimoPayloadRelatorio = null;
 
 const DEFAULT_RANGE_DAYS = 30;
 const MAX_POINTS_CHART = 120;
@@ -14,6 +15,15 @@ const DEFAULT_LIMITE_TABELA = 5000;
 
 function $(id) {
   return document.getElementById(id);
+}
+
+function escapeHtml(valor) {
+  return String(valor ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function formatBRL(valor) {
@@ -40,6 +50,13 @@ function setTexto(id, valor) {
   const el = $(id);
   if (el) {
     el.textContent = String(valor ?? "");
+  }
+}
+
+function setHtml(id, html) {
+  const el = $(id);
+  if (el) {
+    el.innerHTML = html;
   }
 }
 
@@ -374,57 +391,71 @@ function renderTotais(totais) {
   setTexto("totalLucro", formatBRL(totalLucro));
 }
 
-function agruparPorData(registros, metrica) {
-  const mapa = new Map();
+function renderCards(payload) {
+  const cards = payload?.cards || {};
 
-  for (const item of registros) {
-    const dataBruta = String(item?.data ?? "");
-    const dia = dataBruta.slice(0, 10);
-    if (!dia) continue;
+  setTexto("entradaQtd", Number(cards?.entradas?.quantidade ?? 0));
+  setTexto("entradaCusto", formatBRLComPrefixo(cards?.entradas?.custo ?? 0));
+  setTexto("entradaValor", formatBRLComPrefixo(cards?.entradas?.valor ?? 0));
 
-    const valor = Number(item?.[metrica] ?? 0);
+  setTexto("saidaQtd", Number(cards?.saidas?.quantidade ?? 0));
+  setTexto("saidaCusto", formatBRLComPrefixo(cards?.saidas?.custo ?? 0));
+  setTexto("saidaValor", formatBRLComPrefixo(cards?.saidas?.valor ?? 0));
+  setTexto("saidaLucro", formatBRLComPrefixo(cards?.saidas?.lucro ?? 0));
 
-    if (!mapa.has(dia)) {
-      mapa.set(dia, 0);
-    }
-
-    mapa.set(dia, mapa.get(dia) + valor);
-  }
-
-  const labels = Array.from(mapa.keys()).sort();
-  const metric = labels.map((label) => Number(mapa.get(label) ?? 0));
-
-  return { labels, metric };
+  setTexto("remocaoQtd", Number(cards?.remocoes?.quantidade ?? 0));
+  setTexto("remocaoCusto", formatBRLComPrefixo(cards?.remocoes?.custo ?? 0));
 }
 
-function montarPayloadGraficoPorMetricas(registros) {
-  const quantidade = agruparPorData(
-    registros.map((item) => ({ ...item, quantidade: Number(item?.quantidade ?? 0) })),
-    "quantidade"
-  );
-
-  const custo = agruparPorData(registros, "custo_total");
-  const valor = agruparPorData(registros, "valor_total");
-  const lucro = agruparPorData(registros, "lucro");
-
-  const labelsBase = quantidade.labels;
-
-  function normalizarSerie(serie) {
-    const mapa = new Map();
-    serie.labels.forEach((label, index) => {
-      mapa.set(label, Number(serie.metric?.[index] ?? 0));
-    });
-
-    return labelsBase.map((label) => Number(mapa.get(label) ?? 0));
+function renderRankingLista(id, itens, tipo) {
+  if (!Array.isArray(itens) || itens.length === 0) {
+    setHtml(id, `<div class="text-muted small">Nenhum dado disponível.</div>`);
+    return;
   }
 
-  return {
-    labels: labelsBase,
-    quantidade: quantidade.metric,
-    custo_total: normalizarSerie(custo),
-    valor_total: normalizarSerie(valor),
-    lucro: normalizarSerie(lucro)
-  };
+  const html = itens.map((item, index) => {
+    if (tipo === "produtos_qtd") {
+      return `
+        <div class="ranking-item">
+          <div class="ranking-posicao">${index + 1}</div>
+          <div class="ranking-conteudo">
+            <div class="ranking-titulo">${escapeHtml(item?.produto_nome ?? "-")}</div>
+            <div class="ranking-subtexto">
+              Quantidade: <strong>${Number(item?.quantidade_total ?? 0)}</strong>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    if (tipo === "produtos_lucro") {
+      return `
+        <div class="ranking-item">
+          <div class="ranking-posicao">${index + 1}</div>
+          <div class="ranking-conteudo">
+            <div class="ranking-titulo">${escapeHtml(item?.produto_nome ?? "-")}</div>
+            <div class="ranking-subtexto">
+              Lucro: <strong>${formatBRLComPrefixo(item?.lucro_total ?? 0)}</strong>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="ranking-item">
+        <div class="ranking-posicao">${index + 1}</div>
+        <div class="ranking-conteudo">
+          <div class="ranking-titulo">${escapeHtml(item?.fornecedor_nome ?? "-")}</div>
+          <div class="ranking-subtexto">
+            Quantidade: <strong>${Number(item?.quantidade_total ?? 0)}</strong>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  setHtml(id, html);
 }
 
 async function carregarFornecedores() {
@@ -464,7 +495,7 @@ function popularSelectFornecedores() {
   select.innerHTML = `
     <option value="">Todos</option>
     ${fornecedoresCache.map((f) => `
-      <option value="${Number(f.id)}">${String(f.nome ?? "")}</option>
+      <option value="${Number(f.id)}">${escapeHtml(f.nome ?? "")}</option>
     `).join("")}
   `;
 
@@ -520,9 +551,9 @@ function renderSugestoesProduto(produtos) {
     <button
       type="button"
       class="list-group-item list-group-item-action"
-      data-produto-nome="${String(p?.nome ?? "").replace(/"/g, "&quot;")}"
+      data-produto-nome="${escapeHtml(p?.nome ?? "")}"
     >
-      ${String(p?.nome ?? "")}
+      ${escapeHtml(p?.nome ?? "")}
     </button>
   `).join("");
 
@@ -558,7 +589,7 @@ async function exportarXlsx() {
   setStatusRelatorio("Preparando exportação XLSX...", "processando");
 
   try {
-    const resp = await apiRequest("listar_movimentacoes", filtros, "GET");
+    const resp = await apiRequest("relatorio_movimentacoes", filtros, "GET");
 
     if (!resp?.sucesso) {
       setStatusRelatorio(resp?.mensagem || "Não foi possível exportar XLSX.", "erro");
@@ -578,6 +609,8 @@ async function exportarXlsx() {
       Fornecedor: item?.fornecedor_nome ?? "",
       Tipo: item?.tipo ?? "",
       Quantidade: Number(item?.quantidade ?? 0),
+      "Custo Unitário": Number(item?.custo_unitario ?? 0),
+      "Valor Unitário": Number(item?.valor_unitario ?? 0),
       "Custo Total": Number(item?.custo_total ?? 0),
       "Valor Total": Number(item?.valor_total ?? 0),
       Lucro: Number(item?.lucro ?? 0),
@@ -609,7 +642,7 @@ async function exportarPDF() {
   setStatusRelatorio("Preparando exportação PDF...", "processando");
 
   try {
-    const resp = await apiRequest("listar_movimentacoes", filtros, "GET");
+    const resp = await apiRequest("relatorio_movimentacoes", filtros, "GET");
 
     if (!resp?.sucesso) {
       setStatusRelatorio(resp?.mensagem || "Não foi possível exportar PDF.", "erro");
@@ -683,7 +716,7 @@ async function carregarRelatorio() {
   setBtnLoading("btnExportarPdf", true);
 
   try {
-    const resp = await apiRequest("listar_movimentacoes", filtros, "GET");
+    const resp = await apiRequest("relatorio_movimentacoes", filtros, "GET");
 
     if (!resp?.sucesso) {
       renderTotais({
@@ -692,6 +725,12 @@ async function carregarRelatorio() {
         total_valor: 0,
         total_lucro: 0
       });
+
+      renderCards({});
+      renderRankingLista("rankingProdutosQtd", [], "produtos_qtd");
+      renderRankingLista("rankingProdutosLucro", [], "produtos_lucro");
+      renderRankingLista("rankingFornecedores", [], "fornecedores");
+
       ultimoGraficoPayload = {
         labels: [],
         quantidade: [],
@@ -699,33 +738,38 @@ async function carregarRelatorio() {
         valor_total: [],
         lucro: []
       };
+
       renderGraficoTemporal(ultimoGraficoPayload);
       setStatusRelatorio(resp?.mensagem || "Não foi possível carregar o relatório.", "erro");
       return;
     }
 
     const payload = resp?.dados || {};
-    const registros = Array.isArray(payload?.dados) ? payload.dados : [];
+    ultimoPayloadRelatorio = payload;
 
-    const totais = {
-      total_qtd: registros.reduce((acc, item) => acc + Number(item?.quantidade ?? 0), 0),
-      total_custo: registros.reduce((acc, item) => acc + Number(item?.custo_total ?? 0), 0),
-      total_valor: registros.reduce((acc, item) => acc + Number(item?.valor_total ?? 0), 0),
-      total_lucro: registros.reduce((acc, item) => acc + Number(item?.lucro ?? 0), 0)
+    renderTotais(payload?.totais || {});
+    renderCards(payload);
+    renderRankingLista("rankingProdutosQtd", payload?.ranking_produtos_qtd || [], "produtos_qtd");
+    renderRankingLista("rankingProdutosLucro", payload?.ranking_produtos_lucro || [], "produtos_lucro");
+    renderRankingLista("rankingFornecedores", payload?.ranking_fornecedores || [], "fornecedores");
+
+    ultimoGraficoPayload = payload?.grafico_temporal || {
+      labels: [],
+      quantidade: [],
+      custo_total: [],
+      valor_total: [],
+      lucro: []
     };
 
-    renderTotais(totais);
-
-    ultimoGraficoPayload = montarPayloadGraficoPorMetricas(registros);
     renderGraficoTemporal(ultimoGraficoPayload);
     atualizarResumoFiltros();
-    setStatusRelatorio(`Relatório carregado com sucesso. ${registros.length} registro(s) encontrados.`, "sucesso");
+    setStatusRelatorio("Relatório carregado com sucesso.", "sucesso");
 
     logJsInfo({
       origem: "relatorios.js",
       mensagem: "Relatório carregado",
       filtros,
-      total_registros: registros.length,
+      total: payload?.total ?? 0,
       tipo_grafico: getTipoGraficoSelecionado(),
       metrica: getMetricaGraficoSelecionada()
     });
@@ -736,6 +780,12 @@ async function carregarRelatorio() {
       total_valor: 0,
       total_lucro: 0
     });
+
+    renderCards({});
+    renderRankingLista("rankingProdutosQtd", [], "produtos_qtd");
+    renderRankingLista("rankingProdutosLucro", [], "produtos_lucro");
+    renderRankingLista("rankingFornecedores", [], "fornecedores");
+
     ultimoGraficoPayload = {
       labels: [],
       quantidade: [],
@@ -743,6 +793,7 @@ async function carregarRelatorio() {
       valor_total: [],
       lucro: []
     };
+
     renderGraficoTemporal(ultimoGraficoPayload);
     setStatusRelatorio("Erro inesperado ao carregar relatório.", "erro");
 
