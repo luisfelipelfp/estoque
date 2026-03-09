@@ -1,0 +1,76 @@
+/* =========================
+   Tabela de estoque
+   ========================= */
+#tabelaEstoque th {
+  background: #f4f6fa;
+  font-weight: 700;
+}
+
+#tabelaEstoque td {
+  vertical-align: middle;
+}
+
+/* =========================
+   Cabeçalhos dos modais
+   ========================= */
+.modal-header-entrada {
+  background: linear-gradient(180deg, #eefaf2 0%, #ffffff 100%);
+  border-bottom: 1px solid #e6efe8;
+}
+
+.modal-header-saida {
+  background: linear-gradient(180deg, #fff2f2 0%, #ffffff 100%);
+  border-bottom: 1px solid #f1e1e1;
+}
+
+/* =========================
+   Blocos informativos
+   ========================= */
+.estoque-resumo-box {
+  border: 1px solid #e9edf3;
+  border-radius: 16px;
+  background: #fbfcfe;
+  padding: 14px 16px;
+}
+
+/* =========================
+   Lista de sugestões
+   ========================= */
+#entradaSugestoes .list-group-item,
+#saidaSugestoes .list-group-item {
+  cursor: pointer;
+}
+
+/* =========================
+   Campos monetários
+   ========================= */
+.input-group-text {
+  min-width: 52px;
+  justify-content: center;
+}
+
+/* =========================
+   Status dos modais
+   ========================= */
+#entradaStatus,
+#saidaStatus {
+  min-height: 20px;
+}
+
+/* =========================
+   Ajustes nos cards laterais
+   ========================= */
+#entradaUltimasMovimentacoes,
+#saidaUltimasMovimentacoes {
+  min-height: 92px;
+}
+
+/* =========================
+   Responsivo
+   ========================= */
+@media (max-width: 991.98px) {
+  #modalEntrada .modal-dialog,
+  #modalSaida .modal-dialog {
+    margin: 0.75rem;
+  }
+}
