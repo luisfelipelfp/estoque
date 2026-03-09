@@ -7,7 +7,7 @@ const limitePorPagina = 10;
 let ultimoFiltroAplicado = {};
 let totalPaginasAtual = 0;
 let modalDetalhesInstance = null;
-let produtosAutocompleteCache = [];
+let produtosCache = [];
 
 function $(id) {
   return document.getElementById(id);
@@ -118,17 +118,9 @@ function renderMensagemTabela(texto, classe = "text-muted") {
 function renderTipoBadge(tipo) {
   const t = String(tipo || "").toLowerCase();
 
-  if (t === "entrada") {
-    return `<span class="badge bg-success">Entrada</span>`;
-  }
-
-  if (t === "saida") {
-    return `<span class="badge bg-danger">Saída</span>`;
-  }
-
-  if (t === "remocao") {
-    return `<span class="badge bg-secondary">Remoção</span>`;
-  }
+  if (t === "entrada") return `<span class="badge bg-success">Entrada</span>`;
+  if (t === "saida") return `<span class="badge bg-danger">Saída</span>`;
+  if (t === "remocao") return `<span class="badge bg-secondary">Remoção</span>`;
 
   return `<span class="badge bg-dark">${escapeHtml(tipo || "-")}</span>`;
 }
@@ -193,6 +185,34 @@ function renderTabela(movimentacoes) {
       </tr>
     `;
   }).join("");
+}
+
+async function carregarProdutosAutocomplete() {
+  try {
+    const resp = await apiRequest("listar_produtos", {}, "GET");
+
+    if (!resp?.sucesso) {
+      produtosCache = [];
+      return;
+    }
+
+    produtosCache = Array.isArray(resp?.dados) ? resp.dados : [];
+
+    logJsInfo({
+      origem: "movimentacoes.js",
+      mensagem: "Produtos carregados para autocomplete",
+      total: produtosCache.length
+    });
+  } catch (err) {
+    produtosCache = [];
+
+    logJsError({
+      origem: "movimentacoes.js",
+      mensagem: "Erro ao carregar produtos para autocomplete",
+      detalhe: err?.message,
+      stack: err?.stack
+    });
+  }
 }
 
 async function carregarFornecedoresFiltro() {
@@ -261,37 +281,19 @@ function renderSugestoesProduto(produtos) {
   box.style.display = "block";
 }
 
-async function buscarProdutosAutocomplete(termo) {
-  const texto = String(termo || "").trim();
+function buscarProdutosAutocomplete(termo) {
+  const texto = String(termo || "").trim().toLowerCase();
 
   if (!texto) {
-    produtosAutocompleteCache = [];
     limparSugestoesProduto();
     return;
   }
 
-  try {
-    const resp = await apiRequest("buscar_produtos", { q: texto, limit: 8 }, "GET");
+  const encontrados = produtosCache
+    .filter((p) => String(p?.nome ?? "").toLowerCase().includes(texto))
+    .slice(0, 8);
 
-    if (!resp?.sucesso) {
-      produtosAutocompleteCache = [];
-      renderSugestoesProduto([]);
-      return;
-    }
-
-    produtosAutocompleteCache = Array.isArray(resp?.dados) ? resp.dados : [];
-    renderSugestoesProduto(produtosAutocompleteCache);
-  } catch (err) {
-    produtosAutocompleteCache = [];
-    limparSugestoesProduto();
-
-    logJsError({
-      origem: "movimentacoes.js",
-      mensagem: "Erro no autocomplete de produtos",
-      detalhe: err?.message,
-      stack: err?.stack
-    });
-  }
+  renderSugestoesProduto(encontrados);
 }
 
 function debounce(fn, delay = 250) {
@@ -302,7 +304,7 @@ function debounce(fn, delay = 250) {
   };
 }
 
-const buscarProdutosAutocompleteDebounced = debounce(buscarProdutosAutocomplete, 250);
+const buscarProdutosAutocompleteDebounced = debounce(buscarProdutosAutocomplete, 200);
 
 async function listarMovimentacoes(filtros = {}, pagina = 1) {
   const filtrosPossuemValor = Object.values(filtros).some((v) => String(v || "").trim() !== "");
@@ -669,12 +671,15 @@ function bindAutocompleteProduto() {
     if (ev.key !== "Enter") return;
 
     const termo = input.value.trim();
-
     if (!termo) return;
 
-    if (produtosAutocompleteCache.length > 0) {
+    const encontrados = produtosCache.filter((p) =>
+      String(p?.nome ?? "").toLowerCase().includes(termo.toLowerCase())
+    );
+
+    if (encontrados.length > 0) {
       ev.preventDefault();
-      input.value = produtosAutocompleteCache[0].nome || termo;
+      input.value = encontrados[0].nome || termo;
       limparSugestoesProduto();
     }
   });
@@ -724,19 +729,12 @@ function bindEventos() {
 
     abrirDetalhesMovimentacao(Number(btn.dataset.id || 0));
   });
-
-  $("filtroProduto")?.addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter") {
-      ev.preventDefault();
-      const filtros = getFiltrosTela();
-      listarMovimentacoes(filtros, 1);
-    }
-  });
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
   bindEventos();
   bindAutocompleteProduto();
+  await carregarProdutosAutocomplete();
   await carregarFornecedoresFiltro();
   atualizarEstadoPaginacao();
 });
