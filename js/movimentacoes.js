@@ -8,6 +8,7 @@ let ultimoFiltroAplicado = {};
 let totalPaginasAtual = 0;
 let modalDetalhesInstance = null;
 let produtosCache = [];
+let autocompleteAbortController = null;
 
 function $(id) {
   return document.getElementById(id);
@@ -57,6 +58,13 @@ function setResumoPagina(texto = "") {
 function setTextoDetalhe(id, valor) {
   const el = $(id);
   if (el) el.textContent = String(valor ?? "");
+}
+
+function limparResumo() {
+  if ($("resumoTotalRegistros")) $("resumoTotalRegistros").textContent = "0";
+  if ($("resumoQuantidadeTotal")) $("resumoQuantidadeTotal").textContent = "0";
+  if ($("resumoCustoTotal")) $("resumoCustoTotal").textContent = "R$ 0,00";
+  if ($("resumoLucroTotal")) $("resumoLucroTotal").textContent = "R$ 0,00";
 }
 
 function getFiltrosTela() {
@@ -272,6 +280,7 @@ function renderSugestoesProduto(produtos) {
     <button
       type="button"
       class="list-group-item list-group-item-action"
+      data-produto-id="${Number(p?.id ?? 0)}"
       data-produto-nome="${escapeHtml(p?.nome ?? "")}"
     >
       ${escapeHtml(p?.nome ?? "")}
@@ -281,19 +290,55 @@ function renderSugestoesProduto(produtos) {
   box.style.display = "block";
 }
 
-function buscarProdutosAutocomplete(termo) {
-  const texto = String(termo || "").trim().toLowerCase();
+function selecionarProdutoSugestao(id, nome) {
+  if ($("filtroProduto")) $("filtroProduto").value = String(nome || "");
+  if ($("filtroProdutoId")) $("filtroProdutoId").value = String(id || "");
+  limparSugestoesProduto();
+}
+
+async function buscarProdutosAutocomplete(termo) {
+  const texto = String(termo || "").trim();
 
   if (!texto) {
     limparSugestoesProduto();
     return;
   }
 
-  const encontrados = produtosCache
-    .filter((p) => String(p?.nome ?? "").toLowerCase().includes(texto))
+  const encontradosCache = produtosCache
+    .filter((p) => String(p?.nome ?? "").toLowerCase().includes(texto.toLowerCase()))
     .slice(0, 8);
 
-  renderSugestoesProduto(encontrados);
+  if (encontradosCache.length > 0) {
+    renderSugestoesProduto(encontradosCache);
+    return;
+  }
+
+  try {
+    if (autocompleteAbortController) {
+      autocompleteAbortController.abort();
+    }
+
+    autocompleteAbortController = new AbortController();
+
+    const resp = await apiRequest("buscar_produtos", { q: texto, limit: 8 }, "GET");
+
+    if (!resp?.sucesso) {
+      renderSugestoesProduto([]);
+      return;
+    }
+
+    const dados = Array.isArray(resp?.dados) ? resp.dados : [];
+    renderSugestoesProduto(dados);
+  } catch (err) {
+    renderSugestoesProduto([]);
+
+    logJsError({
+      origem: "movimentacoes.js",
+      mensagem: "Erro no autocomplete de produtos",
+      detalhe: err?.message,
+      stack: err?.stack
+    });
+  }
 }
 
 function debounce(fn, delay = 250) {
@@ -315,7 +360,7 @@ async function listarMovimentacoes(filtros = {}, pagina = 1) {
     setResumoPagina("Nenhuma consulta realizada.");
     paginaAtual = 1;
     totalPaginasAtual = 0;
-    renderResumo({ total: 0, dados: [] });
+    limparResumo();
     atualizarEstadoPaginacao();
     return;
   }
@@ -335,7 +380,7 @@ async function listarMovimentacoes(filtros = {}, pagina = 1) {
       setStatus(resp?.mensagem || "Erro ao buscar movimentações.");
       setResumoPagina("Falha ao consultar movimentações.");
       totalPaginasAtual = 0;
-      renderResumo({ total: 0, dados: [] });
+      limparResumo();
       atualizarEstadoPaginacao();
       return;
     }
@@ -369,7 +414,7 @@ async function listarMovimentacoes(filtros = {}, pagina = 1) {
     setStatus("Erro inesperado ao carregar movimentações.");
     setResumoPagina("Erro na consulta.");
     totalPaginasAtual = 0;
-    renderResumo({ total: 0, dados: [] });
+    limparResumo();
     atualizarEstadoPaginacao();
 
     logJsError({
@@ -568,19 +613,23 @@ function renderDetalhesLotes(lotes) {
       <table class="table table-sm table-bordered align-middle mb-0">
         <thead>
           <tr>
-            <th style="width: 100px;">Lote</th>
-            <th style="width: 140px;">Qtd consumida</th>
-            <th style="width: 140px;">Custo unitário</th>
-            <th style="width: 140px;">Custo total</th>
+            <th style="width: 90px;">Lote</th>
+            <th style="width: 170px;">Fornecedor do lote</th>
+            <th style="width: 120px;">Qtd consumida</th>
+            <th style="width: 130px;">Custo unitário</th>
+            <th style="width: 130px;">Custo total</th>
+            <th style="width: 170px;">Criado em</th>
           </tr>
         </thead>
         <tbody>
           ${lotes.map((l) => `
             <tr>
               <td>${Number(l?.lote_id ?? 0)}</td>
+              <td>${escapeHtml(l?.fornecedor_nome || "—")}</td>
               <td>${Number(l?.quantidade_consumida ?? 0)}</td>
               <td>${l?.custo_unitario != null ? formatBRL(l.custo_unitario) : "—"}</td>
               <td>${l?.custo_total != null ? formatBRL(l.custo_total) : "—"}</td>
+              <td>${escapeHtml(l?.lote_criado_em || "—")}</td>
             </tr>
           `).join("")}
         </tbody>
@@ -633,6 +682,7 @@ async function abrirDetalhesMovimentacao(movimentacaoId) {
 
 function limparFiltros() {
   if ($("filtroProduto")) $("filtroProduto").value = "";
+  if ($("filtroProdutoId")) $("filtroProdutoId").value = "";
   if ($("filtroFornecedor")) $("filtroFornecedor").value = "";
   if ($("filtroTipo")) $("filtroTipo").value = "";
   if ($("filtroDataInicio")) $("filtroDataInicio").value = "";
@@ -646,7 +696,7 @@ function limparFiltros() {
   renderMensagemTabela("Use os filtros para buscar movimentações.");
   setStatus("Filtros limpos.");
   setResumoPagina("Nenhuma consulta realizada.");
-  renderResumo({ total: 0, dados: [] });
+  limparResumo();
   atualizarEstadoPaginacao();
 }
 
@@ -659,6 +709,8 @@ function bindAutocompleteProduto() {
   input.addEventListener("input", () => {
     const termo = input.value.trim();
 
+    if ($("filtroProdutoId")) $("filtroProdutoId").value = "";
+
     if (!termo) {
       limparSugestoesProduto();
       return;
@@ -668,28 +720,36 @@ function bindAutocompleteProduto() {
   });
 
   input.addEventListener("keydown", (ev) => {
-    if (ev.key !== "Enter") return;
+    if (ev.key === "Enter") {
+      const termo = input.value.trim();
+      if (!termo) return;
 
-    const termo = input.value.trim();
-    if (!termo) return;
+      const encontrados = produtosCache.filter((p) =>
+        String(p?.nome ?? "").toLowerCase().includes(termo.toLowerCase())
+      );
 
-    const encontrados = produtosCache.filter((p) =>
-      String(p?.nome ?? "").toLowerCase().includes(termo.toLowerCase())
-    );
+      if (encontrados.length > 0) {
+        ev.preventDefault();
+        selecionarProdutoSugestao(encontrados[0].id, encontrados[0].nome || termo);
+      }
 
-    if (encontrados.length > 0) {
-      ev.preventDefault();
-      input.value = encontrados[0].nome || termo;
+      limparSugestoesProduto();
+      listarMovimentacoes(getFiltrosTela(), 1);
+    }
+
+    if (ev.key === "Escape") {
       limparSugestoesProduto();
     }
   });
 
   box.addEventListener("click", (ev) => {
-    const btn = ev.target.closest("button[data-produto-nome]");
+    const btn = ev.target.closest("button[data-produto-id][data-produto-nome]");
     if (!btn) return;
 
-    input.value = btn.dataset.produtoNome || "";
-    limparSugestoesProduto();
+    selecionarProdutoSugestao(
+      Number(btn.dataset.produtoId || 0),
+      btn.dataset.produtoNome || ""
+    );
     input.focus();
   });
 
@@ -721,6 +781,30 @@ function bindEventos() {
   $("btnPaginaProxima")?.addEventListener("click", () => {
     if (paginaAtual >= totalPaginasAtual) return;
     listarMovimentacoes(ultimoFiltroAplicado, paginaAtual + 1);
+  });
+
+  $("filtroTipo")?.addEventListener("change", () => {
+    if (Object.values(getFiltrosTela()).some((v) => String(v || "").trim() !== "")) {
+      listarMovimentacoes(getFiltrosTela(), 1);
+    }
+  });
+
+  $("filtroFornecedor")?.addEventListener("change", () => {
+    if (Object.values(getFiltrosTela()).some((v) => String(v || "").trim() !== "")) {
+      listarMovimentacoes(getFiltrosTela(), 1);
+    }
+  });
+
+  $("filtroDataInicio")?.addEventListener("change", () => {
+    if (Object.values(getFiltrosTela()).some((v) => String(v || "").trim() !== "")) {
+      listarMovimentacoes(getFiltrosTela(), 1);
+    }
+  });
+
+  $("filtroDataFim")?.addEventListener("change", () => {
+    if (Object.values(getFiltrosTela()).some((v) => String(v || "").trim() !== "")) {
+      listarMovimentacoes(getFiltrosTela(), 1);
+    }
   });
 
   document.querySelector("#tabelaMovimentacoes tbody")?.addEventListener("click", (ev) => {
