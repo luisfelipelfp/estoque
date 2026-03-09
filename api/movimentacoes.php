@@ -36,9 +36,6 @@ function coluna_existe_mov(mysqli $conn, string $tabela, string $coluna): bool
     return $ok;
 }
 
-/**
- * Busca produto com lock para movimentação.
- */
 function mov_obter_produto_for_update(mysqli $conn, int $produto_id): ?array
 {
     $stmt = $conn->prepare("
@@ -60,9 +57,6 @@ function mov_obter_produto_for_update(mysqli $conn, int $produto_id): ?array
     return $row ?: null;
 }
 
-/**
- * Insere movimentação já com os campos financeiros novos.
- */
 function mov_inserir_registro(
     mysqli $conn,
     int $produto_id,
@@ -168,9 +162,6 @@ function mov_inserir_registro(
     return $id;
 }
 
-/**
- * Cria lote para uma entrada.
- */
 function mov_criar_lote_entrada(
     mysqli $conn,
     int $produto_id,
@@ -198,9 +189,6 @@ function mov_criar_lote_entrada(
     $stmt->close();
 }
 
-/**
- * Busca lotes disponíveis em ordem FIFO com lock.
- */
 function mov_buscar_lotes_fifo(mysqli $conn, int $produto_id): array
 {
     $stmt = $conn->prepare("
@@ -223,11 +211,11 @@ function mov_buscar_lotes_fifo(mysqli $conn, int $produto_id): array
     $lotes = [];
     while ($row = $res->fetch_assoc()) {
         $lotes[] = [
-            'id'                 => (int)$row['id'],
-            'quantidade_entrada' => (int)$row['quantidade_entrada'],
-            'quantidade_restante'=> (int)$row['quantidade_restante'],
-            'custo_unitario'     => (float)$row['custo_unitario'],
-            'criado_em'          => (string)$row['criado_em'],
+            'id'                  => (int)$row['id'],
+            'quantidade_entrada'  => (int)$row['quantidade_entrada'],
+            'quantidade_restante' => (int)$row['quantidade_restante'],
+            'custo_unitario'      => (float)$row['custo_unitario'],
+            'criado_em'           => (string)$row['criado_em'],
         ];
     }
 
@@ -235,9 +223,6 @@ function mov_buscar_lotes_fifo(mysqli $conn, int $produto_id): array
     return $lotes;
 }
 
-/**
- * Planeja consumo FIFO e retorna detalhes do custo real.
- */
 function mov_planejar_consumo_fifo(mysqli $conn, int $produto_id, int $quantidade): array
 {
     $lotes = mov_buscar_lotes_fifo($conn, $produto_id);
@@ -298,16 +283,13 @@ function mov_planejar_consumo_fifo(mysqli $conn, int $produto_id, int $quantidad
     }
 
     return [
-        'ok'            => true,
-        'consumos'      => $consumos,
-        'custo_total'   => $custoTotal,
-        'custo_unitario'=> $quantidade > 0 ? ($custoTotal / $quantidade) : 0.0
+        'ok'             => true,
+        'consumos'       => $consumos,
+        'custo_total'    => $custoTotal,
+        'custo_unitario' => $quantidade > 0 ? ($custoTotal / $quantidade) : 0.0
     ];
 }
 
-/**
- * Aplica a baixa física dos lotes consumidos e cria vínculo com a movimentação de saída.
- */
 function mov_aplicar_consumo_fifo(
     mysqli $conn,
     int $movimentacao_saida_id,
@@ -355,16 +337,6 @@ function mov_aplicar_consumo_fifo(
     $stmtIns->close();
 }
 
-/**
- * Registra movimentação com lote/FIFO.
- *
- * Observações:
- * - entrada cria lote
- * - saída/remoção consome lotes FIFO
- * - lucro real só existe em saída
- * - fornecedor_id é opcional na assinatura para manter compatibilidade atual;
- *   depois ajuste actions.php para passá-lo nas entradas
- */
 function mov_registrar(
     mysqli $conn,
     int $produto_id,
@@ -428,9 +400,6 @@ function mov_registrar(
 
             $custoUnitarioMov = (float)$preco_custo;
             $custoTotalMov = $quantidade * $custoUnitarioMov;
-
-            // Mantém compatibilidade com o sistema atual:
-            // se valor_unitario não vier, assume o próprio custo na entrada.
             $valorUnitarioMov = $valor_unitario !== null ? (float)$valor_unitario : $custoUnitarioMov;
             $valorTotalMov = $valorUnitarioMov !== null ? ($quantidade * $valorUnitarioMov) : null;
             $lucroMov = null;
@@ -472,7 +441,6 @@ function mov_registrar(
                 $valorTotalMov = $valorUnitarioMov !== null ? ($quantidade * $valorUnitarioMov) : null;
                 $lucroMov = $valorTotalMov !== null ? ($valorTotalMov - $custoTotalMov) : null;
             } else {
-                // remocao
                 $valorUnitarioMov = null;
                 $valorTotalMov = null;
                 $lucroMov = null;
@@ -572,6 +540,13 @@ function mov_listar(mysqli $conn, array $f): array
         $types   .= 'i';
     }
 
+    if (!empty($f['produto'])) {
+        $termo = '%' . trim((string)$f['produto']) . '%';
+        $where[] = '(COALESCE(m.produto_nome, p.nome, "") LIKE ?)';
+        $params[] = $termo;
+        $types .= 's';
+    }
+
     if (!empty($f['fornecedor_id'])) {
         $where[]  = 'm.fornecedor_id = ?';
         $params[] = (int)$f['fornecedor_id'];
@@ -599,7 +574,13 @@ function mov_listar(mysqli $conn, array $f): array
     $whereSql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
 
     try {
-        $stmtT = $conn->prepare("SELECT COUNT(*) AS total FROM movimentacoes m $whereSql");
+        $sqlCount = "
+            SELECT COUNT(*) AS total
+            FROM movimentacoes m
+            LEFT JOIN produtos p ON p.id = m.produto_id
+            $whereSql
+        ";
+        $stmtT = $conn->prepare($sqlCount);
         if ($types !== '') {
             $stmtT->bind_param($types, ...$params);
         }
@@ -647,21 +628,21 @@ function mov_listar(mysqli $conn, array $f): array
 
         while ($row = $res->fetch_assoc()) {
             $dados[] = [
-                'id'             => (int)$row['id'],
-                'produto_id'     => (int)$row['produto_id'],
-                'produto_nome'   => (string)$row['produto_nome'],
-                'fornecedor_id'  => $row['fornecedor_id'] !== null ? (int)$row['fornecedor_id'] : null,
-                'fornecedor_nome'=> (string)$row['fornecedor_nome'],
-                'tipo'           => (string)$row['tipo'],
-                'quantidade'     => (int)$row['quantidade'],
-                'valor_unitario' => $row['valor_unitario'] !== null ? (float)$row['valor_unitario'] : null,
-                'custo_unitario' => $row['custo_unitario'] !== null ? (float)$row['custo_unitario'] : null,
-                'custo_total'    => $row['custo_total'] !== null ? (float)$row['custo_total'] : null,
-                'valor_total'    => $row['valor_total'] !== null ? (float)$row['valor_total'] : null,
-                'lucro'          => $row['lucro'] !== null ? (float)$row['lucro'] : null,
-                'observacao'     => (string)($row['observacao'] ?? ''),
-                'data'           => (string)$row['data'],
-                'usuario'        => (string)$row['usuario']
+                'id'              => (int)$row['id'],
+                'produto_id'      => (int)$row['produto_id'],
+                'produto_nome'    => (string)$row['produto_nome'],
+                'fornecedor_id'   => $row['fornecedor_id'] !== null ? (int)$row['fornecedor_id'] : null,
+                'fornecedor_nome' => (string)$row['fornecedor_nome'],
+                'tipo'            => (string)$row['tipo'],
+                'quantidade'      => (int)$row['quantidade'],
+                'valor_unitario'  => $row['valor_unitario'] !== null ? (float)$row['valor_unitario'] : null,
+                'custo_unitario'  => $row['custo_unitario'] !== null ? (float)$row['custo_unitario'] : null,
+                'custo_total'     => $row['custo_total'] !== null ? (float)$row['custo_total'] : null,
+                'valor_total'     => $row['valor_total'] !== null ? (float)$row['valor_total'] : null,
+                'lucro'           => $row['lucro'] !== null ? (float)$row['lucro'] : null,
+                'observacao'      => (string)($row['observacao'] ?? ''),
+                'data'            => (string)$row['data'],
+                'usuario'         => (string)$row['usuario']
             ];
         }
 
@@ -682,5 +663,102 @@ function mov_listar(mysqli $conn, array $f): array
         ]);
 
         return resposta(false, 'Erro interno ao listar movimentações.');
+    }
+}
+
+function mov_obter(mysqli $conn, int $movimentacaoId): array
+{
+    if ($movimentacaoId <= 0) {
+        return resposta(false, 'Movimentação inválida.');
+    }
+
+    try {
+        $stmt = $conn->prepare("
+            SELECT
+                m.id,
+                m.produto_id,
+                COALESCE(m.produto_nome, p.nome, '[Produto removido]') AS produto_nome,
+                m.fornecedor_id,
+                COALESCE(f.nome, '') AS fornecedor_nome,
+                m.tipo,
+                m.quantidade,
+                m.valor_unitario,
+                m.custo_unitario,
+                m.custo_total,
+                m.valor_total,
+                m.lucro,
+                m.observacao,
+                m.data,
+                COALESCE(u.nome, 'Sistema') AS usuario
+            FROM movimentacoes m
+            LEFT JOIN produtos p ON p.id = m.produto_id
+            LEFT JOIN fornecedores f ON f.id = m.fornecedor_id
+            LEFT JOIN usuarios u ON u.id = m.usuario_id
+            WHERE m.id = ?
+            LIMIT 1
+        ");
+        $stmt->bind_param('i', $movimentacaoId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        if (!$row) {
+            return resposta(false, 'Movimentação não encontrada.');
+        }
+
+        $dados = [
+            'id'              => (int)$row['id'],
+            'produto_id'      => $row['produto_id'] !== null ? (int)$row['produto_id'] : null,
+            'produto_nome'    => (string)$row['produto_nome'],
+            'fornecedor_id'   => $row['fornecedor_id'] !== null ? (int)$row['fornecedor_id'] : null,
+            'fornecedor_nome' => (string)$row['fornecedor_nome'],
+            'tipo'            => (string)$row['tipo'],
+            'quantidade'      => (int)$row['quantidade'],
+            'valor_unitario'  => $row['valor_unitario'] !== null ? (float)$row['valor_unitario'] : null,
+            'custo_unitario'  => $row['custo_unitario'] !== null ? (float)$row['custo_unitario'] : null,
+            'custo_total'     => $row['custo_total'] !== null ? (float)$row['custo_total'] : null,
+            'valor_total'     => $row['valor_total'] !== null ? (float)$row['valor_total'] : null,
+            'lucro'           => $row['lucro'] !== null ? (float)$row['lucro'] : null,
+            'observacao'      => (string)($row['observacao'] ?? ''),
+            'data'            => (string)$row['data'],
+            'usuario'         => (string)$row['usuario'],
+            'lotes'           => []
+        ];
+
+        $stmtLotes = $conn->prepare("
+            SELECT
+                lote_id,
+                quantidade_consumida,
+                custo_unitario,
+                custo_total
+            FROM movimentacao_saida_lotes
+            WHERE movimentacao_saida_id = ?
+            ORDER BY id ASC
+        ");
+        $stmtLotes->bind_param('i', $movimentacaoId);
+        $stmtLotes->execute();
+        $resLotes = $stmtLotes->get_result();
+
+        while ($l = $resLotes->fetch_assoc()) {
+            $dados['lotes'][] = [
+                'lote_id'              => (int)$l['lote_id'],
+                'quantidade_consumida' => (int)$l['quantidade_consumida'],
+                'custo_unitario'       => (float)$l['custo_unitario'],
+                'custo_total'          => (float)$l['custo_total']
+            ];
+        }
+
+        $stmtLotes->close();
+
+        return resposta(true, '', $dados);
+    } catch (Throwable $e) {
+        logError('movimentacoes', 'Erro ao obter movimentação', [
+            'arquivo' => $e->getFile(),
+            'linha'   => $e->getLine(),
+            'erro'    => $e->getMessage(),
+            'movimentacao_id' => $movimentacaoId
+        ]);
+
+        return resposta(false, 'Erro interno ao obter movimentação.');
     }
 }

@@ -5,9 +5,6 @@ error_reporting(E_ALL);
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 
-// ======================
-// SESSÃO
-// ======================
 if (session_status() === PHP_SESSION_NONE) {
     $isHttps = (
         (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
@@ -25,9 +22,6 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// ======================
-// DEPENDÊNCIAS
-// ======================
 require_once __DIR__ . '/log.php';
 require_once __DIR__ . '/utils.php';
 require_once __DIR__ . '/db.php';
@@ -39,9 +33,6 @@ require_once __DIR__ . '/relatorios.php';
 
 initLog('actions');
 
-// ======================
-// HEADERS
-// ======================
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
@@ -69,9 +60,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
     exit;
 }
 
-// ======================
-// HELPERS
-// ======================
 function read_body(): array
 {
     $contentType = strtolower(trim((string)($_SERVER['CONTENT_TYPE'] ?? '')));
@@ -99,9 +87,6 @@ function require_auth(): array
     return $_SESSION['usuario'];
 }
 
-/**
- * Valida e normaliza fornecedores enviados pelo frontend.
- */
 function normalizar_fornecedores_payload(mysqli $conn, mixed $fornecedoresRaw): array
 {
     if (!is_array($fornecedoresRaw) || empty($fornecedoresRaw)) {
@@ -272,9 +257,6 @@ function home_obter_conteudo(mysqli $conn): array
     ];
 }
 
-// ======================
-// EXECUÇÃO
-// ======================
 try {
     $conn = db();
     $acao = (string)($_GET['acao'] ?? $_POST['acao'] ?? '');
@@ -293,9 +275,6 @@ try {
     ]);
 
     switch ($acao) {
-
-        // ================= AUTH =================
-
         case 'login': {
             $login = trim((string)($body['login'] ?? $body['email'] ?? $body['usuario'] ?? ''));
             $senha = (string)($body['senha'] ?? $body['password'] ?? '');
@@ -364,17 +343,11 @@ try {
             json_response(true, 'OK', null);
         }
 
-        // ================= HOME =================
-
         case 'obter_home': {
             require_auth();
-
             $dados = home_obter_conteudo($conn);
-
             json_response(true, 'OK', $dados);
         }
-
-        // ================= FORNECEDORES =================
 
         case 'listar_fornecedores': {
             require_auth();
@@ -427,8 +400,6 @@ try {
 
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
         }
-
-        // ================= PRODUTOS =================
 
         case 'listar_produtos': {
             require_auth();
@@ -601,8 +572,6 @@ try {
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
         }
 
-        // ================= MOVIMENTAÇÕES =================
-
         case 'listar_movimentacoes': {
             require_auth();
 
@@ -610,6 +579,18 @@ try {
             $res = mov_listar($conn, $filtros);
 
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
+        }
+
+        case 'obter_movimentacao': {
+            require_auth();
+
+            $movimentacao_id = (int)($_GET['movimentacao_id'] ?? $body['movimentacao_id'] ?? 0);
+            if ($movimentacao_id <= 0) {
+                json_response(false, 'Movimentação inválida.', null, 400);
+            }
+
+            $res = mov_obter($conn, $movimentacao_id);
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
         }
 
         case 'registrar_movimentacao': {
@@ -672,8 +653,6 @@ try {
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
         }
 
-        // ================= RELATÓRIOS =================
-
         case 'estoque_atual':
         case 'relatorio_estoque':
         case 'relatorio_estoque_atual': {
@@ -706,4 +685,4 @@ try {
     ]);
 
     json_response(false, 'Erro interno no servidor.', null, 500);
-} 
+}
