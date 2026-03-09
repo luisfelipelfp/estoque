@@ -139,6 +139,31 @@ function preencherUsuario(usuario) {
   }
 }
 
+function usuarioEhAdmin(usuario) {
+  const nivel = String(usuario?.nivel ?? "").trim().toLowerCase();
+  return nivel === "admin" || nivel === "administrador";
+}
+
+function aplicarPermissoes(usuario) {
+  const ehAdmin = usuarioEhAdmin(usuario);
+
+  const menuUsuarios = $("menuUsuarios");
+  const sidebarAdminDivider = $("sidebarAdminDivider");
+  const navUsuariosItem = $("navUsuariosItem");
+
+  if (menuUsuarios) {
+    menuUsuarios.style.display = ehAdmin ? "flex" : "none";
+  }
+
+  if (sidebarAdminDivider) {
+    sidebarAdminDivider.style.display = ehAdmin ? "block" : "none";
+  }
+
+  if (navUsuariosItem) {
+    navUsuariosItem.style.display = ehAdmin ? "" : "none";
+  }
+}
+
 function linkCorrespondePaginaAtual(link, paginaAtual) {
   const href = String(link.getAttribute("href") || "").toLowerCase();
 
@@ -210,8 +235,8 @@ function bindLogout() {
 }
 
 async function carregarLayout(usuario) {
-  const navbarEl = await carregarComponente("#navbar", `${APP_BASE}/components/navbar.html?v=20260308-home`);
-  const sidebarEl = await carregarComponente("#sidebar", `${APP_BASE}/components/sidebar.html?v=20260308-home`);
+  const navbarEl = await carregarComponente("#navbar", `${APP_BASE}/components/navbar.html?v=20260308-menu`);
+  const sidebarEl = await carregarComponente("#sidebar", `${APP_BASE}/components/sidebar.html?v=20260308-menu`);
 
   if (sidebarEl) {
     sidebarEl.classList.remove("d-none");
@@ -219,6 +244,7 @@ async function carregarLayout(usuario) {
 
   if (navbarEl || sidebarEl) {
     preencherUsuario(usuario);
+    aplicarPermissoes(usuario);
     marcarLinkAtivoSidebar();
     bindLogout();
   }
@@ -242,6 +268,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     origem: "main.js",
     mensagem: "Usuário autenticado",
     usuario: usuario.nome || null,
-    pagina: obterPaginaAtual()
+    pagina: obterPaginaAtual(),
+    nivel: usuario?.nivel || null
   });
-}); 
+});
