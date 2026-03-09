@@ -37,6 +37,11 @@
   height: 460px;
 }
 
+#graficoTemporal {
+  width: 100% !important;
+  height: 100% !important;
+}
+
 #statusRelatorio {
   min-height: 20px;
 }
@@ -45,9 +50,24 @@
   border-radius: 20px;
 }
 
+.grafico-tipo-box {
+  min-width: 180px;
+}
+
+.grafico-tipo-label {
+  display: block;
+  font-size: 0.78rem;
+  color: #6c757d;
+  margin-bottom: 4px;
+}
+
 @media (max-width: 991px) {
   .chart-box {
     min-height: 300px;
     height: 340px;
   }
-}
+
+  .grafico-tipo-box {
+    width: 100%;
+  }
+} 

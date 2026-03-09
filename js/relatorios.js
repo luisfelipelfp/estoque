@@ -4,6 +4,7 @@ import { logJsInfo, logJsError } from "./logger.js";
 
 let graficoTemporal = null;
 let modalFiltrosInstance = null;
+let ultimoGraficoPayload = null;
 
 const DEFAULT_RANGE_DAYS = 30;
 const MAX_POINTS_CHART = 120;
@@ -82,6 +83,10 @@ function getModalFiltros() {
   return modalFiltrosInstance;
 }
 
+function getTipoGraficoSelecionado() {
+  return $("tipoGrafico")?.value || "bar";
+}
+
 function setDefaultDatesIfEmpty() {
   const elIni = $("dataInicio");
   const elFim = $("dataFim");
@@ -137,33 +142,6 @@ function atualizarResumoFiltros() {
   setTexto("badgePeriodoRelatorio", badgePartes.join(" • "));
 }
 
-/* =========================
-   EXPORTAÇÃO
-   ========================= */
-
-function avisarExportacaoNaoDisponivel(tipo) {
-  const msg = `${tipo} ainda não está implementado no backend atual.`;
-  window.alert(msg);
-
-  logJsInfo({
-    origem: "relatorios.js",
-    mensagem: "Exportação indisponível",
-    tipo
-  });
-}
-
-function exportarCSV() {
-  avisarExportacaoNaoDisponivel("Exportação CSV");
-}
-
-function exportarPDF() {
-  avisarExportacaoNaoDisponivel("Exportação PDF");
-}
-
-/* =========================
-   FILTROS
-   ========================= */
-
 function limparFiltros() {
   if ($("dataInicio")) $("dataInicio").value = "";
   if ($("dataFim")) $("dataFim").value = "";
@@ -178,10 +156,6 @@ function limparFiltros() {
     mensagem: "Filtros limpos"
   });
 }
-
-/* =========================
-   GRÁFICO
-   ========================= */
 
 function toNumArray(arr, len) {
   const out = new Array(len);
@@ -205,7 +179,10 @@ function downsample({ labels, entrada, saida, remocao, outros }, maxPoints) {
 
   for (let i = 0; i < n; i += bucket) {
     const end = Math.min(i + bucket, n);
-    let se = 0, ss = 0, sr = 0, so = 0;
+    let se = 0;
+    let ss = 0;
+    let sr = 0;
+    let so = 0;
 
     for (let j = i; j < end; j++) {
       se += entrada[j] || 0;
@@ -255,6 +232,55 @@ function renderGraficoTemporalVazio() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
+function montarDatasetsPorTipoGrafico(tipoGrafico, entrada, saida, remocao, outros) {
+  const base = [
+    { label: "Entrada (Qtd)", data: entrada },
+    { label: "Saída (Qtd)", data: saida },
+    { label: "Remoção (Qtd)", data: remocao },
+    { label: "Outros (Qtd)", data: outros }
+  ];
+
+  if (tipoGrafico === "line") {
+    return base.map((item) => ({
+      ...item,
+      fill: false,
+      tension: 0.25
+    }));
+  }
+
+  return base;
+}
+
+function montarOpcoesGrafico(tipoGrafico) {
+  const isCircular = tipoGrafico === "pie" || tipoGrafico === "doughnut";
+
+  if (isCircular) {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { position: "bottom" },
+        tooltip: { mode: "index", intersect: false }
+      }
+    };
+  }
+
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    plugins: {
+      legend: { position: "bottom" },
+      tooltip: { mode: "index", intersect: false }
+    },
+    interaction: { mode: "index", intersect: false },
+    scales: {
+      y: { beginAtZero: true }
+    }
+  };
+}
+
 function renderGraficoTemporal(graf) {
   let canvas = $("graficoTemporal");
   if (!canvas) return;
@@ -273,7 +299,10 @@ function renderGraficoTemporal(graf) {
   let remocao = toNumArray(graf?.remocao, labels.length);
   let outros = toNumArray(graf?.outros, labels.length);
 
-  if (labels.length > MAX_POINTS_CHART) {
+  const tipoGrafico = getTipoGraficoSelecionado();
+  const graficoCircular = tipoGrafico === "pie" || tipoGrafico === "doughnut";
+
+  if (!graficoCircular && labels.length > MAX_POINTS_CHART) {
     const r = downsample({ labels, entrada, saida, remocao, outros }, MAX_POINTS_CHART);
     labels = r.labels;
     entrada = r.entrada;
@@ -287,13 +316,6 @@ function renderGraficoTemporal(graf) {
   const sR = sum(remocao);
   const sO = sum(outros);
 
-  console.log("[grafico] labels:", labels.length, "sum:", {
-    entrada: sE,
-    saida: sS,
-    remocao: sR,
-    outros: sO
-  });
-
   if (graficoTemporal) {
     graficoTemporal.destroy();
     graficoTemporal = null;
@@ -305,41 +327,32 @@ function renderGraficoTemporal(graf) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const data = {
-      labels,
-      datasets: [
-        { label: "Entrada (Qtd)", data: entrada },
-        { label: "Saída (Qtd)", data: saida },
-        { label: "Remoção (Qtd)", data: remocao },
-        { label: "Outros (Qtd)", data: outros }
-      ]
-    };
+    let data;
 
-    const options = {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
-      plugins: {
-        legend: { position: "bottom" },
-        tooltip: { mode: "index", intersect: false }
-      },
-      interaction: { mode: "index", intersect: false },
-      scales: {
-        y: { beginAtZero: true }
-      }
-    };
+    if (graficoCircular) {
+      data = {
+        labels: ["Entrada", "Saída", "Remoção", "Outros"],
+        datasets: [
+          {
+            label: "Quantidade",
+            data: [sE, sS, sR, sO]
+          }
+        ]
+      };
+    } else {
+      data = {
+        labels,
+        datasets: montarDatasetsPorTipoGrafico(tipoGrafico, entrada, saida, remocao, outros)
+      };
+    }
 
     graficoTemporal = new Chart(ctx, {
-      type: "bar",
+      type: tipoGrafico,
       data,
-      options
+      options: montarOpcoesGrafico(tipoGrafico)
     });
   });
 }
-
-/* =========================
-   RELATÓRIO
-   ========================= */
 
 function renderTotais(totais) {
   const totalQtd = Number(totais?.total_qtd ?? 0);
@@ -362,7 +375,8 @@ async function carregarRelatorio() {
 
     if (!resp?.sucesso) {
       renderTotais({ total_qtd: 0, total_valor: 0 });
-      renderGraficoTemporal({ labels: [], entrada: [], saida: [], remocao: [], outros: [] });
+      ultimoGraficoPayload = { labels: [], entrada: [], saida: [], remocao: [], outros: [] };
+      renderGraficoTemporal(ultimoGraficoPayload);
       setStatusRelatorio(resp?.mensagem || "Não foi possível carregar o relatório.", "erro");
       return;
     }
@@ -370,7 +384,8 @@ async function carregarRelatorio() {
     const payload = resp?.dados || {};
 
     renderTotais(payload?.totais);
-    renderGraficoTemporal(payload?.grafico_temporal);
+    ultimoGraficoPayload = payload?.grafico_temporal || { labels: [], entrada: [], saida: [], remocao: [], outros: [] };
+    renderGraficoTemporal(ultimoGraficoPayload);
     atualizarResumoFiltros();
     setStatusRelatorio("Relatório carregado com sucesso.", "sucesso");
 
@@ -378,11 +393,13 @@ async function carregarRelatorio() {
       origem: "relatorios.js",
       mensagem: "Relatório carregado",
       filtros,
-      total: payload?.total ?? 0
+      total: payload?.total ?? 0,
+      tipo_grafico: getTipoGraficoSelecionado()
     });
   } catch (err) {
     renderTotais({ total_qtd: 0, total_valor: 0 });
-    renderGraficoTemporal({ labels: [], entrada: [], saida: [], remocao: [], outros: [] });
+    ultimoGraficoPayload = { labels: [], entrada: [], saida: [], remocao: [], outros: [] };
+    renderGraficoTemporal(ultimoGraficoPayload);
     setStatusRelatorio("Erro inesperado ao carregar relatório.", "erro");
 
     logJsError({
@@ -429,6 +446,13 @@ function bindEventos() {
     carregarRelatorio();
   });
 
+  $("tipoGrafico")?.addEventListener("change", () => {
+    if (ultimoGraficoPayload) {
+      renderGraficoTemporal(ultimoGraficoPayload);
+      setStatusRelatorio("Tipo de gráfico atualizado.", "sucesso");
+    }
+  });
+
   const d = debounce(() => {
     atualizarResumoFiltros();
   }, 200);
@@ -436,9 +460,6 @@ function bindEventos() {
   $("dataInicio")?.addEventListener("change", d);
   $("dataFim")?.addEventListener("change", d);
   $("tipo")?.addEventListener("change", d);
-
-  $("btnExportarCSV")?.addEventListener("click", exportarCSV);
-  $("btnExportarPDF")?.addEventListener("click", exportarPDF);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
