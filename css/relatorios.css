@@ -30,6 +30,11 @@
   background: linear-gradient(180deg, #f1f3f5 0%, #ffffff 100%);
 }
 
+.resumo-card-lucro {
+  background: linear-gradient(180deg, #eefaf2 0%, #ffffff 100%);
+  border-color: #d9f0df;
+}
+
 .chart-box {
   position: relative;
   width: 100%;
@@ -50,7 +55,8 @@
   border-radius: 20px;
 }
 
-.grafico-tipo-box {
+.grafico-tipo-box,
+.grafico-metrica-box {
   min-width: 180px;
 }
 
@@ -61,13 +67,18 @@
   margin-bottom: 4px;
 }
 
+#produtoSugestoes .list-group-item {
+  cursor: pointer;
+}
+
 @media (max-width: 991px) {
   .chart-box {
     min-height: 300px;
     height: 340px;
   }
 
-  .grafico-tipo-box {
+  .grafico-tipo-box,
+  .grafico-metrica-box {
     width: 100%;
   }
-} 
+}
