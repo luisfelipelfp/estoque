@@ -39,7 +39,7 @@ function coluna_existe(mysqli $conn, string $tabela, string $coluna): bool
 function normalizar_ncm(?string $ncm): ?string
 {
     $valor = preg_replace('/\D+/', '', (string)$ncm) ?? '';
-    $valor = substr($valor, 0, 8);
+    $valor = trim($valor);
 
     if ($valor === '') {
         return null;
@@ -287,19 +287,20 @@ function produtos_listar(mysqli $conn): array
         $hasVenda = coluna_existe($conn, 'produtos', 'preco_venda');
         $hasEstoqueMinimo = coluna_existe($conn, 'produtos', 'estoque_minimo');
         $hasNcm = coluna_existe($conn, 'produtos', 'ncm');
+        $hasAtivo = coluna_existe($conn, 'produtos', 'ativo');
 
         $sql = "
             SELECT
                 id,
                 nome,
-                " . ($hasNcm ? "COALESCE(ncm,'') AS ncm," : "'' AS ncm,") . "
+                " . ($hasNcm ? "COALESCE(ncm, '') AS ncm," : "'' AS ncm,") . "
                 quantidade,
-                ativo
-                " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo,0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
-                " . ($hasCusto ? ", COALESCE(preco_custo,0) AS preco_custo" : ", 0 AS preco_custo") . "
-                " . ($hasVenda ? ", COALESCE(preco_venda,0) AS preco_venda" : ", 0 AS preco_venda") . "
+                " . ($hasAtivo ? "COALESCE(ativo, 1) AS ativo" : "1 AS ativo") . "
+                " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo, 0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
+                " . ($hasCusto ? ", COALESCE(preco_custo, 0) AS preco_custo" : ", 0 AS preco_custo") . "
+                " . ($hasVenda ? ", COALESCE(preco_venda, 0) AS preco_venda" : ", 0 AS preco_venda") . "
             FROM produtos
-            ORDER BY nome
+            ORDER BY nome ASC, id ASC
         ";
 
         $res = $conn->query($sql);
@@ -337,17 +338,18 @@ function produto_obter(mysqli $conn, int $produto_id): array
         $hasVenda = coluna_existe($conn, 'produtos', 'preco_venda');
         $hasEstoqueMinimo = coluna_existe($conn, 'produtos', 'estoque_minimo');
         $hasNcm = coluna_existe($conn, 'produtos', 'ncm');
+        $hasAtivo = coluna_existe($conn, 'produtos', 'ativo');
 
         $sql = "
             SELECT
                 id,
                 nome,
-                " . ($hasNcm ? "COALESCE(ncm,'') AS ncm," : "'' AS ncm,") . "
+                " . ($hasNcm ? "COALESCE(ncm, '') AS ncm," : "'' AS ncm,") . "
                 quantidade,
-                ativo
-                " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo,0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
-                " . ($hasCusto ? ", COALESCE(preco_custo,0) AS preco_custo" : ", 0 AS preco_custo") . "
-                " . ($hasVenda ? ", COALESCE(preco_venda,0) AS preco_venda" : ", 0 AS preco_venda") . "
+                " . ($hasAtivo ? "COALESCE(ativo, 1) AS ativo" : "1 AS ativo") . "
+                " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo, 0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
+                " . ($hasCusto ? ", COALESCE(preco_custo, 0) AS preco_custo" : ", 0 AS preco_custo") . "
+                " . ($hasVenda ? ", COALESCE(preco_venda, 0) AS preco_venda" : ", 0 AS preco_venda") . "
             FROM produtos
             WHERE id = ?
             LIMIT 1
@@ -404,13 +406,13 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
             SELECT
                 id,
                 nome,
-                " . ($hasNcm ? "COALESCE(ncm,'') AS ncm," : "'' AS ncm,") . "
+                " . ($hasNcm ? "COALESCE(ncm, '') AS ncm," : "'' AS ncm,") . "
                 quantidade
-                " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo,0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
-                " . ($hasCusto ? ", COALESCE(preco_custo,0) AS preco_custo" : ", 0 AS preco_custo") . "
+                " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo, 0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
+                " . ($hasCusto ? ", COALESCE(preco_custo, 0) AS preco_custo" : ", 0 AS preco_custo") . "
             FROM produtos
             WHERE nome LIKE ?
-               " . ($hasNcm ? "OR ncm LIKE ?" : "") . "
+            " . ($hasNcm ? "OR ncm LIKE ?" : "") . "
             ORDER BY nome ASC
             LIMIT ?
         ";
@@ -463,10 +465,10 @@ function produto_resumo(mysqli $conn, int $produto_id): array
             SELECT
                 id,
                 nome,
-                " . ($hasNcm ? "COALESCE(ncm,'') AS ncm," : "'' AS ncm,") . "
+                " . ($hasNcm ? "COALESCE(ncm, '') AS ncm," : "'' AS ncm,") . "
                 quantidade
-                " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo,0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
-                " . ($hasCusto ? ", COALESCE(preco_custo,0) AS preco_custo" : ", 0 AS preco_custo") . "
+                " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo, 0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
+                " . ($hasCusto ? ", COALESCE(preco_custo, 0) AS preco_custo" : ", 0 AS preco_custo") . "
             FROM produtos
             WHERE id = ?
             LIMIT 1
