@@ -507,13 +507,22 @@ try {
             $usuario = require_auth();
 
             $nome = trim((string)($body['nome'] ?? ''));
+            $ncm  = isset($body['ncm']) ? trim((string)$body['ncm']) : null;
             $qtd  = (int)($body['quantidade'] ?? 0);
 
             if ($nome === '') {
                 json_response(false, 'Nome do produto obrigatório.', null, 400);
             }
 
-            $res = produtos_adicionar($conn, $nome, $qtd, 0, (int)$usuario['id']);
+            $res = produtos_adicionar(
+                $conn,
+                $nome,
+                $ncm,
+                $qtd,
+                0,
+                (int)$usuario['id']
+            );
+
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
         }
 
@@ -521,6 +530,8 @@ try {
             $usuario = require_auth();
 
             $nome = trim((string)($body['nome'] ?? ''));
+            $ncm = isset($body['ncm']) ? trim((string)$body['ncm']) : null;
+
             if ($nome === '') {
                 json_response(false, 'Nome do produto obrigatório.', null, 400);
             }
@@ -553,6 +564,7 @@ try {
             $res = produtos_adicionar(
                 $conn,
                 $nome,
+                $ncm,
                 $qtd,
                 $estoque_minimo,
                 (int)$usuario['id'],
@@ -569,6 +581,7 @@ try {
 
             $produto_id = (int)($body['produto_id'] ?? 0);
             $nome = trim((string)($body['nome'] ?? ''));
+            $ncm = isset($body['ncm']) ? trim((string)$body['ncm']) : null;
             $qtd = (int)($body['quantidade'] ?? 0);
             $estoque_minimo = (int)($body['estoque_minimo'] ?? 0);
 
@@ -610,6 +623,7 @@ try {
                 $conn,
                 $produto_id,
                 $nome,
+                $ncm,
                 $qtd,
                 $estoque_minimo,
                 $preco_custo,
