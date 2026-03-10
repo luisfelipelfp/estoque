@@ -39,6 +39,10 @@ function formatMargem(precoCusto, precoVenda) {
   })}%`;
 }
 
+function normalizarNcm(valor) {
+  return String(valor ?? "").replace(/\D/g, "").slice(0, 8);
+}
+
 let produtosCache = [];
 let fornecedoresCadastrados = [];
 let modalInstance = null;
@@ -111,7 +115,7 @@ function renderTabela(produtos) {
   if (!Array.isArray(produtos) || produtos.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="3" class="text-center text-muted">Nenhum produto encontrado.</td>
+        <td colspan="4" class="text-center text-muted">Nenhum produto encontrado.</td>
       </tr>
     `;
     return;
@@ -120,11 +124,13 @@ function renderTabela(produtos) {
   tbody.innerHTML = produtos.map((p) => {
     const id = Number(p?.id ?? 0);
     const nome = escapeHtml(p?.nome ?? "");
+    const ncm = escapeHtml(p?.ncm ?? "") || "—";
 
     return `
       <tr>
         <td>${id}</td>
         <td>${nome}</td>
+        <td>${ncm}</td>
         <td>
           <button
             class="btn btn-sm btn-outline-primary"
@@ -147,9 +153,11 @@ function aplicarFiltro() {
     return;
   }
 
-  const filtrados = produtosCache.filter((p) =>
-    String(p?.nome ?? "").toLowerCase().includes(termo)
-  );
+  const filtrados = produtosCache.filter((p) => {
+    const nome = String(p?.nome ?? "").toLowerCase();
+    const ncm = String(p?.ncm ?? "").toLowerCase();
+    return nome.includes(termo) || ncm.includes(termo);
+  });
 
   renderTabela(filtrados);
 }
@@ -159,7 +167,7 @@ async function carregarProdutos() {
   if (tbody) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="3" class="text-center text-muted">Carregando...</td>
+        <td colspan="4" class="text-center text-muted">Carregando...</td>
       </tr>
     `;
   }
@@ -582,6 +590,7 @@ function adicionarFornecedor() {
 function limparModal() {
   if ($("produtoId")) $("produtoId").value = "";
   if ($("produtoNome")) $("produtoNome").value = "";
+  if ($("produtoNcm")) $("produtoNcm").value = "";
   if ($("produtoEstoqueMinimo")) $("produtoEstoqueMinimo").value = "0";
   if ($("tituloModalProduto")) $("tituloModalProduto").textContent = "Novo Produto";
 
@@ -622,6 +631,7 @@ async function abrirModalProdutoExistente(produtoId) {
 
   if ($("produtoId")) $("produtoId").value = String(produto.id ?? "");
   if ($("produtoNome")) $("produtoNome").value = produto.nome ?? "";
+  if ($("produtoNcm")) $("produtoNcm").value = normalizarNcm(produto.ncm ?? "");
   if ($("produtoEstoqueMinimo")) $("produtoEstoqueMinimo").value = String(Number(produto.estoque_minimo ?? 0));
   if ($("tituloModalProduto")) $("tituloModalProduto").textContent = "Cadastro do Produto";
 
@@ -668,12 +678,18 @@ function fornecedoresValidosParaEnvio() {
 async function salvarProduto() {
   const produtoId = Number($("produtoId")?.value ?? 0);
   const nome = ($("produtoNome")?.value ?? "").trim();
+  const ncm = normalizarNcm($("produtoNcm")?.value ?? "");
   const estoqueMinimo = Number($("produtoEstoqueMinimo")?.value ?? 0);
 
   setStatusMensagem("");
 
   if (!nome) {
     setStatusMensagem("Informe o nome do produto.", "erro");
+    return;
+  }
+
+  if (ncm && ncm.length !== 8) {
+    setStatusMensagem("O NCM deve conter exatamente 8 dígitos.", "erro");
     return;
   }
 
@@ -724,6 +740,7 @@ async function salvarProduto() {
 
     const payload = {
       nome,
+      ncm,
       quantidade: produtoId > 0 ? Number(produtoAtual?.quantidade ?? 0) : 0,
       estoque_minimo: estoqueMinimo,
       fornecedores
@@ -765,6 +782,7 @@ async function salvarProduto() {
       mensagem: produtoId > 0 ? "Produto atualizado com sucesso" : "Produto criado com sucesso",
       produto_id: produtoId || (resp?.dados?.id ?? null),
       nome,
+      ncm,
       estoque_minimo: estoqueMinimo,
       fornecedores: fornecedores.length
     });
@@ -816,6 +834,10 @@ function bindAcoesTopo() {
 
 function bindModal() {
   $("btnSalvarProduto")?.addEventListener("click", salvarProduto);
+
+  $("produtoNcm")?.addEventListener("input", (ev) => {
+    ev.target.value = normalizarNcm(ev.target.value);
+  });
 
   $("listaFornecedores")?.addEventListener("input", (ev) => {
     const input = ev.target.closest("[data-campo][data-index]");

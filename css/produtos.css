@@ -60,6 +60,10 @@
   min-height: 20px;
 }
 
+#produtoNcm {
+  letter-spacing: 0.06em;
+}
+
 @media (max-width: 991px) {
   #modalProduto .modal-dialog {
     margin: 0.75rem;

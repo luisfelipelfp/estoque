@@ -36,6 +36,22 @@ function coluna_existe(mysqli $conn, string $tabela, string $coluna): bool
     return $ok;
 }
 
+function normalizar_ncm(?string $ncm): ?string
+{
+    $valor = preg_replace('/\D+/', '', (string)$ncm) ?? '';
+    $valor = substr($valor, 0, 8);
+
+    if ($valor === '') {
+        return null;
+    }
+
+    if (strlen($valor) !== 8) {
+        throw new InvalidArgumentException('O NCM deve conter exatamente 8 dígitos.');
+    }
+
+    return $valor;
+}
+
 /**
  * Normaliza a estrutura de fornecedores recebida da actions.php.
  *
@@ -270,11 +286,13 @@ function produtos_listar(mysqli $conn): array
         $hasCusto = coluna_existe($conn, 'produtos', 'preco_custo');
         $hasVenda = coluna_existe($conn, 'produtos', 'preco_venda');
         $hasEstoqueMinimo = coluna_existe($conn, 'produtos', 'estoque_minimo');
+        $hasNcm = coluna_existe($conn, 'produtos', 'ncm');
 
         $sql = "
             SELECT
                 id,
                 nome,
+                " . ($hasNcm ? "COALESCE(ncm,'') AS ncm," : "'' AS ncm,") . "
                 quantidade,
                 ativo
                 " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo,0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
@@ -291,6 +309,7 @@ function produtos_listar(mysqli $conn): array
             $dados[] = [
                 'id'             => (int)$row['id'],
                 'nome'           => (string)$row['nome'],
+                'ncm'            => (string)($row['ncm'] ?? ''),
                 'quantidade'     => (int)$row['quantidade'],
                 'ativo'          => (int)$row['ativo'],
                 'estoque_minimo' => (int)$row['estoque_minimo'],
@@ -317,11 +336,13 @@ function produto_obter(mysqli $conn, int $produto_id): array
         $hasCusto = coluna_existe($conn, 'produtos', 'preco_custo');
         $hasVenda = coluna_existe($conn, 'produtos', 'preco_venda');
         $hasEstoqueMinimo = coluna_existe($conn, 'produtos', 'estoque_minimo');
+        $hasNcm = coluna_existe($conn, 'produtos', 'ncm');
 
         $sql = "
             SELECT
                 id,
                 nome,
+                " . ($hasNcm ? "COALESCE(ncm,'') AS ncm," : "'' AS ncm,") . "
                 quantidade,
                 ativo
                 " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo,0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
@@ -347,6 +368,7 @@ function produto_obter(mysqli $conn, int $produto_id): array
         return resposta(true, 'OK', [
             'id'             => (int)$row['id'],
             'nome'           => (string)$row['nome'],
+            'ncm'            => (string)($row['ncm'] ?? ''),
             'quantidade'     => (int)$row['quantidade'],
             'estoque_minimo' => (int)$row['estoque_minimo'],
             'ativo'          => (int)$row['ativo'],
@@ -374,6 +396,7 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
 
         $hasCusto = coluna_existe($conn, 'produtos', 'preco_custo');
         $hasEstoqueMinimo = coluna_existe($conn, 'produtos', 'estoque_minimo');
+        $hasNcm = coluna_existe($conn, 'produtos', 'ncm');
 
         $like = '%' . $q . '%';
 
@@ -381,16 +404,25 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
             SELECT
                 id,
                 nome,
+                " . ($hasNcm ? "COALESCE(ncm,'') AS ncm," : "'' AS ncm,") . "
                 quantidade
                 " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo,0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
                 " . ($hasCusto ? ", COALESCE(preco_custo,0) AS preco_custo" : ", 0 AS preco_custo") . "
             FROM produtos
             WHERE nome LIKE ?
+               " . ($hasNcm ? "OR ncm LIKE ?" : "") . "
             ORDER BY nome ASC
             LIMIT ?
         ";
+
         $stmt = $conn->prepare($sql);
-        $stmt->bind_param('si', $like, $limit);
+
+        if ($hasNcm) {
+            $stmt->bind_param('ssi', $like, $like, $limit);
+        } else {
+            $stmt->bind_param('si', $like, $limit);
+        }
+
         $stmt->execute();
         $res = $stmt->get_result();
 
@@ -399,6 +431,7 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
             $itens[] = [
                 'id'             => (int)$r['id'],
                 'nome'           => (string)$r['nome'],
+                'ncm'            => (string)($r['ncm'] ?? ''),
                 'quantidade'     => (int)$r['quantidade'],
                 'estoque_minimo' => (int)$r['estoque_minimo'],
                 'preco_custo'    => (float)$r['preco_custo'],
@@ -424,11 +457,13 @@ function produto_resumo(mysqli $conn, int $produto_id): array
     try {
         $hasCusto = coluna_existe($conn, 'produtos', 'preco_custo');
         $hasEstoqueMinimo = coluna_existe($conn, 'produtos', 'estoque_minimo');
+        $hasNcm = coluna_existe($conn, 'produtos', 'ncm');
 
         $sqlP = "
             SELECT
                 id,
                 nome,
+                " . ($hasNcm ? "COALESCE(ncm,'') AS ncm," : "'' AS ncm,") . "
                 quantidade
                 " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo,0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
                 " . ($hasCusto ? ", COALESCE(preco_custo,0) AS preco_custo" : ", 0 AS preco_custo") . "
@@ -480,6 +515,7 @@ function produto_resumo(mysqli $conn, int $produto_id): array
             'produto' => [
                 'id'             => (int)$prod['id'],
                 'nome'           => (string)$prod['nome'],
+                'ncm'            => (string)($prod['ncm'] ?? ''),
                 'quantidade'     => (int)$prod['quantidade'],
                 'estoque_minimo' => (int)$prod['estoque_minimo'],
                 'preco_custo'    => (float)$prod['preco_custo'],
@@ -501,6 +537,7 @@ function produto_resumo(mysqli $conn, int $produto_id): array
 function produtos_adicionar(
     mysqli $conn,
     string $nome,
+    ?string $ncm,
     int $quantidade,
     int $estoque_minimo,
     ?int $usuario_id,
@@ -510,6 +547,7 @@ function produtos_adicionar(
 ): array {
     try {
         $nome = trim($nome);
+        $ncmNormalizado = normalizar_ncm($ncm);
 
         if ($nome === '') {
             return resposta(false, 'Nome do produto obrigatório.', null);
@@ -533,12 +571,22 @@ function produtos_adicionar(
 
         $pc = (float)$precos['preco_custo'];
         $pv = (float)$precos['preco_venda'];
+        $hasNcm = coluna_existe($conn, 'produtos', 'ncm');
 
-        $stmt = $conn->prepare(
-            'INSERT INTO produtos (nome, quantidade, estoque_minimo, ativo, preco_custo, preco_venda)
-             VALUES (?, ?, ?, 1, ?, ?)'
-        );
-        $stmt->bind_param('siidd', $nome, $quantidade, $estoque_minimo, $pc, $pv);
+        if ($hasNcm) {
+            $stmt = $conn->prepare(
+                'INSERT INTO produtos (nome, ncm, quantidade, estoque_minimo, ativo, preco_custo, preco_venda)
+                 VALUES (?, ?, ?, ?, 1, ?, ?)'
+            );
+            $stmt->bind_param('ssiidd', $nome, $ncmNormalizado, $quantidade, $estoque_minimo, $pc, $pv);
+        } else {
+            $stmt = $conn->prepare(
+                'INSERT INTO produtos (nome, quantidade, estoque_minimo, ativo, preco_custo, preco_venda)
+                 VALUES (?, ?, ?, 1, ?, ?)'
+            );
+            $stmt->bind_param('siidd', $nome, $quantidade, $estoque_minimo, $pc, $pv);
+        }
+
         $stmt->execute();
         $id = (int)$stmt->insert_id;
         $stmt->close();
@@ -551,18 +599,9 @@ function produtos_adicionar(
 
         return resposta(true, 'Produto adicionado com sucesso', ['id' => $id]);
     } catch (Throwable $e) {
-        if ($conn->errno === 0) {
-            try {
-                $conn->rollback();
-            } catch (Throwable $rollbackError) {
-                // ignora
-            }
-        } else {
-            try {
-                $conn->rollback();
-            } catch (Throwable $rollbackError) {
-                // ignora
-            }
+        try {
+            $conn->rollback();
+        } catch (Throwable $rollbackError) {
         }
 
         logError('produtos', 'Erro ao adicionar produto', [
@@ -570,6 +609,7 @@ function produtos_adicionar(
             'linha'          => $e->getLine(),
             'erro'           => $e->getMessage(),
             'nome'           => $nome,
+            'ncm'            => $ncm ?? null,
             'qtd'            => $quantidade,
             'estoque_minimo' => $estoque_minimo,
             'usuario'        => $usuario_id,
@@ -586,6 +626,7 @@ function produtos_atualizar(
     mysqli $conn,
     int $produto_id,
     string $nome,
+    ?string $ncm,
     int $quantidade,
     int $estoque_minimo,
     float $preco_custo,
@@ -595,6 +636,7 @@ function produtos_atualizar(
 ): array {
     try {
         $nome = trim($nome);
+        $ncmNormalizado = normalizar_ncm($ncm);
 
         if ($produto_id <= 0 || $nome === '' || $quantidade < 0 || $estoque_minimo < 0 || $preco_custo < 0 || $preco_venda < 0) {
             return resposta(false, 'Dados inválidos para atualização do produto.', null);
@@ -625,13 +667,24 @@ function produtos_atualizar(
 
         $pc = (float)$precos['preco_custo'];
         $pv = (float)$precos['preco_venda'];
+        $hasNcm = coluna_existe($conn, 'produtos', 'ncm');
 
-        $stmt = $conn->prepare(
-            'UPDATE produtos
-             SET nome = ?, quantidade = ?, estoque_minimo = ?, preco_custo = ?, preco_venda = ?
-             WHERE id = ?'
-        );
-        $stmt->bind_param('siiddi', $nome, $quantidade, $estoque_minimo, $pc, $pv, $produto_id);
+        if ($hasNcm) {
+            $stmt = $conn->prepare(
+                'UPDATE produtos
+                 SET nome = ?, ncm = ?, quantidade = ?, estoque_minimo = ?, preco_custo = ?, preco_venda = ?
+                 WHERE id = ?'
+            );
+            $stmt->bind_param('ssiiddi', $nome, $ncmNormalizado, $quantidade, $estoque_minimo, $pc, $pv, $produto_id);
+        } else {
+            $stmt = $conn->prepare(
+                'UPDATE produtos
+                 SET nome = ?, quantidade = ?, estoque_minimo = ?, preco_custo = ?, preco_venda = ?
+                 WHERE id = ?'
+            );
+            $stmt->bind_param('siiddi', $nome, $quantidade, $estoque_minimo, $pc, $pv, $produto_id);
+        }
+
         $stmt->execute();
         $stmt->close();
 
@@ -644,7 +697,6 @@ function produtos_atualizar(
         try {
             $conn->rollback();
         } catch (Throwable $rollbackError) {
-            // ignora
         }
 
         logError('produtos', 'Erro ao atualizar produto', [
@@ -653,6 +705,7 @@ function produtos_atualizar(
             'erro'           => $e->getMessage(),
             'produto_id'     => $produto_id,
             'nome'           => $nome,
+            'ncm'            => $ncm ?? null,
             'qtd'            => $quantidade,
             'estoque_minimo' => $estoque_minimo,
             'preco_custo'    => $preco_custo,
@@ -705,7 +758,6 @@ function produtos_remover(
         try {
             $conn->rollback();
         } catch (Throwable $rollbackError) {
-            // ignora
         }
 
         logError('produtos', 'Erro ao remover produto', [
