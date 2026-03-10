@@ -110,7 +110,7 @@ function renderMensagemRestricao() {
   if (tbody) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="6" class="text-center text-danger">
+        <td colspan="7" class="text-center text-danger">
           Esta área é restrita para administradores.
         </td>
       </tr>
@@ -118,14 +118,30 @@ function renderMensagemRestricao() {
   }
 }
 
+function badgeNivel(nivel) {
+  const n = String(nivel ?? "").toLowerCase();
+  return n === "admin"
+    ? `<span class="badge bg-dark">Admin</span>`
+    : `<span class="badge bg-secondary">Operador</span>`;
+}
+
+function badgeStatus(ativo) {
+  return Number(ativo) === 1
+    ? `<span class="badge bg-success">Ativo</span>`
+    : `<span class="badge bg-danger">Inativo</span>`;
+}
+
 function renderTabela(usuarios) {
   const tbody = $("tabelaUsuarios");
   if (!tbody) return;
 
+  const usuarioLogado = obterUsuarioLocal();
+  const idLogado = Number(usuarioLogado?.id ?? 0);
+
   if (!Array.isArray(usuarios) || usuarios.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="6" class="text-center text-muted">
+        <td colspan="7" class="text-center text-muted">
           Nenhum usuário encontrado.
         </td>
       </tr>
@@ -134,27 +150,51 @@ function renderTabela(usuarios) {
   }
 
   tbody.innerHTML = usuarios.map((u) => {
-    const nivel = String(u?.nivel ?? "").toLowerCase();
-    const badgeNivel = nivel === "admin"
-      ? `<span class="badge bg-dark">Admin</span>`
-      : `<span class="badge bg-secondary">Operador</span>`;
+    const id = Number(u?.id ?? 0);
+    const ativo = Number(u?.ativo ?? 1);
+    const ehProprioUsuario = id === idLogado;
 
     return `
       <tr>
-        <td>${Number(u?.id ?? 0)}</td>
+        <td>${id}</td>
         <td>${escapeHtml(u?.nome ?? "")}</td>
         <td>${escapeHtml(u?.email ?? "")}</td>
-        <td>${badgeNivel}</td>
+        <td>${badgeNivel(u?.nivel)}</td>
+        <td>${badgeStatus(ativo)}</td>
         <td>${escapeHtml(formatarData(u?.criado_em ?? ""))}</td>
         <td>
-          <button
-            class="btn btn-sm btn-outline-primary"
-            type="button"
-            data-acao="editar"
-            data-id="${Number(u?.id ?? 0)}"
-          >
-            Editar
-          </button>
+          <div class="d-flex gap-2 flex-wrap">
+            <button
+              class="btn btn-sm btn-outline-primary"
+              type="button"
+              data-acao="editar"
+              data-id="${id}"
+            >
+              Editar
+            </button>
+
+            <button
+              class="btn btn-sm ${ativo === 1 ? "btn-outline-warning" : "btn-outline-success"}"
+              type="button"
+              data-acao="toggle-status"
+              data-id="${id}"
+              ${ehProprioUsuario ? "disabled" : ""}
+              title="${ehProprioUsuario ? "Você não pode alterar o seu próprio status." : ""}"
+            >
+              ${ativo === 1 ? "Inativar" : "Ativar"}
+            </button>
+
+            <button
+              class="btn btn-sm btn-outline-danger"
+              type="button"
+              data-acao="excluir"
+              data-id="${id}"
+              ${ehProprioUsuario ? "disabled" : ""}
+              title="${ehProprioUsuario ? "Você não pode excluir o seu próprio usuário." : ""}"
+            >
+              Excluir
+            </button>
+          </div>
         </td>
       </tr>
     `;
@@ -185,7 +225,7 @@ async function carregarUsuarios() {
   if (tbody) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="6" class="text-center text-muted">
+        <td colspan="7" class="text-center text-muted">
           Carregando...
         </td>
       </tr>
@@ -242,6 +282,7 @@ function limparModal() {
   if ($("usuarioNome")) $("usuarioNome").value = "";
   if ($("usuarioEmail")) $("usuarioEmail").value = "";
   if ($("usuarioNivel")) $("usuarioNivel").value = "operador";
+  if ($("usuarioAtivo")) $("usuarioAtivo").value = "1";
   if ($("usuarioSenha")) $("usuarioSenha").value = "";
 
   if ($("tituloModalUsuario")) $("tituloModalUsuario").textContent = "Novo usuário";
@@ -274,6 +315,7 @@ async function abrirModalEditarUsuario(usuarioId) {
     if ($("usuarioNome")) $("usuarioNome").value = String(u?.nome ?? "");
     if ($("usuarioEmail")) $("usuarioEmail").value = String(u?.email ?? "");
     if ($("usuarioNivel")) $("usuarioNivel").value = String(u?.nivel ?? "operador");
+    if ($("usuarioAtivo")) $("usuarioAtivo").value = String(Number(u?.ativo ?? 1));
 
     if ($("tituloModalUsuario")) $("tituloModalUsuario").textContent = "Editar usuário";
     if ($("subtituloModalUsuario")) $("subtituloModalUsuario").textContent = "Atualize os dados do usuário.";
@@ -299,6 +341,7 @@ async function salvarUsuario() {
   const nome = ($("usuarioNome")?.value ?? "").trim();
   const email = ($("usuarioEmail")?.value ?? "").trim();
   const nivel = ($("usuarioNivel")?.value ?? "").trim();
+  const ativo = Number($("usuarioAtivo")?.value ?? 1);
   const senha = ($("usuarioSenha")?.value ?? "").trim();
 
   setStatusMensagem("");
@@ -318,6 +361,11 @@ async function salvarUsuario() {
     return;
   }
 
+  if (![0, 1].includes(ativo)) {
+    setStatusMensagem("Informe um status válido.", "erro");
+    return;
+  }
+
   if (usuarioId <= 0 && !senha) {
     setStatusMensagem("Informe a senha para o novo usuário.", "erro");
     return;
@@ -328,6 +376,7 @@ async function salvarUsuario() {
     nome,
     email,
     nivel,
+    ativo,
     senha
   };
 
@@ -359,7 +408,8 @@ async function salvarUsuario() {
       usuario_id: usuarioId || (resp?.dados?.id ?? null),
       nome,
       email,
-      nivel
+      nivel,
+      ativo
     });
   } catch (err) {
     setStatusMensagem("Erro inesperado ao salvar usuário.", "erro");
@@ -372,6 +422,68 @@ async function salvarUsuario() {
     });
   } finally {
     setBtnLoading("btnSalvarUsuario", false);
+  }
+}
+
+async function alterarStatusUsuario(usuarioId, ativoAtual) {
+  const novoAtivo = Number(ativoAtual) === 1 ? 0 : 1;
+  const acaoTexto = novoAtivo === 1 ? "ativar" : "inativar";
+
+  if (!window.confirm(`Deseja realmente ${acaoTexto} este usuário?`)) {
+    return;
+  }
+
+  try {
+    const resp = await apiRequest("alterar_status_usuario", {
+      usuario_id: usuarioId,
+      ativo: novoAtivo
+    }, "POST");
+
+    if (!resp?.sucesso) {
+      window.alert(resp?.mensagem || "Não foi possível alterar o status do usuário.");
+      return;
+    }
+
+    await carregarUsuarios();
+  } catch (err) {
+    logJsError({
+      origem: "usuarios.js",
+      mensagem: "Erro ao alterar status do usuário",
+      detalhe: err?.message || String(err),
+      stack: err?.stack || null,
+      usuario_id: usuarioId
+    });
+
+    window.alert("Erro ao alterar o status do usuário.");
+  }
+}
+
+async function excluirUsuario(usuarioId) {
+  if (!window.confirm("Deseja realmente excluir este usuário? Esta ação não poderá ser desfeita.")) {
+    return;
+  }
+
+  try {
+    const resp = await apiRequest("excluir_usuario", {
+      usuario_id: usuarioId
+    }, "POST");
+
+    if (!resp?.sucesso) {
+      window.alert(resp?.mensagem || "Não foi possível excluir o usuário.");
+      return;
+    }
+
+    await carregarUsuarios();
+  } catch (err) {
+    logJsError({
+      origem: "usuarios.js",
+      mensagem: "Erro ao excluir usuário",
+      detalhe: err?.message || String(err),
+      stack: err?.stack || null,
+      usuario_id: usuarioId
+    });
+
+    window.alert("Erro ao excluir o usuário.");
   }
 }
 
@@ -388,10 +500,28 @@ function bindEventos() {
   });
 
   $("tabelaUsuarios")?.addEventListener("click", (ev) => {
-    const btn = ev.target.closest("button[data-acao='editar'][data-id]");
+    const btn = ev.target.closest("button[data-acao][data-id]");
     if (!btn) return;
 
-    abrirModalEditarUsuario(Number(btn.dataset.id || 0));
+    const acao = btn.dataset.acao || "";
+    const usuarioId = Number(btn.dataset.id || 0);
+
+    if (acao === "editar") {
+      abrirModalEditarUsuario(usuarioId);
+      return;
+    }
+
+    const usuario = usuariosCache.find((u) => Number(u?.id ?? 0) === usuarioId);
+    if (!usuario) return;
+
+    if (acao === "toggle-status") {
+      alterarStatusUsuario(usuarioId, Number(usuario?.ativo ?? 1));
+      return;
+    }
+
+    if (acao === "excluir") {
+      excluirUsuario(usuarioId);
+    }
   });
 
   $("modalUsuario")?.addEventListener("hidden.bs.modal", () => {
@@ -415,4 +545,4 @@ document.addEventListener("DOMContentLoaded", async () => {
     mensagem: "Tela de usuários carregada para administrador",
     usuario: usuario?.nome || null
   });
-});
+}); 

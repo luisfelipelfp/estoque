@@ -235,8 +235,8 @@ function bindLogout() {
 }
 
 async function carregarLayout(usuario) {
-  const navbarEl = await carregarComponente("#navbar", `${APP_BASE}/components/navbar.html?v=20260308-menu`);
-  const sidebarEl = await carregarComponente("#sidebar", `${APP_BASE}/components/sidebar.html?v=20260308-menu`);
+  const navbarEl = await carregarComponente("#navbar", `${APP_BASE}/components/navbar.html?v=20260309-user3`);
+  const sidebarEl = await carregarComponente("#sidebar", `${APP_BASE}/components/sidebar.html?v=20260309-user3`);
 
   if (sidebarEl) {
     sidebarEl.classList.remove("d-none");

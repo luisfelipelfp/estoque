@@ -28,6 +28,10 @@
   min-height: 20px;
 }
 
+#usuariosAvisoRestrito .alert {
+  border-radius: 14px;
+}
+
 @media (max-width: 991px) {
   #modalUsuario .modal-dialog {
     margin: 0.75rem;

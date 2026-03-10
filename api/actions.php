@@ -285,9 +285,9 @@ try {
             }
 
             $stmt = $conn->prepare("
-                SELECT id, nome, email, senha, nivel
+                SELECT id, nome, email, senha, nivel, COALESCE(ativo, 1) AS ativo
                 FROM usuarios
-                WHERE email = ? OR nome = ?
+                WHERE (email = ? OR nome = ?)
                 LIMIT 1
             ");
             $stmt->bind_param('ss', $login, $login);
@@ -298,6 +298,10 @@ try {
 
             if (!$user) {
                 json_response(false, 'Usuário ou senha inválidos.', null, 401);
+            }
+
+            if ((int)($user['ativo'] ?? 1) !== 1) {
+                json_response(false, 'Usuário inativo. Procure um administrador.', null, 403);
             }
 
             $hash = (string)($user['senha'] ?? '');
@@ -313,6 +317,7 @@ try {
                 'nome'  => (string)$user['nome'],
                 'email' => (string)$user['email'],
                 'nivel' => (string)$user['nivel'],
+                'ativo' => (int)$user['ativo'],
             ];
             $_SESSION['LAST_ACTIVITY'] = time();
 
@@ -379,6 +384,7 @@ try {
             $nome = trim((string)($body['nome'] ?? ''));
             $email = trim((string)($body['email'] ?? ''));
             $nivel = trim((string)($body['nivel'] ?? 'operador'));
+            $ativo = (int)($body['ativo'] ?? 1);
             $senha = isset($body['senha']) ? (string)$body['senha'] : null;
 
             $res = usuario_salvar(
@@ -388,6 +394,39 @@ try {
                 $email,
                 $nivel,
                 $senha,
+                $ativo,
+                (int)$usuario['id']
+            );
+
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
+        }
+
+        case 'alterar_status_usuario': {
+            $usuario = require_auth();
+            usuarios_require_admin($usuario);
+
+            $usuarioId = (int)($body['usuario_id'] ?? 0);
+            $ativo = (int)($body['ativo'] ?? -1);
+
+            $res = usuario_alterar_status(
+                $conn,
+                $usuarioId,
+                $ativo,
+                (int)$usuario['id']
+            );
+
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
+        }
+
+        case 'excluir_usuario': {
+            $usuario = require_auth();
+            usuarios_require_admin($usuario);
+
+            $usuarioId = (int)($body['usuario_id'] ?? 0);
+
+            $res = usuario_excluir(
+                $conn,
+                $usuarioId,
                 (int)$usuario['id']
             );
 

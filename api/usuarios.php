@@ -28,6 +28,7 @@ function usuarios_listar(mysqli $conn): array
                 nome,
                 email,
                 nivel,
+                COALESCE(ativo, 1) AS ativo,
                 criado_em
             FROM usuarios
             ORDER BY nome ASC, id ASC
@@ -42,6 +43,7 @@ function usuarios_listar(mysqli $conn): array
                 'nome'      => (string)$row['nome'],
                 'email'     => (string)$row['email'],
                 'nivel'     => (string)$row['nivel'],
+                'ativo'     => (int)$row['ativo'],
                 'criado_em' => (string)$row['criado_em'],
             ];
         }
@@ -71,6 +73,7 @@ function usuario_obter(mysqli $conn, int $usuarioId): array
                 nome,
                 email,
                 nivel,
+                COALESCE(ativo, 1) AS ativo,
                 criado_em
             FROM usuarios
             WHERE id = ?
@@ -90,6 +93,7 @@ function usuario_obter(mysqli $conn, int $usuarioId): array
             'nome'      => (string)$row['nome'],
             'email'     => (string)$row['email'],
             'nivel'     => (string)$row['nivel'],
+            'ativo'     => (int)$row['ativo'],
             'criado_em' => (string)$row['criado_em'],
         ]);
     } catch (Throwable $e) {
@@ -111,6 +115,7 @@ function usuario_salvar(
     string $email,
     string $nivel,
     ?string $senha,
+    int $ativo,
     int $usuarioLogadoId
 ): array {
     $nome = trim($nome);
@@ -130,8 +135,16 @@ function usuario_salvar(
         return resposta(false, 'Nível de usuário inválido.');
     }
 
+    if (!in_array($ativo, [0, 1], true)) {
+        return resposta(false, 'Status do usuário inválido.');
+    }
+
     if ($usuarioId <= 0 && ($senha === null || $senha === '')) {
         return resposta(false, 'A senha é obrigatória para novo usuário.');
+    }
+
+    if ($usuarioId > 0 && $usuarioId === $usuarioLogadoId && $ativo === 0) {
+        return resposta(false, 'Você não pode inativar o seu próprio usuário.');
     }
 
     try {
@@ -157,19 +170,19 @@ function usuario_salvar(
 
                 $stmt = $conn->prepare("
                     UPDATE usuarios
-                    SET nome = ?, email = ?, nivel = ?, senha = ?
+                    SET nome = ?, email = ?, nivel = ?, ativo = ?, senha = ?
                     WHERE id = ?
                 ");
-                $stmt->bind_param('ssssi', $nome, $email, $nivel, $hash, $usuarioId);
+                $stmt->bind_param('sssisi', $nome, $email, $nivel, $ativo, $hash, $usuarioId);
                 $stmt->execute();
                 $stmt->close();
             } else {
                 $stmt = $conn->prepare("
                     UPDATE usuarios
-                    SET nome = ?, email = ?, nivel = ?
+                    SET nome = ?, email = ?, nivel = ?, ativo = ?
                     WHERE id = ?
                 ");
-                $stmt->bind_param('sssi', $nome, $email, $nivel, $usuarioId);
+                $stmt->bind_param('sssii', $nome, $email, $nivel, $ativo, $usuarioId);
                 $stmt->execute();
                 $stmt->close();
             }
@@ -178,7 +191,8 @@ function usuario_salvar(
                 'usuario_id'        => $usuarioId,
                 'usuario_logado_id' => $usuarioLogadoId,
                 'email'             => $email,
-                'nivel'             => $nivel
+                'nivel'             => $nivel,
+                'ativo'             => $ativo
             ]);
 
             return resposta(true, 'Usuário atualizado com sucesso.', [
@@ -189,10 +203,10 @@ function usuario_salvar(
         $hash = password_hash((string)$senha, PASSWORD_DEFAULT);
 
         $stmt = $conn->prepare("
-            INSERT INTO usuarios (nome, email, senha, nivel)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO usuarios (nome, email, senha, nivel, ativo)
+            VALUES (?, ?, ?, ?, ?)
         ");
-        $stmt->bind_param('ssss', $nome, $email, $hash, $nivel);
+        $stmt->bind_param('ssssi', $nome, $email, $hash, $nivel, $ativo);
         $stmt->execute();
         $novoId = (int)$stmt->insert_id;
         $stmt->close();
@@ -201,7 +215,8 @@ function usuario_salvar(
             'usuario_id'        => $novoId,
             'usuario_logado_id' => $usuarioLogadoId,
             'email'             => $email,
-            'nivel'             => $nivel
+            'nivel'             => $nivel,
+            'ativo'             => $ativo
         ]);
 
         return resposta(true, 'Usuário cadastrado com sucesso.', [
@@ -218,5 +233,109 @@ function usuario_salvar(
         ]);
 
         return resposta(false, 'Erro interno ao salvar usuário.');
+    }
+}
+
+function usuario_alterar_status(
+    mysqli $conn,
+    int $usuarioId,
+    int $ativo,
+    int $usuarioLogadoId
+): array {
+    if ($usuarioId <= 0) {
+        return resposta(false, 'Usuário inválido.');
+    }
+
+    if (!in_array($ativo, [0, 1], true)) {
+        return resposta(false, 'Status inválido.');
+    }
+
+    if ($usuarioId === $usuarioLogadoId) {
+        return resposta(false, 'Você não pode alterar o status do seu próprio usuário.');
+    }
+
+    try {
+        $stmt = $conn->prepare("
+            UPDATE usuarios
+            SET ativo = ?
+            WHERE id = ?
+        ");
+        $stmt->bind_param('ii', $ativo, $usuarioId);
+        $stmt->execute();
+        $afetadas = $stmt->affected_rows;
+        $stmt->close();
+
+        if ($afetadas <= 0) {
+            return resposta(false, 'Usuário não encontrado ou sem alterações.');
+        }
+
+        logInfo('usuarios', 'Status do usuário alterado', [
+            'usuario_id'        => $usuarioId,
+            'ativo'             => $ativo,
+            'usuario_logado_id' => $usuarioLogadoId
+        ]);
+
+        return resposta(true, 'Status do usuário alterado com sucesso.', [
+            'id'    => $usuarioId,
+            'ativo' => $ativo
+        ]);
+    } catch (Throwable $e) {
+        logError('usuarios', 'Erro ao alterar status do usuário', [
+            'arquivo'           => $e->getFile(),
+            'linha'             => $e->getLine(),
+            'erro'              => $e->getMessage(),
+            'usuario_id'        => $usuarioId,
+            'usuario_logado_id' => $usuarioLogadoId
+        ]);
+
+        return resposta(false, 'Erro interno ao alterar status do usuário.');
+    }
+}
+
+function usuario_excluir(
+    mysqli $conn,
+    int $usuarioId,
+    int $usuarioLogadoId
+): array {
+    if ($usuarioId <= 0) {
+        return resposta(false, 'Usuário inválido.');
+    }
+
+    if ($usuarioId === $usuarioLogadoId) {
+        return resposta(false, 'Você não pode excluir o seu próprio usuário.');
+    }
+
+    try {
+        $stmt = $conn->prepare("
+            DELETE FROM usuarios
+            WHERE id = ?
+        ");
+        $stmt->bind_param('i', $usuarioId);
+        $stmt->execute();
+        $afetadas = $stmt->affected_rows;
+        $stmt->close();
+
+        if ($afetadas <= 0) {
+            return resposta(false, 'Usuário não encontrado.');
+        }
+
+        logInfo('usuarios', 'Usuário excluído', [
+            'usuario_id'        => $usuarioId,
+            'usuario_logado_id' => $usuarioLogadoId
+        ]);
+
+        return resposta(true, 'Usuário excluído com sucesso.', [
+            'id' => $usuarioId
+        ]);
+    } catch (Throwable $e) {
+        logError('usuarios', 'Erro ao excluir usuário', [
+            'arquivo'           => $e->getFile(),
+            'linha'             => $e->getLine(),
+            'erro'              => $e->getMessage(),
+            'usuario_id'        => $usuarioId,
+            'usuario_logado_id' => $usuarioLogadoId
+        ]);
+
+        return resposta(false, 'Erro interno ao excluir usuário.');
     }
 }
