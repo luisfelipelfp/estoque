@@ -60,7 +60,6 @@ function set_cors_origin(): void
         return;
     }
 
-    // Para acesso direto no mesmo host, sem Origin, mantém um padrão seguro conhecido
     header('Access-Control-Allow-Origin: https://192.168.15.100');
 }
 set_cors_origin();
@@ -178,6 +177,11 @@ function require_auth(): array
     $_SESSION['LAST_ACTIVITY'] = time();
 
     return $_SESSION['usuario'];
+}
+
+function normalizar_login(string $login): string
+{
+    return trim(mb_strtolower($login));
 }
 
 function normalizar_fornecedores_payload(mysqli $conn, mixed $fornecedoresRaw): array
@@ -380,17 +384,25 @@ try {
 
     switch ($acao) {
         case 'login': {
-            $login = trim((string)($body['login'] ?? $body['email'] ?? $body['usuario'] ?? ''));
+            $loginOriginal = trim((string)($body['login'] ?? $body['email'] ?? $body['usuario'] ?? ''));
             $senha = (string)($body['senha'] ?? $body['password'] ?? '');
 
-            if ($login === '' || $senha === '') {
+            if ($loginOriginal === '' || $senha === '') {
                 json_response(false, 'Informe login e senha.', null, 400);
             }
 
+            $login = normalizar_login($loginOriginal);
+
             $stmt = $conn->prepare("
-                SELECT id, nome, email, senha, nivel, COALESCE(ativo, 1) AS ativo
+                SELECT
+                    id,
+                    nome,
+                    email,
+                    senha,
+                    LOWER(TRIM(nivel)) AS nivel,
+                    COALESCE(ativo, 1) AS ativo
                 FROM usuarios
-                WHERE (email = ? OR nome = ?)
+                WHERE LOWER(email) = ? OR LOWER(nome) = ?
                 LIMIT 1
             ");
             if (!$stmt) {
