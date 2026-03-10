@@ -1,4 +1,3 @@
-// js/usuarios.js
 import { apiRequest } from "./api.js";
 import { logJsInfo, logJsError } from "./logger.js";
 
@@ -94,10 +93,13 @@ function setBtnLoading(id, loading, textoLoading = "Salvando...") {
   btn.textContent = loading ? textoLoading : btn.dataset.originalText;
 }
 
-function renderMensagemRestricao() {
+function setTelaRestrita() {
+  $("usuariosAvisoRestrito")?.classList.remove("d-none");
+
   const topo = $("usuariosStatusTopo");
   const tbody = $("tabelaUsuarios");
   const btnNovo = $("btnNovoUsuario");
+  const filtroCard = $("usuariosFiltroCard");
 
   if (topo) {
     topo.textContent = "Acesso restrito.";
@@ -105,6 +107,10 @@ function renderMensagemRestricao() {
 
   if (btnNovo) {
     btnNovo.disabled = true;
+  }
+
+  if (filtroCard) {
+    filtroCard.classList.add("d-none");
   }
 
   if (tbody) {
@@ -131,12 +137,21 @@ function badgeStatus(ativo) {
     : `<span class="badge bg-danger">Inativo</span>`;
 }
 
+function contarAdminsAtivos(lista) {
+  return (Array.isArray(lista) ? lista : []).filter((u) => {
+    const nivel = String(u?.nivel ?? "").toLowerCase();
+    const ativo = Number(u?.ativo ?? 1);
+    return nivel === "admin" && ativo === 1;
+  }).length;
+}
+
 function renderTabela(usuarios) {
   const tbody = $("tabelaUsuarios");
   if (!tbody) return;
 
   const usuarioLogado = obterUsuarioLocal();
   const idLogado = Number(usuarioLogado?.id ?? 0);
+  const totalAdminsAtivos = contarAdminsAtivos(usuariosCache);
 
   if (!Array.isArray(usuarios) || usuarios.length === 0) {
     tbody.innerHTML = `
@@ -152,7 +167,24 @@ function renderTabela(usuarios) {
   tbody.innerHTML = usuarios.map((u) => {
     const id = Number(u?.id ?? 0);
     const ativo = Number(u?.ativo ?? 1);
+    const nivel = String(u?.nivel ?? "").toLowerCase();
     const ehProprioUsuario = id === idLogado;
+    const ehUltimoAdminAtivo = nivel === "admin" && ativo === 1 && totalAdminsAtivos <= 1;
+
+    const bloquearInativacao = ehProprioUsuario || ehUltimoAdminAtivo;
+    const bloquearExclusao = ehProprioUsuario || ehUltimoAdminAtivo;
+
+    const tituloInativar = ehProprioUsuario
+      ? "Você não pode alterar o seu próprio status."
+      : ehUltimoAdminAtivo
+        ? "Não é permitido inativar o último administrador ativo."
+        : "";
+
+    const tituloExcluir = ehProprioUsuario
+      ? "Você não pode excluir o seu próprio usuário."
+      : ehUltimoAdminAtivo
+        ? "Não é permitido excluir o último administrador ativo."
+        : "";
 
     return `
       <tr>
@@ -178,8 +210,8 @@ function renderTabela(usuarios) {
               type="button"
               data-acao="toggle-status"
               data-id="${id}"
-              ${ehProprioUsuario ? "disabled" : ""}
-              title="${ehProprioUsuario ? "Você não pode alterar o seu próprio status." : ""}"
+              ${bloquearInativacao ? "disabled" : ""}
+              title="${escapeHtml(tituloInativar)}"
             >
               ${ativo === 1 ? "Inativar" : "Ativar"}
             </button>
@@ -189,8 +221,8 @@ function renderTabela(usuarios) {
               type="button"
               data-acao="excluir"
               data-id="${id}"
-              ${ehProprioUsuario ? "disabled" : ""}
-              title="${ehProprioUsuario ? "Você não pode excluir o seu próprio usuário." : ""}"
+              ${bloquearExclusao ? "disabled" : ""}
+              title="${escapeHtml(tituloExcluir)}"
             >
               Excluir
             </button>
@@ -288,7 +320,7 @@ function limparModal() {
   if ($("tituloModalUsuario")) $("tituloModalUsuario").textContent = "Novo usuário";
   if ($("subtituloModalUsuario")) $("subtituloModalUsuario").textContent = "Preencha os dados para salvar o usuário.";
   if ($("labelSenhaUsuario")) $("labelSenhaUsuario").textContent = "Senha";
-  if ($("usuarioSenhaHint")) $("usuarioSenhaHint").textContent = "A senha é obrigatória no cadastro.";
+  if ($("usuarioSenhaHint")) $("usuarioSenhaHint").textContent = "A senha é obrigatória no cadastro e deve ter pelo menos 6 caracteres.";
 
   setStatusMensagem("");
 }
@@ -320,7 +352,7 @@ async function abrirModalEditarUsuario(usuarioId) {
     if ($("tituloModalUsuario")) $("tituloModalUsuario").textContent = "Editar usuário";
     if ($("subtituloModalUsuario")) $("subtituloModalUsuario").textContent = "Atualize os dados do usuário.";
     if ($("labelSenhaUsuario")) $("labelSenhaUsuario").textContent = "Nova senha";
-    if ($("usuarioSenhaHint")) $("usuarioSenhaHint").textContent = "Deixe em branco para manter a senha atual.";
+    if ($("usuarioSenhaHint")) $("usuarioSenhaHint").textContent = "Deixe em branco para manter a senha atual. Se informar, a senha deve ter pelo menos 6 caracteres.";
 
     getModalUsuario()?.show();
   } catch (err) {
@@ -368,6 +400,11 @@ async function salvarUsuario() {
 
   if (usuarioId <= 0 && !senha) {
     setStatusMensagem("Informe a senha para o novo usuário.", "erro");
+    return;
+  }
+
+  if (senha && senha.length < 6) {
+    setStatusMensagem("A senha deve ter pelo menos 6 caracteres.", "erro");
     return;
   }
 
@@ -501,7 +538,7 @@ function bindEventos() {
 
   $("tabelaUsuarios")?.addEventListener("click", (ev) => {
     const btn = ev.target.closest("button[data-acao][data-id]");
-    if (!btn) return;
+    if (!btn || btn.disabled) return;
 
     const acao = btn.dataset.acao || "";
     const usuarioId = Number(btn.dataset.id || 0);
@@ -534,7 +571,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const usuario = obterUsuarioLocal();
   if (!usuarioEhAdmin(usuario)) {
-    renderMensagemRestricao();
+    setTelaRestrita();
     return;
   }
 
@@ -545,4 +582,4 @@ document.addEventListener("DOMContentLoaded", async () => {
     mensagem: "Tela de usuários carregada para administrador",
     usuario: usuario?.nome || null
   });
-}); 
+});

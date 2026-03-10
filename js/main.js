@@ -1,4 +1,3 @@
-// js/main.js
 import { apiRequest } from "./api.js";
 import { logJsInfo, logJsError } from "./logger.js";
 
@@ -152,16 +151,27 @@ function aplicarPermissoes(usuario) {
   const navUsuariosItem = $("navUsuariosItem");
 
   if (menuUsuarios) {
-    menuUsuarios.style.display = ehAdmin ? "flex" : "none";
+    menuUsuarios.hidden = !ehAdmin;
   }
 
   if (sidebarAdminDivider) {
-    sidebarAdminDivider.style.display = ehAdmin ? "block" : "none";
+    sidebarAdminDivider.hidden = !ehAdmin;
   }
 
   if (navUsuariosItem) {
-    navUsuariosItem.style.display = ehAdmin ? "" : "none";
+    navUsuariosItem.hidden = !ehAdmin;
   }
+}
+
+function protegerPaginaAdmin(usuario) {
+  const paginaAtual = obterPaginaAtual();
+
+  if (paginaAtual === "usuarios" && !usuarioEhAdmin(usuario)) {
+    window.location.replace(`${APP_BASE}/pages/home.html`);
+    return false;
+  }
+
+  return true;
 }
 
 function linkCorrespondePaginaAtual(link, paginaAtual) {
@@ -235,8 +245,8 @@ function bindLogout() {
 }
 
 async function carregarLayout(usuario) {
-  const navbarEl = await carregarComponente("#navbar", `${APP_BASE}/components/navbar.html?v=20260309-user3`);
-  const sidebarEl = await carregarComponente("#sidebar", `${APP_BASE}/components/sidebar.html?v=20260309-user3`);
+  const navbarEl = await carregarComponente("#navbar", `${APP_BASE}/components/navbar.html?v=20260310-user4`);
+  const sidebarEl = await carregarComponente("#sidebar", `${APP_BASE}/components/sidebar.html?v=20260310-user4`);
 
   if (sidebarEl) {
     sidebarEl.classList.remove("d-none");
@@ -261,6 +271,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const usuario = await verificarLogin();
   if (!usuario) return;
+
+  if (!protegerPaginaAdmin(usuario)) {
+    return;
+  }
 
   await carregarLayout(usuario);
 

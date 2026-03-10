@@ -8,10 +8,17 @@
   vertical-align: middle;
 }
 
+#tabelaUsuarios .badge {
+  font-size: 0.78rem;
+  padding: 0.5em 0.7em;
+  border-radius: 999px;
+}
+
 #modalUsuario .modal-content {
   border: 0;
   border-radius: 18px;
   overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
 }
 
 #modalUsuario .modal-header {
@@ -32,8 +39,21 @@
   border-radius: 14px;
 }
 
+#usuariosTabelaCard .table td,
+#usuariosTabelaCard .table th {
+  vertical-align: middle;
+}
+
+#usuariosTabelaCard .btn {
+  min-width: 84px;
+}
+
 @media (max-width: 991px) {
   #modalUsuario .modal-dialog {
     margin: 0.75rem;
+  }
+
+  #usuariosTabelaCard .btn {
+    min-width: auto;
   }
 }

@@ -19,6 +19,70 @@ function usuarios_require_admin(array $usuario): void
     }
 }
 
+function usuarios_normalizar_nivel(string $nivel): string
+{
+    return strtolower(trim($nivel));
+}
+
+function usuarios_contar_admins_ativos(mysqli $conn, ?int $ignorarUsuarioId = null): int
+{
+    $sql = "
+        SELECT COUNT(*) AS total
+        FROM usuarios
+        WHERE LOWER(TRIM(nivel)) = 'admin'
+          AND COALESCE(ativo, 1) = 1
+    ";
+
+    if ($ignorarUsuarioId !== null && $ignorarUsuarioId > 0) {
+        $sql .= " AND id <> ?";
+    }
+
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new RuntimeException('Erro ao contar administradores ativos.');
+    }
+
+    if ($ignorarUsuarioId !== null && $ignorarUsuarioId > 0) {
+        $stmt->bind_param('i', $ignorarUsuarioId);
+    }
+
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return (int)($row['total'] ?? 0);
+}
+
+function usuario_buscar_basico(mysqli $conn, int $usuarioId): ?array
+{
+    if ($usuarioId <= 0) {
+        return null;
+    }
+
+    $stmt = $conn->prepare("
+        SELECT
+            id,
+            nome,
+            email,
+            LOWER(TRIM(nivel)) AS nivel,
+            COALESCE(ativo, 1) AS ativo,
+            criado_em
+        FROM usuarios
+        WHERE id = ?
+        LIMIT 1
+    ");
+    if (!$stmt) {
+        throw new RuntimeException('Erro ao buscar usuário.');
+    }
+
+    $stmt->bind_param('i', $usuarioId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return $row ?: null;
+}
+
 function usuarios_listar(mysqli $conn): array
 {
     try {
@@ -27,7 +91,7 @@ function usuarios_listar(mysqli $conn): array
                 id,
                 nome,
                 email,
-                nivel,
+                LOWER(TRIM(nivel)) AS nivel,
                 COALESCE(ativo, 1) AS ativo,
                 criado_em
             FROM usuarios
@@ -35,6 +99,10 @@ function usuarios_listar(mysqli $conn): array
         ";
 
         $res = $conn->query($sql);
+        if (!$res) {
+            return resposta(false, 'Erro ao listar usuários.');
+        }
+
         $dados = [];
 
         while ($row = $res->fetch_assoc()) {
@@ -47,6 +115,8 @@ function usuarios_listar(mysqli $conn): array
                 'criado_em' => (string)$row['criado_em'],
             ];
         }
+
+        $res->free();
 
         return resposta(true, 'Usuários listados com sucesso.', $dados);
     } catch (Throwable $e) {
@@ -72,13 +142,17 @@ function usuario_obter(mysqli $conn, int $usuarioId): array
                 id,
                 nome,
                 email,
-                nivel,
+                LOWER(TRIM(nivel)) AS nivel,
                 COALESCE(ativo, 1) AS ativo,
                 criado_em
             FROM usuarios
             WHERE id = ?
             LIMIT 1
         ");
+        if (!$stmt) {
+            return resposta(false, 'Erro ao obter usuário.');
+        }
+
         $stmt->bind_param('i', $usuarioId);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
@@ -120,7 +194,7 @@ function usuario_salvar(
 ): array {
     $nome = trim($nome);
     $email = trim($email);
-    $nivel = trim($nivel);
+    $nivel = usuarios_normalizar_nivel($nivel);
     $senha = $senha !== null ? trim($senha) : null;
 
     if ($nome === '') {
@@ -143,18 +217,22 @@ function usuario_salvar(
         return resposta(false, 'A senha é obrigatória para novo usuário.');
     }
 
-    if ($usuarioId > 0 && $usuarioId === $usuarioLogadoId && $ativo === 0) {
-        return resposta(false, 'Você não pode inativar o seu próprio usuário.');
+    if ($senha !== null && $senha !== '' && mb_strlen($senha) < 6) {
+        return resposta(false, 'A senha deve ter pelo menos 6 caracteres.');
     }
 
     try {
         $stmtDup = $conn->prepare("
             SELECT id
             FROM usuarios
-            WHERE email = ?
+            WHERE LOWER(email) = LOWER(?)
               AND id <> ?
             LIMIT 1
         ");
+        if (!$stmtDup) {
+            return resposta(false, 'Erro ao validar e-mail do usuário.');
+        }
+
         $stmtDup->bind_param('si', $email, $usuarioId);
         $stmtDup->execute();
         $duplicado = $stmtDup->get_result()->fetch_assoc();
@@ -165,6 +243,35 @@ function usuario_salvar(
         }
 
         if ($usuarioId > 0) {
+            $usuarioAtual = usuario_buscar_basico($conn, $usuarioId);
+
+            if (!$usuarioAtual) {
+                return resposta(false, 'Usuário não encontrado.');
+            }
+
+            $eraAdminAtivo = (
+                strtolower((string)($usuarioAtual['nivel'] ?? '')) === 'admin'
+                && (int)($usuarioAtual['ativo'] ?? 1) === 1
+            );
+
+            $seraAdminAtivo = ($nivel === 'admin' && $ativo === 1);
+
+            if ($usuarioId === $usuarioLogadoId && $ativo === 0) {
+                return resposta(false, 'Você não pode inativar o seu próprio usuário.');
+            }
+
+            if ($usuarioId === $usuarioLogadoId && $nivel !== 'admin') {
+                return resposta(false, 'Você não pode remover o seu próprio perfil de administrador.');
+            }
+
+            if ($eraAdminAtivo && !$seraAdminAtivo) {
+                $adminsRestantes = usuarios_contar_admins_ativos($conn, $usuarioId);
+
+                if ($adminsRestantes <= 0) {
+                    return resposta(false, 'Não é permitido inativar ou rebaixar o último administrador ativo do sistema.');
+                }
+            }
+
             if ($senha !== null && $senha !== '') {
                 $hash = password_hash($senha, PASSWORD_DEFAULT);
 
@@ -173,6 +280,10 @@ function usuario_salvar(
                     SET nome = ?, email = ?, nivel = ?, ativo = ?, senha = ?
                     WHERE id = ?
                 ");
+                if (!$stmt) {
+                    return resposta(false, 'Erro ao atualizar usuário.');
+                }
+
                 $stmt->bind_param('sssisi', $nome, $email, $nivel, $ativo, $hash, $usuarioId);
                 $stmt->execute();
                 $stmt->close();
@@ -182,6 +293,10 @@ function usuario_salvar(
                     SET nome = ?, email = ?, nivel = ?, ativo = ?
                     WHERE id = ?
                 ");
+                if (!$stmt) {
+                    return resposta(false, 'Erro ao atualizar usuário.');
+                }
+
                 $stmt->bind_param('sssii', $nome, $email, $nivel, $ativo, $usuarioId);
                 $stmt->execute();
                 $stmt->close();
@@ -206,6 +321,10 @@ function usuario_salvar(
             INSERT INTO usuarios (nome, email, senha, nivel, ativo)
             VALUES (?, ?, ?, ?, ?)
         ");
+        if (!$stmt) {
+            return resposta(false, 'Erro ao cadastrar usuário.');
+        }
+
         $stmt->bind_param('ssssi', $nome, $email, $hash, $nivel, $ativo);
         $stmt->execute();
         $novoId = (int)$stmt->insert_id;
@@ -255,17 +374,40 @@ function usuario_alterar_status(
     }
 
     try {
+        $usuarioAtual = usuario_buscar_basico($conn, $usuarioId);
+
+        if (!$usuarioAtual) {
+            return resposta(false, 'Usuário não encontrado.');
+        }
+
+        $ehAdminAtivo = (
+            strtolower((string)($usuarioAtual['nivel'] ?? '')) === 'admin'
+            && (int)($usuarioAtual['ativo'] ?? 1) === 1
+        );
+
+        if ($ehAdminAtivo && $ativo === 0) {
+            $adminsRestantes = usuarios_contar_admins_ativos($conn, $usuarioId);
+
+            if ($adminsRestantes <= 0) {
+                return resposta(false, 'Não é permitido inativar o último administrador ativo do sistema.');
+            }
+        }
+
         $stmt = $conn->prepare("
             UPDATE usuarios
             SET ativo = ?
             WHERE id = ?
         ");
+        if (!$stmt) {
+            return resposta(false, 'Erro ao alterar status do usuário.');
+        }
+
         $stmt->bind_param('ii', $ativo, $usuarioId);
         $stmt->execute();
         $afetadas = $stmt->affected_rows;
         $stmt->close();
 
-        if ($afetadas <= 0) {
+        if ($afetadas <= 0 && (int)($usuarioAtual['ativo'] ?? 1) !== $ativo) {
             return resposta(false, 'Usuário não encontrado ou sem alterações.');
         }
 
@@ -306,10 +448,33 @@ function usuario_excluir(
     }
 
     try {
+        $usuarioAtual = usuario_buscar_basico($conn, $usuarioId);
+
+        if (!$usuarioAtual) {
+            return resposta(false, 'Usuário não encontrado.');
+        }
+
+        $ehAdminAtivo = (
+            strtolower((string)($usuarioAtual['nivel'] ?? '')) === 'admin'
+            && (int)($usuarioAtual['ativo'] ?? 1) === 1
+        );
+
+        if ($ehAdminAtivo) {
+            $adminsRestantes = usuarios_contar_admins_ativos($conn, $usuarioId);
+
+            if ($adminsRestantes <= 0) {
+                return resposta(false, 'Não é permitido excluir o último administrador ativo do sistema.');
+            }
+        }
+
         $stmt = $conn->prepare("
             DELETE FROM usuarios
             WHERE id = ?
         ");
+        if (!$stmt) {
+            return resposta(false, 'Erro ao excluir usuário.');
+        }
+
         $stmt->bind_param('i', $usuarioId);
         $stmt->execute();
         $afetadas = $stmt->affected_rows;
