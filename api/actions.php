@@ -5,6 +5,8 @@ error_reporting(E_ALL);
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 
+const SESSION_TIMEOUT_SECONDS = 7200; // 2 horas
+
 if (session_status() === PHP_SESSION_NONE) {
     $isHttps = (
         (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
@@ -38,13 +40,19 @@ header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 function set_cors_origin(): void
 {
-    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    $origin = trim((string)($_SERVER['HTTP_ORIGIN'] ?? ''));
+
     $allowed = [
         'http://192.168.15.100',
         'https://192.168.15.100',
+        'http://localhost',
+        'http://127.0.0.1',
     ];
 
     if ($origin !== '' && in_array($origin, $allowed, true)) {
@@ -52,6 +60,7 @@ function set_cors_origin(): void
         return;
     }
 
+    // Para acesso direto no mesmo host, sem Origin, mantém um padrão seguro conhecido
     header('Access-Control-Allow-Origin: https://192.168.15.100');
 }
 set_cors_origin();
@@ -75,8 +84,89 @@ function read_body(): array
         return $_POST;
     }
 
-    $json = json_decode($raw, true);
-    return is_array($json) ? $json : [];
+    if ($raw !== '') {
+        $json = json_decode($raw, true);
+        if (is_array($json)) {
+            return $json;
+        }
+
+        parse_str($raw, $parsed);
+        return is_array($parsed) ? $parsed : [];
+    }
+
+    return [];
+}
+
+function get_action(array $body): string
+{
+    $acao = $_GET['acao'] ?? $_POST['acao'] ?? $body['acao'] ?? '';
+    return trim((string)$acao);
+}
+
+function sanitize_for_log(array $data): array
+{
+    $maskedKeys = [
+        'senha',
+        'password',
+        'token',
+        'access_token',
+        'refresh_token'
+    ];
+
+    $sanitized = $data;
+
+    array_walk_recursive($sanitized, function (&$value, $key) use ($maskedKeys): void {
+        if (in_array((string)$key, $maskedKeys, true)) {
+            $value = '***';
+        }
+    });
+
+    return $sanitized;
+}
+
+function destroy_user_session(): void
+{
+    $_SESSION = [];
+
+    if (ini_get('session.use_cookies')) {
+        $params = session_get_cookie_params();
+        setcookie(
+            session_name(),
+            '',
+            time() - 42000,
+            $params['path'] ?? '/',
+            $params['domain'] ?? '',
+            (bool)($params['secure'] ?? false),
+            (bool)($params['httponly'] ?? true)
+        );
+    }
+
+    session_destroy();
+}
+
+function apply_session_timeout(string $acao): void
+{
+    $publicActions = [
+        'login',
+        'logout',
+    ];
+
+    if (in_array($acao, $publicActions, true)) {
+        return;
+    }
+
+    if (!empty($_SESSION['usuario']) && isset($_SESSION['LAST_ACTIVITY'])) {
+        $elapsed = time() - (int)$_SESSION['LAST_ACTIVITY'];
+
+        if ($elapsed > SESSION_TIMEOUT_SECONDS) {
+            destroy_user_session();
+            json_response(false, 'Sessão expirada. Faça login novamente.', null, 401);
+        }
+    }
+
+    if (!empty($_SESSION['usuario'])) {
+        $_SESSION['LAST_ACTIVITY'] = time();
+    }
 }
 
 function require_auth(): array
@@ -84,6 +174,8 @@ function require_auth(): array
     if (empty($_SESSION['usuario']) || !is_array($_SESSION['usuario'])) {
         json_response(false, 'Usuário não autenticado.', null, 401);
     }
+
+    $_SESSION['LAST_ACTIVITY'] = time();
 
     return $_SESSION['usuario'];
 }
@@ -118,6 +210,10 @@ function normalizar_fornecedores_payload(mysqli $conn, mixed $fornecedoresRaw): 
             WHERE id = ?
             LIMIT 1
         ");
+        if (!$stmt) {
+            throw new RuntimeException('Erro ao validar fornecedor.');
+        }
+
         $stmt->bind_param('i', $fornecedorId);
         $stmt->execute();
         $fornecedorDb = $stmt->get_result()->fetch_assoc();
@@ -125,6 +221,10 @@ function normalizar_fornecedores_payload(mysqli $conn, mixed $fornecedoresRaw): 
 
         if (!$fornecedorDb) {
             throw new InvalidArgumentException('Fornecedor informado não existe.');
+        }
+
+        if ((int)($fornecedorDb['ativo'] ?? 1) !== 1) {
+            throw new InvalidArgumentException('Fornecedor informado está inativo.');
         }
 
         $precoCusto = isset($item['preco_custo']) && $item['preco_custo'] !== ''
@@ -192,6 +292,11 @@ function tabela_existe(mysqli $conn, string $nomeTabela): bool
           AND TABLE_NAME = ?
         LIMIT 1
     ");
+
+    if (!$stmt) {
+        return false;
+    }
+
     $stmt->bind_param('s', $nomeTabela);
     $stmt->execute();
     $ok = (bool)$stmt->get_result()->fetch_assoc();
@@ -260,19 +365,17 @@ function home_obter_conteudo(mysqli $conn): array
 
 try {
     $conn = db();
-    $acao = (string)($_GET['acao'] ?? $_POST['acao'] ?? '');
     $body = read_body();
+    $acao = get_action($body);
 
-    if ($acao === '' && isset($body['acao'])) {
-        $acao = (string)$body['acao'];
-    }
+    apply_session_timeout($acao);
 
     logInfo('actions', 'Requisição recebida', [
         'acao'   => $acao,
         'method' => $_SERVER['REQUEST_METHOD'] ?? 'CLI',
-        'get'    => $_GET,
-        'post'   => $_POST,
-        'body'   => $body
+        'get'    => sanitize_for_log($_GET),
+        'post'   => sanitize_for_log($_POST),
+        'body'   => sanitize_for_log($body)
     ]);
 
     switch ($acao) {
@@ -290,6 +393,10 @@ try {
                 WHERE (email = ? OR nome = ?)
                 LIMIT 1
             ");
+            if (!$stmt) {
+                json_response(false, 'Erro ao processar login.', null, 500);
+            }
+
             $stmt->bind_param('ss', $login, $login);
             $stmt->execute();
             $result = $stmt->get_result();
@@ -330,22 +437,7 @@ try {
         }
 
         case 'logout': {
-            $_SESSION = [];
-
-            if (ini_get('session.use_cookies')) {
-                $params = session_get_cookie_params();
-                setcookie(
-                    session_name(),
-                    '',
-                    time() - 42000,
-                    $params['path'] ?? '/',
-                    $params['domain'] ?? '',
-                    (bool)($params['secure'] ?? false),
-                    (bool)($params['httponly'] ?? true)
-                );
-            }
-
-            session_destroy();
+            destroy_user_session();
             json_response(true, 'OK', null);
         }
 
@@ -514,6 +606,10 @@ try {
                 json_response(false, 'Nome do produto obrigatório.', null, 400);
             }
 
+            if ($qtd < 0) {
+                json_response(false, 'Quantidade inválida.', null, 400);
+            }
+
             $res = produtos_adicionar(
                 $conn,
                 $nome,
@@ -553,6 +649,14 @@ try {
 
             if ($estoque_minimo < 0) {
                 json_response(false, 'Estoque mínimo inválido.', null, 400);
+            }
+
+            if ($preco_custo !== null && $preco_custo < 0) {
+                json_response(false, 'Preço de custo inválido.', null, 400);
+            }
+
+            if ($preco_venda !== null && $preco_venda < 0) {
+                json_response(false, 'Preço de venda inválido.', null, 400);
             }
 
             try {
@@ -695,7 +799,7 @@ try {
             $usuario = require_auth();
 
             $produto_id = (int)($body['produto_id'] ?? 0);
-            $tipo       = (string)($body['tipo'] ?? '');
+            $tipo       = trim((string)($body['tipo'] ?? ''));
             $quantidade = (int)($body['quantidade'] ?? 0);
 
             $fornecedor_id = isset($body['fornecedor_id']) && $body['fornecedor_id'] !== ''
@@ -720,6 +824,14 @@ try {
 
             if (!in_array($tipo, ['entrada', 'saida', 'remocao'], true)) {
                 json_response(false, 'Tipo inválido.', null, 400);
+            }
+
+            if ($preco_custo !== null && $preco_custo < 0) {
+                json_response(false, 'Preço de custo inválido.', null, 400);
+            }
+
+            if ($valor_unitario !== null && $valor_unitario < 0) {
+                json_response(false, 'Valor unitário inválido.', null, 400);
             }
 
             if ($tipo === 'entrada') {
@@ -774,7 +886,6 @@ try {
         default:
             json_response(false, 'Ação inválida.', null, 400);
     }
-
 } catch (Throwable $e) {
     logError('actions', 'Erro fatal', [
         'arquivo' => $e->getFile(),
