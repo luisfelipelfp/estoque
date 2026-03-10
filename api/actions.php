@@ -30,6 +30,7 @@ require_once __DIR__ . '/fornecedores.php';
 require_once __DIR__ . '/produtos.php';
 require_once __DIR__ . '/movimentacoes.php';
 require_once __DIR__ . '/relatorios.php';
+require_once __DIR__ . '/usuarios.php';
 
 initLog('actions');
 
@@ -347,6 +348,50 @@ try {
             require_auth();
             $dados = home_obter_conteudo($conn);
             json_response(true, 'OK', $dados);
+        }
+
+        case 'listar_usuarios': {
+            $usuario = require_auth();
+            usuarios_require_admin($usuario);
+
+            $res = usuarios_listar($conn);
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
+        }
+
+        case 'obter_usuario': {
+            $usuario = require_auth();
+            usuarios_require_admin($usuario);
+
+            $usuarioId = (int)($_GET['usuario_id'] ?? $body['usuario_id'] ?? 0);
+            if ($usuarioId <= 0) {
+                json_response(false, 'Usuário inválido.', null, 400);
+            }
+
+            $res = usuario_obter($conn, $usuarioId);
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
+        }
+
+        case 'salvar_usuario': {
+            $usuario = require_auth();
+            usuarios_require_admin($usuario);
+
+            $usuarioId = (int)($body['usuario_id'] ?? 0);
+            $nome = trim((string)($body['nome'] ?? ''));
+            $email = trim((string)($body['email'] ?? ''));
+            $nivel = trim((string)($body['nivel'] ?? 'operador'));
+            $senha = isset($body['senha']) ? (string)$body['senha'] : null;
+
+            $res = usuario_salvar(
+                $conn,
+                $usuarioId,
+                $nome,
+                $email,
+                $nivel,
+                $senha,
+                (int)$usuario['id']
+            );
+
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
         }
 
         case 'listar_fornecedores': {
@@ -685,4 +730,4 @@ try {
     ]);
 
     json_response(false, 'Erro interno no servidor.', null, 500);
-}   
+}

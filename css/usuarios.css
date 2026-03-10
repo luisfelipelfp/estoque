@@ -1,0 +1,35 @@
+#tabelaUsuarios th {
+  background: #f4f6fa;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+#tabelaUsuarios td {
+  vertical-align: middle;
+}
+
+#modalUsuario .modal-content {
+  border: 0;
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+#modalUsuario .modal-header {
+  background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+  border-bottom: 1px solid #e9ecef;
+}
+
+#modalUsuario .modal-footer {
+  border-top: 1px solid #e9ecef;
+  background: #fbfbfc;
+}
+
+#usuarioStatus {
+  min-height: 20px;
+}
+
+@media (max-width: 991px) {
+  #modalUsuario .modal-dialog {
+    margin: 0.75rem;
+  }
+}
