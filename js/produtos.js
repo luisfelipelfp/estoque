@@ -43,6 +43,11 @@ function normalizarNcm(valor) {
   return String(valor ?? "").replace(/\D/g, "").slice(0, 8);
 }
 
+function valorSeguroNumero(valor, fallback = 0) {
+  const n = Number(valor);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 let produtosCache = [];
 let fornecedoresCadastrados = [];
 let modalInstance = null;
@@ -90,7 +95,7 @@ function atualizarResumoModal() {
   badge.textContent = `${totalSelecionados} selecionado(s)`;
 
   if (!totalLinhas) {
-    info.textContent = "";
+    info.textContent = "Você ainda não adicionou fornecedores para este produto.";
     return;
   }
 
@@ -124,7 +129,8 @@ function renderTabela(produtos) {
   tbody.innerHTML = produtos.map((p) => {
     const id = Number(p?.id ?? 0);
     const nome = escapeHtml(p?.nome ?? "");
-    const ncm = escapeHtml(p?.ncm ?? "") || "—";
+    const ncmNormalizado = normalizarNcm(p?.ncm ?? "");
+    const ncm = ncmNormalizado ? escapeHtml(ncmNormalizado) : "—";
 
     return `
       <tr>
@@ -136,6 +142,7 @@ function renderTabela(produtos) {
             class="btn btn-sm btn-outline-primary"
             data-acao="abrir"
             data-id="${id}"
+            type="button"
           >
             Abrir
           </button>
@@ -352,7 +359,7 @@ function atualizarFornecedor(index, campo, valor) {
 
     garantirFornecedorPrincipal();
     renderListaFornecedores();
-    setStatusMensagem("", "muted");
+    setStatusMensagem("");
     return;
   }
 
@@ -584,7 +591,7 @@ function adicionarFornecedor() {
   fornecedoresTemp.push(criarFornecedorVazio());
   garantirFornecedorPrincipal();
   renderListaFornecedores();
-  setStatusMensagem("Nova linha de fornecedor adicionada.", "muted");
+  setStatusMensagem("Nova linha de fornecedor adicionada.");
 }
 
 function limparModal() {
@@ -630,9 +637,9 @@ async function abrirModalProdutoExistente(produtoId) {
   limparModal();
 
   if ($("produtoId")) $("produtoId").value = String(produto.id ?? "");
-  if ($("produtoNome")) $("produtoNome").value = produto.nome ?? "";
+  if ($("produtoNome")) $("produtoNome").value = String(produto.nome ?? "");
   if ($("produtoNcm")) $("produtoNcm").value = normalizarNcm(produto.ncm ?? "");
-  if ($("produtoEstoqueMinimo")) $("produtoEstoqueMinimo").value = String(Number(produto.estoque_minimo ?? 0));
+  if ($("produtoEstoqueMinimo")) $("produtoEstoqueMinimo").value = String(valorSeguroNumero(produto.estoque_minimo, 0));
   if ($("tituloModalProduto")) $("tituloModalProduto").textContent = "Cadastro do Produto";
 
   if (Array.isArray(produto.fornecedores) && produto.fornecedores.length > 0) {
@@ -640,8 +647,8 @@ async function abrirModalProdutoExistente(produtoId) {
       fornecedor_id: String(f?.fornecedor_id ?? ""),
       nome: f?.nome ?? "",
       codigo: f?.codigo ?? "",
-      preco_custo: String(Number(f?.preco_custo ?? 0)),
-      preco_venda: String(Number(f?.preco_venda ?? 0)),
+      preco_custo: String(valorSeguroNumero(f?.preco_custo, 0)),
+      preco_venda: String(valorSeguroNumero(f?.preco_venda, 0)),
       observacao: f?.observacao ?? "",
       principal: Number(f?.principal ?? 0) === 1 ? 1 : 0
     }));

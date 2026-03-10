@@ -8,6 +8,7 @@
 #tabelaProdutos th {
   background-color: #e9ecef;
   font-weight: bold;
+  white-space: nowrap;
 }
 
 #tabelaProdutos td {
@@ -62,6 +63,10 @@
 
 #produtoNcm {
   letter-spacing: 0.06em;
+}
+
+#listaFornecedores .form-text {
+  min-height: 20px;
 }
 
 @media (max-width: 991px) {
