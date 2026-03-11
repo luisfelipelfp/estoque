@@ -25,6 +25,13 @@ function usuarios_normalizar_nivel(string $nivel): string
     return strtolower(trim($nivel));
 }
 
+function usuarios_strlen(string $valor): int
+{
+    return function_exists('mb_strlen')
+        ? mb_strlen($valor, 'UTF-8')
+        : strlen($valor);
+}
+
 function usuarios_contar_admins_ativos(mysqli $conn, ?int $ignorarUsuarioId = null): int
 {
     $sql = "
@@ -98,6 +105,35 @@ function usuario_auditoria_payload(?array $usuario): ?array
         'ativo'     => isset($usuario['ativo']) ? (int)$usuario['ativo'] : 1,
         'criado_em' => (string)($usuario['criado_em'] ?? ''),
     ];
+}
+
+function usuarios_registrar_auditoria_segura(
+    mysqli $conn,
+    ?int $usuarioLogadoId,
+    string $acao,
+    string $entidade,
+    ?int $entidadeId,
+    mixed $dadosAnteriores,
+    mixed $dadosNovos
+): void {
+    $ok = auditoria_registrar(
+        $conn,
+        $usuarioLogadoId,
+        $acao,
+        $entidade,
+        $entidadeId,
+        $dadosAnteriores,
+        $dadosNovos
+    );
+
+    if (!$ok) {
+        logWarning('usuarios', 'Falha ao registrar auditoria de usuários', [
+            'acao'              => $acao,
+            'entidade'          => $entidade,
+            'entidade_id'       => $entidadeId,
+            'usuario_logado_id' => $usuarioLogadoId
+        ]);
+    }
 }
 
 function usuarios_listar(mysqli $conn): array
@@ -234,7 +270,7 @@ function usuario_salvar(
         return resposta(false, 'A senha é obrigatória para novo usuário.');
     }
 
-    if ($senha !== null && $senha !== '' && mb_strlen($senha) < 6) {
+    if ($senha !== null && $senha !== '' && usuarios_strlen($senha) < 6) {
         return resposta(false, 'A senha deve ter pelo menos 6 caracteres.');
     }
 
@@ -332,7 +368,7 @@ function usuario_salvar(
             $usuarioDepois = usuario_buscar_basico($conn, $usuarioId);
             $depois = usuario_auditoria_payload($usuarioDepois);
 
-            auditoria_registrar(
+            usuarios_registrar_auditoria_segura(
                 $conn,
                 $usuarioLogadoId,
                 'editar_usuario',
@@ -374,7 +410,7 @@ function usuario_salvar(
 
         $novoUsuario = usuario_buscar_basico($conn, $novoId);
 
-        auditoria_registrar(
+        usuarios_registrar_auditoria_segura(
             $conn,
             $usuarioLogadoId,
             'criar_usuario',
@@ -399,11 +435,7 @@ function usuario_salvar(
         ]);
     } catch (Throwable $e) {
         try {
-            if ($conn->errno === 0) {
-                $conn->rollback();
-            } else {
-                $conn->rollback();
-            }
+            $conn->rollback();
         } catch (Throwable $rollbackError) {
         }
 
@@ -487,7 +519,7 @@ function usuario_alterar_status(
         $usuarioDepois = usuario_buscar_basico($conn, $usuarioId);
         $depois = usuario_auditoria_payload($usuarioDepois);
 
-        auditoria_registrar(
+        usuarios_registrar_auditoria_segura(
             $conn,
             $usuarioLogadoId,
             $ativo === 1 ? 'reativar_usuario' : 'inativar_usuario',
@@ -585,7 +617,7 @@ function usuario_excluir(
             return resposta(false, 'Usuário não encontrado.');
         }
 
-        auditoria_registrar(
+        usuarios_registrar_auditoria_segura(
             $conn,
             $usuarioLogadoId,
             'excluir_usuario',

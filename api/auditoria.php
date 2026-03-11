@@ -41,7 +41,9 @@ function auditoria_json(mixed $dados): ?string
 
     $json = json_encode(
         $dados,
-        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE
+        JSON_UNESCAPED_UNICODE |
+        JSON_UNESCAPED_SLASHES |
+        JSON_INVALID_UTF8_SUBSTITUTE
     );
 
     return $json === false ? null : $json;
@@ -56,53 +58,65 @@ function auditoria_registrar(
     mixed $dadosAnteriores = null,
     mixed $dadosNovos = null
 ): bool {
+
     if (!auditoria_tabela_existe($conn)) {
-        logWarning('auditoria', 'Tabela auditoria não encontrada. Registro ignorado.', [
+        logWarning('auditoria', 'Tabela auditoria não encontrada', [
             'acao' => $acao,
-            'entidade' => $entidade,
-            'entidade_id' => $entidadeId,
+            'entidade' => $entidade
         ]);
         return false;
     }
 
-    $acao = trim($acao);
-    $entidade = trim($entidade);
+    try {
 
-    if ($acao === '' || $entidade === '') {
-        throw new InvalidArgumentException('Ação e entidade são obrigatórias para auditoria.');
-    }
+        $acao = trim($acao);
+        $entidade = trim($entidade);
 
-    $jsonAntes = auditoria_json($dadosAnteriores);
-    $jsonDepois = auditoria_json($dadosNovos);
+        if ($acao === '' || $entidade === '') {
+            throw new InvalidArgumentException('Ação e entidade são obrigatórias.');
+        }
 
-    $stmt = $conn->prepare("
-        INSERT INTO auditoria
+        $jsonAntes  = auditoria_json($dadosAnteriores);
+        $jsonDepois = auditoria_json($dadosNovos);
+
+        $stmt = $conn->prepare("
+            INSERT INTO auditoria
             (usuario_id, acao, entidade, entidade_id, dados_anteriores, dados_novos, criado_em)
-        VALUES
-            (?, ?, ?, ?, ?, ?, NOW())
-    ");
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
+        ");
 
-    if (!$stmt) {
-        throw new RuntimeException('Erro ao preparar insert da auditoria.');
+        if (!$stmt) {
+            throw new RuntimeException('Erro ao preparar auditoria.');
+        }
+
+        $stmt->bind_param(
+            'ississ',
+            $usuarioId,
+            $acao,
+            $entidade,
+            $entidadeId,
+            $jsonAntes,
+            $jsonDepois
+        );
+
+        $ok = $stmt->execute();
+        $stmt->close();
+
+        if (!$ok) {
+            throw new RuntimeException('Erro ao executar auditoria.');
+        }
+
+        return true;
+
+    } catch (Throwable $e) {
+
+        logError('auditoria', 'Falha ao registrar auditoria', [
+            'erro' => $e->getMessage(),
+            'acao' => $acao ?? null,
+            'entidade' => $entidade ?? null,
+            'entidade_id' => $entidadeId ?? null
+        ]);
+
+        return false;
     }
-
-    $stmt->bind_param(
-        'ississ',
-        $usuarioId,
-        $acao,
-        $entidade,
-        $entidadeId,
-        $jsonAntes,
-        $jsonDepois
-    );
-
-    $ok = $stmt->execute();
-    $erro = $stmt->error;
-    $stmt->close();
-
-    if (!$ok) {
-        throw new RuntimeException('Erro ao registrar auditoria: ' . $erro);
-    }
-
-    return true;
 }
