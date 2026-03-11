@@ -27,13 +27,6 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/log.php';
 require_once __DIR__ . '/utils.php';
 require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/auditoria.php';
-
-require_once __DIR__ . '/fornecedores.php';
-require_once __DIR__ . '/produtos.php';
-require_once __DIR__ . '/movimentacoes.php';
-require_once __DIR__ . '/relatorios.php';
-require_once __DIR__ . '/usuarios.php';
 
 initLog('actions');
 
@@ -44,42 +37,6 @@ header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
-
-register_shutdown_function(function (): void {
-    $error = error_get_last();
-
-    if (!$error) {
-        return;
-    }
-
-    $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
-    if (!in_array((int)$error['type'], $fatalTypes, true)) {
-        return;
-    }
-
-    if (!headers_sent()) {
-        http_response_code(500);
-        header('Content-Type: application/json; charset=utf-8');
-    }
-
-    logError('actions', 'Fatal shutdown', [
-        'type'    => $error['type'] ?? null,
-        'message' => $error['message'] ?? '',
-        'file'    => $error['file'] ?? '',
-        'line'    => $error['line'] ?? 0,
-    ]);
-
-    echo json_encode([
-        'sucesso' => false,
-        'mensagem' => 'Erro fatal no servidor.',
-        'debug' => [
-            'message' => (string)($error['message'] ?? ''),
-            'file'    => (string)($error['file'] ?? ''),
-            'line'    => (int)($error['line'] ?? 0),
-            'type'    => (int)($error['type'] ?? 0),
-        ]
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-});
 
 function set_cors_origin(): void
 {
@@ -359,8 +316,14 @@ function tabela_existe(mysqli $conn, string $nomeTabela): bool
 
 function home_obter_conteudo(mysqli $conn): array
 {
-    $frase = ['texto' => '', 'autor' => ''];
-    $imagem = ['caminho' => ''];
+    $frase = [
+        'texto' => '',
+        'autor' => '',
+    ];
+
+    $imagem = [
+        'caminho' => '',
+    ];
 
     if (tabela_existe($conn, 'frases_home')) {
         $sqlFrase = "
@@ -486,8 +449,7 @@ try {
         }
 
         case 'usuario_atual': {
-            $u = require_auth();
-            json_response(true, 'OK', ['usuario' => $u]);
+            json_response(true, 'OK', ['usuario' => require_auth()]);
         }
 
         case 'logout': {
@@ -497,19 +459,19 @@ try {
 
         case 'obter_home': {
             require_auth();
-            $dados = home_obter_conteudo($conn);
-            json_response(true, 'OK', $dados);
+            json_response(true, 'OK', home_obter_conteudo($conn));
         }
 
         case 'listar_usuarios': {
+            require_once __DIR__ . '/usuarios.php';
             $usuario = require_auth();
             usuarios_require_admin($usuario);
-
             $res = usuarios_listar($conn);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
         }
 
         case 'obter_usuario': {
+            require_once __DIR__ . '/usuarios.php';
             $usuario = require_auth();
             usuarios_require_admin($usuario);
 
@@ -523,24 +485,18 @@ try {
         }
 
         case 'salvar_usuario': {
+            require_once __DIR__ . '/usuarios.php';
             $usuario = require_auth();
             usuarios_require_admin($usuario);
 
-            $usuarioId = (int)($body['usuario_id'] ?? 0);
-            $nome = trim((string)($body['nome'] ?? ''));
-            $email = trim((string)($body['email'] ?? ''));
-            $nivel = trim((string)($body['nivel'] ?? 'operador'));
-            $ativo = (int)($body['ativo'] ?? 1);
-            $senha = isset($body['senha']) ? (string)$body['senha'] : null;
-
             $res = usuario_salvar(
                 $conn,
-                $usuarioId,
-                $nome,
-                $email,
-                $nivel,
-                $senha,
-                $ativo,
+                (int)($body['usuario_id'] ?? 0),
+                trim((string)($body['nome'] ?? '')),
+                trim((string)($body['email'] ?? '')),
+                trim((string)($body['nivel'] ?? 'operador')),
+                isset($body['senha']) ? (string)$body['senha'] : null,
+                (int)($body['ativo'] ?? 1),
                 (int)$usuario['id']
             );
 
@@ -548,16 +504,14 @@ try {
         }
 
         case 'alterar_status_usuario': {
+            require_once __DIR__ . '/usuarios.php';
             $usuario = require_auth();
             usuarios_require_admin($usuario);
 
-            $usuarioId = (int)($body['usuario_id'] ?? 0);
-            $ativo = (int)($body['ativo'] ?? -1);
-
             $res = usuario_alterar_status(
                 $conn,
-                $usuarioId,
-                $ativo,
+                (int)($body['usuario_id'] ?? 0),
+                (int)($body['ativo'] ?? -1),
                 (int)$usuario['id']
             );
 
@@ -565,14 +519,13 @@ try {
         }
 
         case 'excluir_usuario': {
+            require_once __DIR__ . '/usuarios.php';
             $usuario = require_auth();
             usuarios_require_admin($usuario);
 
-            $usuarioId = (int)($body['usuario_id'] ?? 0);
-
             $res = usuario_excluir(
                 $conn,
-                $usuarioId,
+                (int)($body['usuario_id'] ?? 0),
                 (int)$usuario['id']
             );
 
@@ -580,33 +533,31 @@ try {
         }
 
         case 'listar_fornecedores': {
+            require_once __DIR__ . '/fornecedores.php';
             require_auth();
             $res = fornecedores_listar($conn);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
         }
 
         case 'obter_fornecedor': {
+            require_once __DIR__ . '/fornecedores.php';
             require_auth();
 
-            $fornecedor_id = (int)($_GET['fornecedor_id'] ?? $body['fornecedor_id'] ?? 0);
-            if ($fornecedor_id <= 0) {
+            $fornecedorId = (int)($_GET['fornecedor_id'] ?? $body['fornecedor_id'] ?? 0);
+            if ($fornecedorId <= 0) {
                 json_response(false, 'Fornecedor inválido.', null, 400);
             }
 
-            $res = fornecedor_obter($conn, $fornecedor_id);
+            $res = fornecedor_obter($conn, $fornecedorId);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
         }
 
         case 'salvar_fornecedor': {
+            require_once __DIR__ . '/fornecedores.php';
             $usuario = require_auth();
 
-            $fornecedor_id = (int)($body['fornecedor_id'] ?? 0);
             $nome = trim((string)($body['nome'] ?? ''));
-            $cnpj = trim((string)($body['cnpj'] ?? ''));
-            $telefone = trim((string)($body['telefone'] ?? ''));
-            $email = trim((string)($body['email'] ?? ''));
             $ativo = (int)($body['ativo'] ?? 1);
-            $observacao = trim((string)($body['observacao'] ?? ''));
 
             if ($nome === '') {
                 json_response(false, 'Nome do fornecedor obrigatório.', null, 400);
@@ -618,13 +569,13 @@ try {
 
             $res = fornecedor_salvar(
                 $conn,
-                $fornecedor_id,
+                (int)($body['fornecedor_id'] ?? 0),
                 $nome,
-                $cnpj,
-                $telefone,
-                $email,
+                trim((string)($body['cnpj'] ?? '')),
+                trim((string)($body['telefone'] ?? '')),
+                trim((string)($body['email'] ?? '')),
                 $ativo,
-                $observacao,
+                trim((string)($body['observacao'] ?? '')),
                 (int)$usuario['id']
             );
 
@@ -632,28 +583,30 @@ try {
         }
 
         case 'listar_produtos': {
+            require_once __DIR__ . '/produtos.php';
             require_auth();
             $res = produtos_listar($conn);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
         }
 
         case 'obter_produto': {
+            require_once __DIR__ . '/produtos.php';
             require_auth();
 
-            $produto_id = (int)($_GET['produto_id'] ?? $body['produto_id'] ?? 0);
-            if ($produto_id <= 0) {
+            $produtoId = (int)($_GET['produto_id'] ?? $body['produto_id'] ?? 0);
+            if ($produtoId <= 0) {
                 json_response(false, 'Produto inválido.', null, 400);
             }
 
-            $res = produto_obter($conn, $produto_id);
+            $res = produto_obter($conn, $produtoId);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
         }
 
         case 'adicionar_produto': {
+            require_once __DIR__ . '/produtos.php';
             $usuario = require_auth();
 
             $nome = trim((string)($body['nome'] ?? ''));
-            $ncm  = isset($body['ncm']) ? trim((string)$body['ncm']) : null;
             $qtd  = (int)($body['quantidade'] ?? 0);
 
             if ($nome === '') {
@@ -667,7 +620,7 @@ try {
             $res = produtos_adicionar(
                 $conn,
                 $nome,
-                $ncm,
+                isset($body['ncm']) ? trim((string)$body['ncm']) : null,
                 $qtd,
                 0,
                 (int)$usuario['id']
@@ -677,39 +630,39 @@ try {
         }
 
         case 'criar_produto': {
+            require_once __DIR__ . '/produtos.php';
             $usuario = require_auth();
 
             $nome = trim((string)($body['nome'] ?? ''));
             $ncm = isset($body['ncm']) ? trim((string)$body['ncm']) : null;
+            $qtd = (int)($body['quantidade'] ?? 0);
+            $estoqueMinimo = (int)($body['estoque_minimo'] ?? 0);
+
+            $precoCusto = (isset($body['preco_custo']) && $body['preco_custo'] !== '')
+                ? (float)$body['preco_custo']
+                : null;
+
+            $precoVenda = (isset($body['preco_venda']) && $body['preco_venda'] !== '')
+                ? (float)$body['preco_venda']
+                : null;
 
             if ($nome === '') {
                 json_response(false, 'Nome do produto obrigatório.', null, 400);
             }
 
-            $qtd = (int)($body['quantidade'] ?? 0);
-            $estoque_minimo = (int)($body['estoque_minimo'] ?? 0);
-
-            $preco_custo = (isset($body['preco_custo']) && $body['preco_custo'] !== '')
-                ? (float)$body['preco_custo']
-                : null;
-
-            $preco_venda = (isset($body['preco_venda']) && $body['preco_venda'] !== '')
-                ? (float)$body['preco_venda']
-                : null;
-
             if ($qtd < 0) {
                 json_response(false, 'Quantidade inválida.', null, 400);
             }
 
-            if ($estoque_minimo < 0) {
+            if ($estoqueMinimo < 0) {
                 json_response(false, 'Estoque mínimo inválido.', null, 400);
             }
 
-            if ($preco_custo !== null && $preco_custo < 0) {
+            if ($precoCusto !== null && $precoCusto < 0) {
                 json_response(false, 'Preço de custo inválido.', null, 400);
             }
 
-            if ($preco_venda !== null && $preco_venda < 0) {
+            if ($precoVenda !== null && $precoVenda < 0) {
                 json_response(false, 'Preço de venda inválido.', null, 400);
             }
 
@@ -724,10 +677,10 @@ try {
                 $nome,
                 $ncm,
                 $qtd,
-                $estoque_minimo,
+                $estoqueMinimo,
                 (int)$usuario['id'],
-                $preco_custo,
-                $preco_venda,
+                $precoCusto,
+                $precoVenda,
                 $fornecedores
             );
 
@@ -735,23 +688,18 @@ try {
         }
 
         case 'atualizar_produto': {
+            require_once __DIR__ . '/produtos.php';
             $usuario = require_auth();
 
-            $produto_id = (int)($body['produto_id'] ?? 0);
+            $produtoId = (int)($body['produto_id'] ?? 0);
             $nome = trim((string)($body['nome'] ?? ''));
             $ncm = isset($body['ncm']) ? trim((string)$body['ncm']) : null;
             $qtd = (int)($body['quantidade'] ?? 0);
-            $estoque_minimo = (int)($body['estoque_minimo'] ?? 0);
+            $estoqueMinimo = (int)($body['estoque_minimo'] ?? 0);
+            $precoCusto = (isset($body['preco_custo']) && $body['preco_custo'] !== '') ? (float)$body['preco_custo'] : 0.0;
+            $precoVenda = (isset($body['preco_venda']) && $body['preco_venda'] !== '') ? (float)$body['preco_venda'] : 0.0;
 
-            $preco_custo = (isset($body['preco_custo']) && $body['preco_custo'] !== '')
-                ? (float)$body['preco_custo']
-                : 0.0;
-
-            $preco_venda = (isset($body['preco_venda']) && $body['preco_venda'] !== '')
-                ? (float)$body['preco_venda']
-                : 0.0;
-
-            if ($produto_id <= 0) {
+            if ($produtoId <= 0) {
                 json_response(false, 'Produto inválido.', null, 400);
             }
 
@@ -763,11 +711,11 @@ try {
                 json_response(false, 'Quantidade inválida.', null, 400);
             }
 
-            if ($estoque_minimo < 0) {
+            if ($estoqueMinimo < 0) {
                 json_response(false, 'Estoque mínimo inválido.', null, 400);
             }
 
-            if ($preco_custo < 0 || $preco_venda < 0) {
+            if ($precoCusto < 0 || $precoVenda < 0) {
                 json_response(false, 'Preços inválidos.', null, 400);
             }
 
@@ -779,13 +727,13 @@ try {
 
             $res = produtos_atualizar(
                 $conn,
-                $produto_id,
+                $produtoId,
                 $nome,
                 $ncm,
                 $qtd,
-                $estoque_minimo,
-                $preco_custo,
-                $preco_venda,
+                $estoqueMinimo,
+                $precoCusto,
+                $precoVenda,
                 (int)$usuario['id'],
                 $fornecedores
             );
@@ -794,18 +742,20 @@ try {
         }
 
         case 'remover_produto': {
+            require_once __DIR__ . '/produtos.php';
             $usuario = require_auth();
 
-            $produto_id = (int)($body['produto_id'] ?? 0);
-            if ($produto_id <= 0) {
+            $produtoId = (int)($body['produto_id'] ?? 0);
+            if ($produtoId <= 0) {
                 json_response(false, 'Produto inválido.', null, 400);
             }
 
-            $res = produtos_remover($conn, $produto_id, (int)$usuario['id']);
+            $res = produtos_remover($conn, $produtoId, (int)$usuario['id']);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
         }
 
         case 'buscar_produtos': {
+            require_once __DIR__ . '/produtos.php';
             require_auth();
 
             $q = trim((string)($_GET['q'] ?? $body['q'] ?? ''));
@@ -817,54 +767,57 @@ try {
         }
 
         case 'produto_resumo': {
+            require_once __DIR__ . '/produtos.php';
             require_auth();
 
-            $produto_id = (int)($_GET['produto_id'] ?? $body['produto_id'] ?? 0);
-            if ($produto_id <= 0) {
+            $produtoId = (int)($_GET['produto_id'] ?? $body['produto_id'] ?? 0);
+            if ($produtoId <= 0) {
                 json_response(false, 'Produto inválido.', null, 400);
             }
 
-            $res = produto_resumo($conn, $produto_id);
+            $res = produto_resumo($conn, $produtoId);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
         }
 
         case 'listar_movimentacoes': {
+            require_once __DIR__ . '/movimentacoes.php';
             require_auth();
 
             $filtros = array_merge($_GET, $body);
             $res = mov_listar($conn, $filtros);
-
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
         }
 
         case 'obter_movimentacao': {
+            require_once __DIR__ . '/movimentacoes.php';
             require_auth();
 
-            $movimentacao_id = (int)($_GET['movimentacao_id'] ?? $body['movimentacao_id'] ?? 0);
-            if ($movimentacao_id <= 0) {
+            $movimentacaoId = (int)($_GET['movimentacao_id'] ?? $body['movimentacao_id'] ?? 0);
+            if ($movimentacaoId <= 0) {
                 json_response(false, 'Movimentação inválida.', null, 400);
             }
 
-            $res = mov_obter($conn, $movimentacao_id);
+            $res = mov_obter($conn, $movimentacaoId);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
         }
 
         case 'registrar_movimentacao': {
+            require_once __DIR__ . '/movimentacoes.php';
             $usuario = require_auth();
 
-            $produto_id = (int)($body['produto_id'] ?? 0);
-            $tipo       = trim((string)($body['tipo'] ?? ''));
+            $produtoId = (int)($body['produto_id'] ?? 0);
+            $tipo = trim((string)($body['tipo'] ?? ''));
             $quantidade = (int)($body['quantidade'] ?? 0);
 
-            $fornecedor_id = isset($body['fornecedor_id']) && $body['fornecedor_id'] !== ''
+            $fornecedorId = isset($body['fornecedor_id']) && $body['fornecedor_id'] !== ''
                 ? (int)$body['fornecedor_id']
                 : null;
 
-            $preco_custo = isset($body['preco_custo']) && $body['preco_custo'] !== ''
+            $precoCusto = isset($body['preco_custo']) && $body['preco_custo'] !== ''
                 ? (float)$body['preco_custo']
                 : null;
 
-            $valor_unitario = isset($body['valor_unitario']) && $body['valor_unitario'] !== ''
+            $valorUnitario = isset($body['valor_unitario']) && $body['valor_unitario'] !== ''
                 ? (float)$body['valor_unitario']
                 : null;
 
@@ -872,7 +825,7 @@ try {
                 ? trim((string)$body['observacao'])
                 : null;
 
-            if ($produto_id <= 0 || $quantidade <= 0) {
+            if ($produtoId <= 0 || $quantidade <= 0) {
                 json_response(false, 'Dados inválidos.', null, 400);
             }
 
@@ -880,38 +833,38 @@ try {
                 json_response(false, 'Tipo inválido.', null, 400);
             }
 
-            if ($preco_custo !== null && $preco_custo < 0) {
+            if ($precoCusto !== null && $precoCusto < 0) {
                 json_response(false, 'Preço de custo inválido.', null, 400);
             }
 
-            if ($valor_unitario !== null && $valor_unitario < 0) {
+            if ($valorUnitario !== null && $valorUnitario < 0) {
                 json_response(false, 'Valor unitário inválido.', null, 400);
             }
 
             if ($tipo === 'entrada') {
-                if ($fornecedor_id === null || $fornecedor_id <= 0) {
+                if ($fornecedorId === null || $fornecedorId <= 0) {
                     json_response(false, 'Na entrada é obrigatório informar o fornecedor.', null, 400);
                 }
 
-                if ($preco_custo === null || $preco_custo <= 0) {
+                if ($precoCusto === null || $precoCusto <= 0) {
                     json_response(false, 'Na entrada é obrigatório informar um preço de custo válido.', null, 400);
                 }
             }
 
             if ($tipo !== 'entrada') {
-                $fornecedor_id = null;
+                $fornecedorId = null;
             }
 
             $res = mov_registrar(
                 $conn,
-                $produto_id,
+                $produtoId,
                 $tipo,
                 $quantidade,
                 (int)$usuario['id'],
-                $preco_custo,
-                $valor_unitario,
+                $precoCusto,
+                $valorUnitario,
                 $observacao,
-                $fornecedor_id
+                $fornecedorId
             );
 
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
@@ -920,6 +873,7 @@ try {
         case 'estoque_atual':
         case 'relatorio_estoque':
         case 'relatorio_estoque_atual': {
+            require_once __DIR__ . '/relatorios.php';
             require_auth();
 
             $res = relatorio_estoque_atual($conn);
@@ -929,11 +883,11 @@ try {
         case 'relatorio':
         case 'relatorios':
         case 'relatorio_movimentacoes': {
+            require_once __DIR__ . '/relatorios.php';
             require_auth();
 
             $filtros = array_merge($_GET, $body);
             $res = relatorio($conn, $filtros);
-
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
         }
 
@@ -947,9 +901,5 @@ try {
         'erro'    => $e->getMessage()
     ]);
 
-    json_response(false, 'Erro interno no servidor.', [
-        'erro'    => $e->getMessage(),
-        'arquivo' => $e->getFile(),
-        'linha'   => $e->getLine(),
-    ], 500);
+    json_response(false, 'Erro interno no servidor.', null, 500);
 }
