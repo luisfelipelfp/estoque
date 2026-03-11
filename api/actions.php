@@ -76,29 +76,44 @@ function lower_text(string $value): string
 
 function read_body(): array
 {
+    static $cache = null;
+
+    if ($cache !== null) {
+        return $cache;
+    }
+
     $contentType = strtolower(trim((string)($_SERVER['CONTENT_TYPE'] ?? '')));
     $raw = file_get_contents('php://input');
 
-    if (str_contains($contentType, 'application/json')) {
+    if (
+        function_exists('str_contains')
+            ? str_contains($contentType, 'application/json')
+            : strpos($contentType, 'application/json') !== false
+    ) {
         $json = json_decode($raw, true);
-        return is_array($json) ? $json : [];
+        $cache = is_array($json) ? $json : [];
+        return $cache;
     }
 
     if (!empty($_POST)) {
-        return $_POST;
+        $cache = $_POST;
+        return $cache;
     }
 
     if ($raw !== '') {
         $json = json_decode($raw, true);
         if (is_array($json)) {
-            return $json;
+            $cache = $json;
+            return $cache;
         }
 
         parse_str($raw, $parsed);
-        return is_array($parsed) ? $parsed : [];
+        $cache = is_array($parsed) ? $parsed : [];
+        return $cache;
     }
 
-    return [];
+    $cache = [];
+    return $cache;
 }
 
 function get_action(array $body): string
@@ -212,6 +227,8 @@ function normalizar_fornecedores_payload(mysqli $conn, mixed $fornecedoresRaw): 
         if (in_array($fornecedorId, $idsUsados, true)) {
             throw new InvalidArgumentException('O mesmo fornecedor não pode ser adicionado mais de uma vez para o mesmo produto.');
         }
+
+        require_once __DIR__ . '/fornecedores.php';
 
         $stmt = $conn->prepare("
             SELECT id, nome, ativo
@@ -894,6 +911,7 @@ try {
         default:
             json_response(false, 'Ação inválida.', null, 400);
     }
+
 } catch (Throwable $e) {
     logError('actions', 'Erro fatal', [
         'arquivo' => $e->getFile(),
