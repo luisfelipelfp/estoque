@@ -27,6 +27,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/log.php';
 require_once __DIR__ . '/utils.php';
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/auditoria.php';
 
 require_once __DIR__ . '/fornecedores.php';
 require_once __DIR__ . '/produtos.php';

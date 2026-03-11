@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/log.php';
 require_once __DIR__ . '/utils.php';
+require_once __DIR__ . '/auditoria.php';
 
 initLog('movimentacoes');
 
@@ -55,6 +56,128 @@ function mov_obter_produto_for_update(mysqli $conn, int $produto_id): ?array
     $stmt->close();
 
     return $row ?: null;
+}
+
+function mov_produto_snapshot(mysqli $conn, int $produto_id): ?array
+{
+    $stmt = $conn->prepare("
+        SELECT
+            id,
+            nome,
+            quantidade,
+            COALESCE(preco_custo, 0) AS preco_custo,
+            COALESCE(preco_venda, 0) AS preco_venda
+        FROM produtos
+        WHERE id = ?
+        LIMIT 1
+    ");
+    if (!$stmt) {
+        throw new RuntimeException('Erro ao preparar snapshot do produto na movimentação.');
+    }
+
+    $stmt->bind_param('i', $produto_id);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$row) {
+        return null;
+    }
+
+    return [
+        'id'          => (int)$row['id'],
+        'nome'        => (string)$row['nome'],
+        'quantidade'  => (int)$row['quantidade'],
+        'preco_custo' => (float)$row['preco_custo'],
+        'preco_venda' => (float)$row['preco_venda'],
+    ];
+}
+
+function mov_auditoria_snapshot(mysqli $conn, int $movimentacaoId): ?array
+{
+    if ($movimentacaoId <= 0) {
+        return null;
+    }
+
+    $stmt = $conn->prepare("
+        SELECT
+            id,
+            produto_id,
+            produto_nome,
+            fornecedor_id,
+            tipo,
+            quantidade,
+            valor_unitario,
+            custo_unitario,
+            custo_total,
+            valor_total,
+            lucro,
+            observacao,
+            data,
+            usuario_id
+        FROM movimentacoes
+        WHERE id = ?
+        LIMIT 1
+    ");
+    if (!$stmt) {
+        throw new RuntimeException('Erro ao preparar snapshot da movimentação.');
+    }
+
+    $stmt->bind_param('i', $movimentacaoId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$row) {
+        return null;
+    }
+
+    $dados = [
+        'id'             => (int)$row['id'],
+        'produto_id'     => $row['produto_id'] !== null ? (int)$row['produto_id'] : null,
+        'produto_nome'   => (string)($row['produto_nome'] ?? ''),
+        'fornecedor_id'  => $row['fornecedor_id'] !== null ? (int)$row['fornecedor_id'] : null,
+        'tipo'           => (string)$row['tipo'],
+        'quantidade'     => (int)$row['quantidade'],
+        'valor_unitario' => $row['valor_unitario'] !== null ? (float)$row['valor_unitario'] : null,
+        'custo_unitario' => $row['custo_unitario'] !== null ? (float)$row['custo_unitario'] : null,
+        'custo_total'    => $row['custo_total'] !== null ? (float)$row['custo_total'] : null,
+        'valor_total'    => $row['valor_total'] !== null ? (float)$row['valor_total'] : null,
+        'lucro'          => $row['lucro'] !== null ? (float)$row['lucro'] : null,
+        'observacao'     => (string)($row['observacao'] ?? ''),
+        'data'           => (string)($row['data'] ?? ''),
+        'usuario_id'     => $row['usuario_id'] !== null ? (int)$row['usuario_id'] : null,
+        'lotes'          => [],
+    ];
+
+    $stmtLotes = $conn->prepare("
+        SELECT
+            msl.lote_id,
+            msl.quantidade_consumida,
+            msl.custo_unitario,
+            msl.custo_total
+        FROM movimentacao_saida_lotes msl
+        WHERE msl.movimentacao_saida_id = ?
+        ORDER BY msl.id ASC
+    ");
+    if ($stmtLotes) {
+        $stmtLotes->bind_param('i', $movimentacaoId);
+        $stmtLotes->execute();
+        $resLotes = $stmtLotes->get_result();
+
+        while ($l = $resLotes->fetch_assoc()) {
+            $dados['lotes'][] = [
+                'lote_id'              => (int)$l['lote_id'],
+                'quantidade_consumida' => (int)$l['quantidade_consumida'],
+                'custo_unitario'       => (float)$l['custo_unitario'],
+                'custo_total'          => (float)$l['custo_total'],
+            ];
+        }
+
+        $stmtLotes->close();
+    }
+
+    return $dados;
 }
 
 function mov_inserir_registro(
@@ -373,6 +496,7 @@ function mov_registrar(
     $conn->begin_transaction();
 
     try {
+        $produtoAntes = mov_produto_snapshot($conn, $produto_id);
         $produto = mov_obter_produto_for_update($conn, $produto_id);
 
         if (!$produto) {
@@ -480,6 +604,24 @@ function mov_registrar(
         } else {
             mov_aplicar_consumo_fifo($conn, $movimentacaoId, $consumosFIFO);
         }
+
+        $produtoDepois = mov_produto_snapshot($conn, $produto_id);
+        $movDepois = mov_auditoria_snapshot($conn, $movimentacaoId);
+
+        auditoria_registrar(
+            $conn,
+            $usuario_id,
+            'registrar_movimentacao',
+            'movimentacao',
+            $movimentacaoId,
+            [
+                'produto_antes' => $produtoAntes,
+            ],
+            [
+                'movimentacao' => $movDepois,
+                'produto_depois' => $produtoDepois,
+            ]
+        );
 
         $conn->commit();
 

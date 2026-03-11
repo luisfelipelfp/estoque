@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/log.php';
 require_once __DIR__ . '/utils.php';
+require_once __DIR__ . '/auditoria.php';
 
 initLog('usuarios');
 
@@ -81,6 +82,22 @@ function usuario_buscar_basico(mysqli $conn, int $usuarioId): ?array
     $stmt->close();
 
     return $row ?: null;
+}
+
+function usuario_auditoria_payload(?array $usuario): ?array
+{
+    if (!$usuario) {
+        return null;
+    }
+
+    return [
+        'id'        => isset($usuario['id']) ? (int)$usuario['id'] : null,
+        'nome'      => (string)($usuario['nome'] ?? ''),
+        'email'     => (string)($usuario['email'] ?? ''),
+        'nivel'     => strtolower(trim((string)($usuario['nivel'] ?? ''))),
+        'ativo'     => isset($usuario['ativo']) ? (int)$usuario['ativo'] : 1,
+        'criado_em' => (string)($usuario['criado_em'] ?? ''),
+    ];
 }
 
 function usuarios_listar(mysqli $conn): array
@@ -242,12 +259,17 @@ function usuario_salvar(
             return resposta(false, 'Já existe um usuário com este e-mail.');
         }
 
+        $conn->begin_transaction();
+
         if ($usuarioId > 0) {
             $usuarioAtual = usuario_buscar_basico($conn, $usuarioId);
 
             if (!$usuarioAtual) {
+                $conn->rollback();
                 return resposta(false, 'Usuário não encontrado.');
             }
+
+            $antes = usuario_auditoria_payload($usuarioAtual);
 
             $eraAdminAtivo = (
                 strtolower((string)($usuarioAtual['nivel'] ?? '')) === 'admin'
@@ -257,10 +279,12 @@ function usuario_salvar(
             $seraAdminAtivo = ($nivel === 'admin' && $ativo === 1);
 
             if ($usuarioId === $usuarioLogadoId && $ativo === 0) {
+                $conn->rollback();
                 return resposta(false, 'Você não pode inativar o seu próprio usuário.');
             }
 
             if ($usuarioId === $usuarioLogadoId && $nivel !== 'admin') {
+                $conn->rollback();
                 return resposta(false, 'Você não pode remover o seu próprio perfil de administrador.');
             }
 
@@ -268,6 +292,7 @@ function usuario_salvar(
                 $adminsRestantes = usuarios_contar_admins_ativos($conn, $usuarioId);
 
                 if ($adminsRestantes <= 0) {
+                    $conn->rollback();
                     return resposta(false, 'Não é permitido inativar ou rebaixar o último administrador ativo do sistema.');
                 }
             }
@@ -281,6 +306,7 @@ function usuario_salvar(
                     WHERE id = ?
                 ");
                 if (!$stmt) {
+                    $conn->rollback();
                     return resposta(false, 'Erro ao atualizar usuário.');
                 }
 
@@ -294,6 +320,7 @@ function usuario_salvar(
                     WHERE id = ?
                 ");
                 if (!$stmt) {
+                    $conn->rollback();
                     return resposta(false, 'Erro ao atualizar usuário.');
                 }
 
@@ -301,6 +328,21 @@ function usuario_salvar(
                 $stmt->execute();
                 $stmt->close();
             }
+
+            $usuarioDepois = usuario_buscar_basico($conn, $usuarioId);
+            $depois = usuario_auditoria_payload($usuarioDepois);
+
+            auditoria_registrar(
+                $conn,
+                $usuarioLogadoId,
+                'editar_usuario',
+                'usuario',
+                $usuarioId,
+                $antes,
+                $depois
+            );
+
+            $conn->commit();
 
             logInfo('usuarios', 'Usuário atualizado', [
                 'usuario_id'        => $usuarioId,
@@ -330,6 +372,20 @@ function usuario_salvar(
         $novoId = (int)$stmt->insert_id;
         $stmt->close();
 
+        $novoUsuario = usuario_buscar_basico($conn, $novoId);
+
+        auditoria_registrar(
+            $conn,
+            $usuarioLogadoId,
+            'criar_usuario',
+            'usuario',
+            $novoId,
+            null,
+            usuario_auditoria_payload($novoUsuario)
+        );
+
+        $conn->commit();
+
         logInfo('usuarios', 'Usuário criado', [
             'usuario_id'        => $novoId,
             'usuario_logado_id' => $usuarioLogadoId,
@@ -342,6 +398,15 @@ function usuario_salvar(
             'id' => $novoId
         ]);
     } catch (Throwable $e) {
+        try {
+            if ($conn->errno === 0) {
+                $conn->rollback();
+            } else {
+                $conn->rollback();
+            }
+        } catch (Throwable $rollbackError) {
+        }
+
         logError('usuarios', 'Erro ao salvar usuário', [
             'arquivo'           => $e->getFile(),
             'linha'             => $e->getLine(),
@@ -374,11 +439,16 @@ function usuario_alterar_status(
     }
 
     try {
+        $conn->begin_transaction();
+
         $usuarioAtual = usuario_buscar_basico($conn, $usuarioId);
 
         if (!$usuarioAtual) {
+            $conn->rollback();
             return resposta(false, 'Usuário não encontrado.');
         }
+
+        $antes = usuario_auditoria_payload($usuarioAtual);
 
         $ehAdminAtivo = (
             strtolower((string)($usuarioAtual['nivel'] ?? '')) === 'admin'
@@ -389,6 +459,7 @@ function usuario_alterar_status(
             $adminsRestantes = usuarios_contar_admins_ativos($conn, $usuarioId);
 
             if ($adminsRestantes <= 0) {
+                $conn->rollback();
                 return resposta(false, 'Não é permitido inativar o último administrador ativo do sistema.');
             }
         }
@@ -399,6 +470,7 @@ function usuario_alterar_status(
             WHERE id = ?
         ");
         if (!$stmt) {
+            $conn->rollback();
             return resposta(false, 'Erro ao alterar status do usuário.');
         }
 
@@ -408,8 +480,24 @@ function usuario_alterar_status(
         $stmt->close();
 
         if ($afetadas <= 0 && (int)($usuarioAtual['ativo'] ?? 1) !== $ativo) {
+            $conn->rollback();
             return resposta(false, 'Usuário não encontrado ou sem alterações.');
         }
+
+        $usuarioDepois = usuario_buscar_basico($conn, $usuarioId);
+        $depois = usuario_auditoria_payload($usuarioDepois);
+
+        auditoria_registrar(
+            $conn,
+            $usuarioLogadoId,
+            $ativo === 1 ? 'reativar_usuario' : 'inativar_usuario',
+            'usuario',
+            $usuarioId,
+            $antes,
+            $depois
+        );
+
+        $conn->commit();
 
         logInfo('usuarios', 'Status do usuário alterado', [
             'usuario_id'        => $usuarioId,
@@ -422,6 +510,11 @@ function usuario_alterar_status(
             'ativo' => $ativo
         ]);
     } catch (Throwable $e) {
+        try {
+            $conn->rollback();
+        } catch (Throwable $rollbackError) {
+        }
+
         logError('usuarios', 'Erro ao alterar status do usuário', [
             'arquivo'           => $e->getFile(),
             'linha'             => $e->getLine(),
@@ -448,11 +541,16 @@ function usuario_excluir(
     }
 
     try {
+        $conn->begin_transaction();
+
         $usuarioAtual = usuario_buscar_basico($conn, $usuarioId);
 
         if (!$usuarioAtual) {
+            $conn->rollback();
             return resposta(false, 'Usuário não encontrado.');
         }
+
+        $antes = usuario_auditoria_payload($usuarioAtual);
 
         $ehAdminAtivo = (
             strtolower((string)($usuarioAtual['nivel'] ?? '')) === 'admin'
@@ -463,6 +561,7 @@ function usuario_excluir(
             $adminsRestantes = usuarios_contar_admins_ativos($conn, $usuarioId);
 
             if ($adminsRestantes <= 0) {
+                $conn->rollback();
                 return resposta(false, 'Não é permitido excluir o último administrador ativo do sistema.');
             }
         }
@@ -472,6 +571,7 @@ function usuario_excluir(
             WHERE id = ?
         ");
         if (!$stmt) {
+            $conn->rollback();
             return resposta(false, 'Erro ao excluir usuário.');
         }
 
@@ -481,8 +581,21 @@ function usuario_excluir(
         $stmt->close();
 
         if ($afetadas <= 0) {
+            $conn->rollback();
             return resposta(false, 'Usuário não encontrado.');
         }
+
+        auditoria_registrar(
+            $conn,
+            $usuarioLogadoId,
+            'excluir_usuario',
+            'usuario',
+            $usuarioId,
+            $antes,
+            null
+        );
+
+        $conn->commit();
 
         logInfo('usuarios', 'Usuário excluído', [
             'usuario_id'        => $usuarioId,
@@ -493,6 +606,11 @@ function usuario_excluir(
             'id' => $usuarioId
         ]);
     } catch (Throwable $e) {
+        try {
+            $conn->rollback();
+        } catch (Throwable $rollbackError) {
+        }
+
         logError('usuarios', 'Erro ao excluir usuário', [
             'arquivo'           => $e->getFile(),
             'linha'             => $e->getLine(),

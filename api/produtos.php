@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/log.php';
 require_once __DIR__ . '/utils.php';
+require_once __DIR__ . '/auditoria.php';
 
 initLog('produtos');
 
@@ -52,15 +53,6 @@ function normalizar_ncm(?string $ncm): ?string
     return $valor;
 }
 
-/**
- * Normaliza a estrutura de fornecedores recebida da actions.php.
- *
- * Regras:
- * - exige fornecedor_id > 0
- * - não usa nome para criar fornecedor
- * - garante apenas um principal
- * - sanitiza preços e textos
- */
 function normalizar_fornecedores(array $fornecedores): array
 {
     $out = [];
@@ -138,9 +130,6 @@ function normalizar_fornecedores(array $fornecedores): array
     return $out;
 }
 
-/**
- * Garante que todos os fornecedores informados realmente existam.
- */
 function validar_fornecedores_existentes(mysqli $conn, array $fornecedores): void
 {
     if (empty($fornecedores)) {
@@ -277,6 +266,60 @@ function fornecedor_principal_preco(array $fornecedores): array
     return [
         'preco_custo' => (float)$fornecedores[0]['preco_custo'],
         'preco_venda' => (float)$fornecedores[0]['preco_venda'],
+    ];
+}
+
+function produto_auditoria_snapshot(mysqli $conn, int $produto_id): ?array
+{
+    if ($produto_id <= 0) {
+        return null;
+    }
+
+    $hasCusto = coluna_existe($conn, 'produtos', 'preco_custo');
+    $hasVenda = coluna_existe($conn, 'produtos', 'preco_venda');
+    $hasEstoqueMinimo = coluna_existe($conn, 'produtos', 'estoque_minimo');
+    $hasNcm = coluna_existe($conn, 'produtos', 'ncm');
+    $hasAtivo = coluna_existe($conn, 'produtos', 'ativo');
+
+    $sql = "
+        SELECT
+            id,
+            nome,
+            " . ($hasNcm ? "COALESCE(ncm, '') AS ncm," : "'' AS ncm,") . "
+            quantidade,
+            " . ($hasAtivo ? "COALESCE(ativo, 1) AS ativo" : "1 AS ativo") . "
+            " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo, 0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
+            " . ($hasCusto ? ", COALESCE(preco_custo, 0) AS preco_custo" : ", 0 AS preco_custo") . "
+            " . ($hasVenda ? ", COALESCE(preco_venda, 0) AS preco_venda" : ", 0 AS preco_venda") . "
+        FROM produtos
+        WHERE id = ?
+        LIMIT 1
+    ";
+
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new RuntimeException('Erro ao preparar snapshot do produto.');
+    }
+
+    $stmt->bind_param('i', $produto_id);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$row) {
+        return null;
+    }
+
+    return [
+        'id'             => (int)$row['id'],
+        'nome'           => (string)$row['nome'],
+        'ncm'            => (string)($row['ncm'] ?? ''),
+        'quantidade'     => (int)$row['quantidade'],
+        'estoque_minimo' => (int)$row['estoque_minimo'],
+        'ativo'          => (int)$row['ativo'],
+        'preco_custo'    => (float)$row['preco_custo'],
+        'preco_venda'    => (float)$row['preco_venda'],
+        'fornecedores'   => produto_fornecedores_listar($conn, $produto_id),
     ];
 }
 
@@ -597,6 +640,18 @@ function produtos_adicionar(
             produto_fornecedores_salvar($conn, $id, $fornecedoresNormalizados);
         }
 
+        $depois = produto_auditoria_snapshot($conn, $id);
+
+        auditoria_registrar(
+            $conn,
+            $usuario_id,
+            'criar_produto',
+            'produto',
+            $id,
+            null,
+            $depois
+        );
+
         $conn->commit();
 
         return resposta(true, 'Produto adicionado com sucesso', ['id' => $id]);
@@ -649,13 +704,9 @@ function produtos_atualizar(
 
         $conn->begin_transaction();
 
-        $stmtChk = $conn->prepare('SELECT id FROM produtos WHERE id = ? LIMIT 1');
-        $stmtChk->bind_param('i', $produto_id);
-        $stmtChk->execute();
-        $exists = $stmtChk->get_result()->fetch_assoc();
-        $stmtChk->close();
+        $antes = produto_auditoria_snapshot($conn, $produto_id);
 
-        if (!$exists) {
+        if (!$antes) {
             $conn->rollback();
             return resposta(false, 'Produto não encontrado.', null);
         }
@@ -691,6 +742,18 @@ function produtos_atualizar(
         $stmt->close();
 
         produto_fornecedores_salvar($conn, $produto_id, $fornecedoresNormalizados);
+
+        $depois = produto_auditoria_snapshot($conn, $produto_id);
+
+        auditoria_registrar(
+            $conn,
+            $usuario_id,
+            'editar_produto',
+            'produto',
+            $produto_id,
+            $antes,
+            $depois
+        );
 
         $conn->commit();
 
@@ -732,13 +795,9 @@ function produtos_remover(
 
         $conn->begin_transaction();
 
-        $stmtChk = $conn->prepare('SELECT id FROM produtos WHERE id = ? LIMIT 1');
-        $stmtChk->bind_param('i', $produto_id);
-        $stmtChk->execute();
-        $exists = $stmtChk->get_result()->fetch_assoc();
-        $stmtChk->close();
+        $antes = produto_auditoria_snapshot($conn, $produto_id);
 
-        if (!$exists) {
+        if (!$antes) {
             $conn->rollback();
             return resposta(false, 'Produto não encontrado.', null);
         }
@@ -752,6 +811,16 @@ function produtos_remover(
         $stmt->bind_param('i', $produto_id);
         $stmt->execute();
         $stmt->close();
+
+        auditoria_registrar(
+            $conn,
+            $usuario_id,
+            'excluir_produto',
+            'produto',
+            $produto_id,
+            $antes,
+            null
+        );
 
         $conn->commit();
 
