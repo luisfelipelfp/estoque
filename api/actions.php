@@ -85,11 +85,11 @@ function read_body(): array
     $contentType = strtolower(trim((string)($_SERVER['CONTENT_TYPE'] ?? '')));
     $raw = file_get_contents('php://input');
 
-    if (
-        function_exists('str_contains')
-            ? str_contains($contentType, 'application/json')
-            : strpos($contentType, 'application/json') !== false
-    ) {
+    $isJson = function_exists('str_contains')
+        ? str_contains($contentType, 'application/json')
+        : strpos($contentType, 'application/json') !== false;
+
+    if ($isJson) {
         $json = json_decode($raw, true);
         $cache = is_array($json) ? $json : [];
         return $cache;
@@ -204,7 +204,7 @@ function normalizar_login(string $login): string
     return lower_text($login);
 }
 
-function normalizar_fornecedores_payload(mysqli $conn, mixed $fornecedoresRaw): array
+function normalizar_fornecedores_payload(mysqli $conn, $fornecedoresRaw): array
 {
     if (!is_array($fornecedoresRaw) || empty($fornecedoresRaw)) {
         return [];
@@ -469,6 +469,7 @@ try {
             require_once __DIR__ . '/usuarios.php';
             $usuario = require_auth();
             usuarios_require_admin($usuario);
+
             $res = usuarios_listar($conn);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
         }
@@ -538,6 +539,7 @@ try {
         case 'listar_fornecedores': {
             require_once __DIR__ . '/fornecedores.php';
             require_auth();
+
             $res = fornecedores_listar($conn);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
         }
@@ -588,6 +590,7 @@ try {
         case 'listar_produtos': {
             require_once __DIR__ . '/produtos.php';
             require_auth();
+
             $res = produtos_listar($conn);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
         }
@@ -633,13 +636,13 @@ try {
         }
 
         case 'criar_produto': {
-             require_once __DIR__ . '/produtos.php';
-             $usuario = require_auth();
+            require_once __DIR__ . '/produtos.php';
+            $usuario = require_auth();
 
-             $nome = trim((string)($body['nome'] ?? ''));
+            $nome = trim((string)($body['nome'] ?? ''));
             $ncm = isset($body['ncm']) ? trim((string)$body['ncm']) : null;
-             $qtd = (int)($body['quantidade'] ?? 0);
-             $estoqueMinimo = (int)($body['estoque_minimo'] ?? 0);
+            $qtd = (int)($body['quantidade'] ?? 0);
+            $estoqueMinimo = (int)($body['estoque_minimo'] ?? 0);
 
             if ($nome === '') {
                 json_response(false, 'Nome do produto obrigatório.', null, 400);
@@ -647,14 +650,14 @@ try {
 
             if ($qtd < 0) {
                 json_response(false, 'Quantidade inválida.', null, 400);
-             }
+            }
 
-             if ($estoqueMinimo < 0) {
+            if ($estoqueMinimo < 0) {
                 json_response(false, 'Estoque mínimo inválido.', null, 400);
-             }
+            }
 
             try {
-                 $fornecedores = normalizar_fornecedores_payload($conn, $body['fornecedores'] ?? []);
+                $fornecedores = normalizar_fornecedores_payload($conn, $body['fornecedores'] ?? []);
             } catch (InvalidArgumentException $e) {
                 json_response(false, $e->getMessage(), null, 400);
             }
@@ -663,9 +666,9 @@ try {
                 $conn,
                 $nome,
                 $ncm,
-                 $qtd,
-                 $estoqueMinimo,
-                 (int)$usuario['id'],
+                $qtd,
+                $estoqueMinimo,
+                (int)$usuario['id'],
                 null,
                 null,
                 $fornecedores
@@ -675,7 +678,7 @@ try {
         }
 
         case 'atualizar_produto': {
-             require_once __DIR__ . '/produtos.php';
+            require_once __DIR__ . '/produtos.php';
             $usuario = require_auth();
 
             $produtoId = (int)($body['produto_id'] ?? 0);
@@ -700,27 +703,11 @@ try {
                 json_response(false, 'Estoque mínimo inválido.', null, 400);
             }
 
-    try {
-        $fornecedores = normalizar_fornecedores_payload($conn, $body['fornecedores'] ?? []);
-    } catch (InvalidArgumentException $e) {
-        json_response(false, $e->getMessage(), null, 400);
-    }
-
-    $res = produtos_atualizar(
-        $conn,
-        $produtoId,
-        $nome,
-        $ncm,
-        $qtd,
-        $estoqueMinimo,
-        0.0,
-        0.0,
-        (int)$usuario['id'],
-        $fornecedores
-    );
-
-    json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
-}
+            try {
+                $fornecedores = normalizar_fornecedores_payload($conn, $body['fornecedores'] ?? []);
+            } catch (InvalidArgumentException $e) {
+                json_response(false, $e->getMessage(), null, 400);
+            }
 
             $res = produtos_atualizar(
                 $conn,
@@ -729,8 +716,8 @@ try {
                 $ncm,
                 $qtd,
                 $estoqueMinimo,
-                $precoCusto,
-                $precoVenda,
+                0.0,
+                0.0,
                 (int)$usuario['id'],
                 $fornecedores
             );
