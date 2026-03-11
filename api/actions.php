@@ -45,6 +45,42 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
+register_shutdown_function(function (): void {
+    $error = error_get_last();
+
+    if (!$error) {
+        return;
+    }
+
+    $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+    if (!in_array((int)$error['type'], $fatalTypes, true)) {
+        return;
+    }
+
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+    }
+
+    logError('actions', 'Fatal shutdown', [
+        'type'    => $error['type'] ?? null,
+        'message' => $error['message'] ?? '',
+        'file'    => $error['file'] ?? '',
+        'line'    => $error['line'] ?? 0,
+    ]);
+
+    echo json_encode([
+        'sucesso' => false,
+        'mensagem' => 'Erro fatal no servidor.',
+        'debug' => [
+            'message' => (string)($error['message'] ?? ''),
+            'file'    => (string)($error['file'] ?? ''),
+            'line'    => (int)($error['line'] ?? 0),
+            'type'    => (int)($error['type'] ?? 0),
+        ]
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+});
+
 function set_cors_origin(): void
 {
     $origin = trim((string)($_SERVER['HTTP_ORIGIN'] ?? ''));
@@ -323,14 +359,8 @@ function tabela_existe(mysqli $conn, string $nomeTabela): bool
 
 function home_obter_conteudo(mysqli $conn): array
 {
-    $frase = [
-        'texto' => '',
-        'autor' => '',
-    ];
-
-    $imagem = [
-        'caminho' => '',
-    ];
+    $frase = ['texto' => '', 'autor' => ''];
+    $imagem = ['caminho' => ''];
 
     if (tabela_existe($conn, 'frases_home')) {
         $sqlFrase = "
@@ -917,5 +947,9 @@ try {
         'erro'    => $e->getMessage()
     ]);
 
-    json_response(false, 'Erro interno no servidor.', null, 500);
+    json_response(false, 'Erro interno no servidor.', [
+        'erro'    => $e->getMessage(),
+        'arquivo' => $e->getFile(),
+        'linha'   => $e->getLine(),
+    ], 500);
 }
