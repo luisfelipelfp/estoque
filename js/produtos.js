@@ -1,4 +1,3 @@
-// js/produtos.js
 import { apiRequest } from "./api.js";
 import { logJsInfo, logJsError } from "./logger.js";
 
@@ -13,30 +12,6 @@ function escapeHtml(s) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
-}
-
-function formatBRL(valor) {
-  const n = Number(valor || 0);
-  return `R$ ${n.toLocaleString("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })}`;
-}
-
-function calcularLucro(precoCusto, precoVenda) {
-  return Number(precoVenda || 0) - Number(precoCusto || 0);
-}
-
-function formatMargem(precoCusto, precoVenda) {
-  const venda = Number(precoVenda || 0);
-  const lucro = calcularLucro(precoCusto, precoVenda);
-  if (venda <= 0) return "0,00%";
-
-  const margem = (lucro / venda) * 100;
-  return `${margem.toLocaleString("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })}%`;
 }
 
 function normalizarNcm(valor) {
@@ -261,8 +236,6 @@ function criarFornecedorVazio() {
     fornecedor_id: "",
     nome: "",
     codigo: "",
-    preco_custo: "",
-    preco_venda: "",
     observacao: "",
     principal: 0
   };
@@ -302,25 +275,6 @@ function obterNomeFornecedorPorId(fornecedorId) {
     (f) => Number(f?.id ?? 0) === Number(fornecedorId)
   );
   return item?.nome ?? "";
-}
-
-function atualizarResumoFornecedorNoDOM(index) {
-  const custoInput = document.querySelector(`[data-campo="preco_custo"][data-index="${index}"]`);
-  const vendaInput = document.querySelector(`[data-campo="preco_venda"][data-index="${index}"]`);
-  const lucroInput = document.querySelector(`[data-lucro-index="${index}"]`);
-  const margemEl = document.querySelector(`[data-margem-index="${index}"]`);
-
-  const precoCusto = Number(custoInput?.value || 0);
-  const precoVenda = Number(vendaInput?.value || 0);
-  const lucro = calcularLucro(precoCusto, precoVenda);
-
-  if (lucroInput) {
-    lucroInput.value = formatBRL(lucro);
-  }
-
-  if (margemEl) {
-    margemEl.textContent = `Margem estimada: ${formatMargem(precoCusto, precoVenda)}`;
-  }
 }
 
 function atualizarTituloFornecedorNoDOM(index, valor) {
@@ -375,10 +329,6 @@ function atualizarFornecedor(index, campo, valor) {
     return;
   }
 
-  if (campo === "preco_custo" || campo === "preco_venda") {
-    atualizarResumoFornecedorNoDOM(index);
-  }
-
   if (campo === "nome") {
     atualizarTituloFornecedorNoDOM(index, valor);
   }
@@ -424,9 +374,6 @@ function montarOptionsFornecedor(fornecedor, indexAtual) {
 }
 
 function criarFornecedorCard(fornecedor, index) {
-  const precoCusto = Number(fornecedor?.preco_custo || 0);
-  const precoVenda = Number(fornecedor?.preco_venda || 0);
-  const lucro = calcularLucro(precoCusto, precoVenda);
   const principal = Number(fornecedor?.principal || 0) === 1;
   const tituloFornecedor = escapeHtml((fornecedor?.nome ?? "").trim() || `Fornecedor ${index + 1}`);
   const fornecedorSelecionado = Number(fornecedor?.fornecedor_id ?? 0) > 0;
@@ -467,7 +414,7 @@ function criarFornecedorCard(fornecedor, index) {
 
         ${principal ? `
           <div class="alert alert-primary py-2 mb-3">
-            Este é o fornecedor principal usado como referência do produto.
+            Este é o fornecedor principal usado como referência de vínculo do produto.
           </div>
         ` : ""}
 
@@ -492,53 +439,6 @@ function criarFornecedorCard(fornecedor, index) {
               data-index="${index}"
               placeholder="Ex.: 83921"
             >
-          </div>
-
-          <div class="col-12 col-lg-4">
-            <label class="form-label">Preço de custo</label>
-            <div class="input-group">
-              <span class="input-group-text">R$</span>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                class="form-control"
-                value="${escapeHtml(fornecedor?.preco_custo ?? "")}"
-                data-campo="preco_custo"
-                data-index="${index}"
-                placeholder="0,00"
-              >
-            </div>
-          </div>
-
-          <div class="col-12 col-lg-4">
-            <label class="form-label">Preço de venda</label>
-            <div class="input-group">
-              <span class="input-group-text">R$</span>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                class="form-control"
-                value="${escapeHtml(fornecedor?.preco_venda ?? "")}"
-                data-campo="preco_venda"
-                data-index="${index}"
-                placeholder="0,00"
-              >
-            </div>
-          </div>
-
-          <div class="col-12 col-lg-4">
-            <label class="form-label">Lucro estimado</label>
-            <input
-              class="form-control"
-              value="${formatBRL(lucro)}"
-              readonly
-              data-lucro-index="${index}"
-            >
-            <div class="form-text" data-margem-index="${index}">
-              Margem estimada: ${formatMargem(precoCusto, precoVenda)}
-            </div>
           </div>
 
           <div class="col-12">
@@ -647,8 +547,6 @@ async function abrirModalProdutoExistente(produtoId) {
       fornecedor_id: String(f?.fornecedor_id ?? ""),
       nome: f?.nome ?? "",
       codigo: f?.codigo ?? "",
-      preco_custo: String(valorSeguroNumero(f?.preco_custo, 0)),
-      preco_venda: String(valorSeguroNumero(f?.preco_venda, 0)),
       observacao: f?.observacao ?? "",
       principal: Number(f?.principal ?? 0) === 1 ? 1 : 0
     }));
@@ -673,8 +571,6 @@ function fornecedoresValidosParaEnvio() {
         fornecedor_id: fornecedorId,
         nome: String(nome ?? "").trim(),
         codigo: String(f?.codigo ?? "").trim(),
-        preco_custo: Number(f?.preco_custo || 0),
-        preco_venda: Number(f?.preco_venda || 0),
         observacao: String(f?.observacao ?? "").trim(),
         principal: Number(f?.principal ?? 0) === 1 ? 1 : 0
       };
@@ -706,15 +602,6 @@ async function salvarProduto() {
   }
 
   const fornecedores = fornecedoresValidosParaEnvio();
-
-  const fornecedoresComErro = fornecedores.find(
-    (f) => f.preco_custo < 0 || f.preco_venda < 0
-  );
-
-  if (fornecedoresComErro) {
-    setStatusMensagem("Os preços dos fornecedores devem ser maiores ou iguais a zero.", "erro");
-    return;
-  }
 
   const fornecedorDuplicado = fornecedores.find((f, index) =>
     fornecedores.findIndex((x) => Number(x.fornecedor_id) === Number(f.fornecedor_id)) !== index

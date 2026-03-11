@@ -1,5 +1,3 @@
-/* ===== Estilos específicos da área de Produtos ===== */
-
 #tabelaProdutos {
   border-radius: 8px;
   overflow: hidden;
@@ -65,12 +63,8 @@
   letter-spacing: 0.06em;
 }
 
-#listaFornecedores .form-text {
-  min-height: 20px;
-}
-
 @media (max-width: 991px) {
   #modalProduto .modal-dialog {
     margin: 0.75rem;
   }
-}
+}   
