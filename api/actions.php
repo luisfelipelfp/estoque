@@ -70,6 +70,17 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
     exit;
 }
 
+function lower_text(string $value): string
+{
+    $value = trim($value);
+
+    if (function_exists('mb_strtolower')) {
+        return mb_strtolower($value, 'UTF-8');
+    }
+
+    return strtolower($value);
+}
+
 function read_body(): array
 {
     $contentType = strtolower(trim((string)($_SERVER['CONTENT_TYPE'] ?? '')));
@@ -182,7 +193,7 @@ function require_auth(): array
 
 function normalizar_login(string $login): string
 {
-    return trim(mb_strtolower($login));
+    return lower_text($login);
 }
 
 function normalizar_fornecedores_payload(mysqli $conn, mixed $fornecedoresRaw): array
