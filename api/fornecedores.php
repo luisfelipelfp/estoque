@@ -26,6 +26,65 @@ function fornecedor_email_valido(string $email): bool
     return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
 }
 
+function fornecedor_total_produtos(mysqli $conn, int $fornecedorId): int
+{
+    $stmt = $conn->prepare("
+        SELECT COUNT(DISTINCT produto_id) AS total
+        FROM produto_fornecedores
+        WHERE fornecedor_id = ?
+    ");
+    if (!$stmt) {
+        throw new RuntimeException('Erro ao contar produtos do fornecedor.');
+    }
+
+    $stmt->bind_param('i', $fornecedorId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return (int)($row['total'] ?? 0);
+}
+
+function fornecedor_produtos_listar(mysqli $conn, int $fornecedorId): array
+{
+    $sql = "
+        SELECT
+            p.id,
+            p.nome,
+            COALESCE(pf.codigo_produto_fornecedor, '') AS codigo_produto_fornecedor,
+            COALESCE(pf.observacao, '') AS observacao,
+            COALESCE(pf.principal, 0) AS principal
+        FROM produto_fornecedores pf
+        INNER JOIN produtos p
+            ON p.id = pf.produto_id
+        WHERE pf.fornecedor_id = ?
+        ORDER BY p.nome ASC
+    ";
+
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new RuntimeException('Erro ao listar produtos do fornecedor.');
+    }
+
+    $stmt->bind_param('i', $fornecedorId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+
+    $dados = [];
+    while ($row = $res->fetch_assoc()) {
+        $dados[] = [
+            'produto_id'                => (int)$row['id'],
+            'produto_nome'              => (string)$row['nome'],
+            'codigo_produto_fornecedor' => (string)$row['codigo_produto_fornecedor'],
+            'observacao'                => (string)$row['observacao'],
+            'principal'                 => (int)$row['principal'],
+        ];
+    }
+
+    $stmt->close();
+    return $dados;
+}
+
 function fornecedor_snapshot(mysqli $conn, int $fornecedorId): ?array
 {
     if ($fornecedorId <= 0) {
@@ -73,25 +132,6 @@ function fornecedor_snapshot(mysqli $conn, int $fornecedorId): ?array
     ];
 }
 
-function fornecedor_total_produtos(mysqli $conn, int $fornecedorId): int
-{
-    $stmt = $conn->prepare("
-        SELECT COUNT(DISTINCT produto_id) AS total
-        FROM produto_fornecedores
-        WHERE fornecedor_id = ?
-    ");
-    if (!$stmt) {
-        throw new RuntimeException('Erro ao contar produtos do fornecedor.');
-    }
-
-    $stmt->bind_param('i', $fornecedorId);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-
-    return (int)($row['total'] ?? 0);
-}
-
 function fornecedores_registrar_auditoria_segura(
     mysqli $conn,
     ?int $usuarioId,
@@ -113,10 +153,10 @@ function fornecedores_registrar_auditoria_segura(
 
     if (!$ok) {
         logWarning('fornecedores', 'Falha ao registrar auditoria de fornecedor', [
-            'acao'         => $acao,
-            'entidade'     => $entidade,
-            'entidade_id'  => $entidadeId,
-            'usuario_id'   => $usuarioId
+            'acao'        => $acao,
+            'entidade'    => $entidade,
+            'entidade_id' => $entidadeId,
+            'usuario_id'  => $usuarioId
         ]);
     }
 }
@@ -194,46 +234,6 @@ function fornecedores_listar(mysqli $conn): array
 
         return resposta(false, 'Erro ao listar fornecedores.', []);
     }
-}
-
-function fornecedor_produtos_listar(mysqli $conn, int $fornecedorId): array
-{
-    $sql = "
-        SELECT
-            p.id,
-            p.nome,
-            COALESCE(pf.codigo_produto_fornecedor, '') AS codigo_produto_fornecedor,
-            COALESCE(pf.observacao, '') AS observacao,
-            COALESCE(pf.principal, 0) AS principal
-        FROM produto_fornecedores pf
-        INNER JOIN produtos p
-            ON p.id = pf.produto_id
-        WHERE pf.fornecedor_id = ?
-        ORDER BY p.nome ASC
-    ";
-
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        throw new RuntimeException('Erro ao listar produtos do fornecedor.');
-    }
-
-    $stmt->bind_param('i', $fornecedorId);
-    $stmt->execute();
-    $res = $stmt->get_result();
-
-    $dados = [];
-    while ($row = $res->fetch_assoc()) {
-        $dados[] = [
-            'produto_id'                => (int)$row['id'],
-            'produto_nome'              => (string)$row['nome'],
-            'codigo_produto_fornecedor' => (string)$row['codigo_produto_fornecedor'],
-            'observacao'                => (string)$row['observacao'],
-            'principal'                 => (int)$row['principal'],
-        ];
-    }
-
-    $stmt->close();
-    return $dados;
 }
 
 function fornecedor_obter(mysqli $conn, int $fornecedorId): array
@@ -350,19 +350,21 @@ function fornecedor_salvar(
             $stmtDupCnpj = $conn->prepare("
                 SELECT id
                 FROM fornecedores
-                WHERE REGEXP_REPLACE(COALESCE(cnpj, ''), '[^0-9]', '') = ?
+                WHERE REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj, ''), '.', ''), '-', ''), '/', ''), ' ', '') = ?
                   AND id <> ?
                 LIMIT 1
             ");
-            if ($stmtDupCnpj) {
-                $stmtDupCnpj->bind_param('si', $cnpj, $fornecedorId);
-                $stmtDupCnpj->execute();
-                $dupCnpj = $stmtDupCnpj->get_result()->fetch_assoc();
-                $stmtDupCnpj->close();
+            if (!$stmtDupCnpj) {
+                return resposta(false, 'Erro ao validar CNPJ do fornecedor.', null);
+            }
 
-                if ($dupCnpj) {
-                    return resposta(false, 'Já existe um fornecedor com esse CNPJ.', null);
-                }
+            $stmtDupCnpj->bind_param('si', $cnpj, $fornecedorId);
+            $stmtDupCnpj->execute();
+            $dupCnpj = $stmtDupCnpj->get_result()->fetch_assoc();
+            $stmtDupCnpj->close();
+
+            if ($dupCnpj) {
+                return resposta(false, 'Já existe um fornecedor com esse CNPJ.', null);
             }
         }
 
@@ -434,6 +436,7 @@ function fornecedor_salvar(
                 (?, ?, ?, ?, ?, ?)
         ");
         if (!$stmt) {
+            $conn->rollback();
             return resposta(false, 'Erro ao cadastrar fornecedor.', null);
         }
 
