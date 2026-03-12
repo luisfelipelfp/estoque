@@ -69,6 +69,18 @@
   padding: 14px 16px;
 }
 
+.estoque-alerta-modal {
+  border-radius: 14px;
+  border: 1px solid #ffe08a;
+  background: #fff8e1;
+  color: #7a5a00;
+  padding: 12px 14px;
+}
+
+.estoque-alerta-modal strong {
+  font-weight: 700;
+}
+
 /* =========================
    Lista de sugestões
    ========================= */

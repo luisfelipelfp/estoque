@@ -217,7 +217,8 @@ function renderTabela(produtos) {
 
   tbody.innerHTML = produtos.map((p) => {
     const id = Number(p?.id ?? 0);
-    const nome = escapeHtml(p?.nome ?? "");
+    const nomeEscapado = escapeHtml(p?.nome ?? "");
+    const nomeOriginal = String(p?.nome ?? "");
     const qtd = Number(p?.quantidade ?? 0);
     const estoqueMinimo = Number(p?.estoque_minimo ?? 0);
     const status = obterStatusEstoque(p);
@@ -225,7 +226,7 @@ function renderTabela(produtos) {
     return `
       <tr class="${status.linhaClasse}">
         <td>${id}</td>
-        <td>${nome}</td>
+        <td>${nomeEscapado}</td>
         <td>
           <span class="badge ${status.emBaixa ? "bg-danger" : "bg-primary"}">${qtd}</span>
         </td>
@@ -240,7 +241,7 @@ function renderTabela(produtos) {
               type="button"
               data-acao="entrada"
               data-id="${id}"
-              data-nome="${nome}"
+              data-nome="${escapeHtml(nomeOriginal)}"
             >
               Entrada
             </button>
@@ -249,7 +250,7 @@ function renderTabela(produtos) {
               type="button"
               data-acao="saida"
               data-id="${id}"
-              data-nome="${nome}"
+              data-nome="${escapeHtml(nomeOriginal)}"
             >
               Saída
             </button>
@@ -441,6 +442,68 @@ function renderUltimasMovimentacoes(prefixo, movs) {
   }).join("");
 }
 
+function atualizarAlertaModal(prefixo, produto) {
+  const box = $(`${prefixo}AlertaEstoqueBox`);
+  const texto = $(`${prefixo}AlertaEstoqueTexto`);
+
+  if (!box || !texto) return;
+
+  const qtdAtual = Number(produto?.quantidade ?? 0);
+  const estoqueMinimo = Number(produto?.estoque_minimo ?? 0);
+  const status = obterStatusEstoque({
+    quantidade: qtdAtual,
+    estoque_minimo: estoqueMinimo
+  });
+
+  if (prefixo === "entrada") {
+    if (status.chave === "normal") {
+      box.classList.add("d-none");
+      texto.textContent = "";
+      return;
+    }
+
+    if (status.chave === "zerado") {
+      texto.textContent = "Este produto está sem estoque. Registre a entrada para reabastecer o item.";
+    } else {
+      texto.textContent = "Este produto está abaixo do estoque mínimo. Uma nova entrada pode normalizar o saldo.";
+    }
+
+    box.classList.remove("d-none");
+    return;
+  }
+
+  if (prefixo === "saida") {
+    if (status.chave === "zerado") {
+      texto.textContent = "Este produto já está sem estoque. Não será possível registrar saída enquanto o saldo não for reabastecido.";
+      box.classList.remove("d-none");
+      return;
+    }
+
+    if (status.chave === "baixo") {
+      texto.textContent = "Este produto já está com estoque baixo. Registrar uma saída pode agravar a situação.";
+      box.classList.remove("d-none");
+      return;
+    }
+
+    const saldoAposSaida = qtdAtual - Number($("saidaQuantidade")?.value ?? 0);
+
+    if (saldoAposSaida <= 0) {
+      texto.textContent = "Atenção: esta saída deixará o produto sem estoque.";
+      box.classList.remove("d-none");
+      return;
+    }
+
+    if (saldoAposSaida <= estoqueMinimo) {
+      texto.textContent = "Atenção: esta saída deixará o produto abaixo do estoque mínimo.";
+      box.classList.remove("d-none");
+      return;
+    }
+
+    box.classList.add("d-none");
+    texto.textContent = "";
+  }
+}
+
 function preencherResumoBasico(prefixo, produto) {
   const qtdAtual = Number(produto?.quantidade ?? 0);
   const estoqueMinimo = Number(produto?.estoque_minimo ?? 0);
@@ -457,6 +520,8 @@ function preencherResumoBasico(prefixo, produto) {
     alertaEl.textContent = status.alertaTexto;
     alertaEl.className = status.alertaClasse;
   }
+
+  atualizarAlertaModal(prefixo, produto);
 }
 
 function resetResumo(prefixo) {
@@ -478,6 +543,11 @@ function resetResumo(prefixo) {
   if (btnHistorico) {
     btnHistorico.disabled = true;
   }
+
+  const alertaBox = $(`${prefixo}AlertaEstoqueBox`);
+  const alertaTexto = $(`${prefixo}AlertaEstoqueTexto`);
+  if (alertaBox) alertaBox.classList.add("d-none");
+  if (alertaTexto) alertaTexto.textContent = "";
 }
 
 function montarFornecedorOptions(vinculados = []) {
@@ -611,6 +681,7 @@ async function carregarResumoProduto(prefixo, produtoId) {
     if (saidaValor && !saidaValor.value && precoVenda > 0) {
       saidaValor.value = String(precoVenda);
     }
+    atualizarAlertaModal("saida", produto);
   }
 }
 
@@ -697,6 +768,17 @@ function ajustarQuantidade(idCampo, delta) {
   const atual = Number(input.value ?? 1);
   const novo = Math.max(1, (Number.isFinite(atual) ? atual : 1) + delta);
   input.value = String(novo);
+
+  if (idCampo === "saidaQuantidade") {
+    const produtoId = Number($("saidaProdutoId")?.value ?? 0);
+    if (produtoId > 0) {
+      const detalhe = produtoDetalheCache.get(produtoId);
+      const produto = detalhe?.resumo?.produto || detalhe?.produto || getProdutoCache(produtoId);
+      if (produto) {
+        atualizarAlertaModal("saida", produto);
+      }
+    }
+  }
 }
 
 function limparModalEntrada() {
@@ -987,6 +1069,17 @@ function bindModais() {
   $("entradaQtdMais")?.addEventListener("click", () => ajustarQuantidade("entradaQuantidade", 1));
   $("saidaQtdMenos")?.addEventListener("click", () => ajustarQuantidade("saidaQuantidade", -1));
   $("saidaQtdMais")?.addEventListener("click", () => ajustarQuantidade("saidaQuantidade", 1));
+
+  $("saidaQuantidade")?.addEventListener("input", () => {
+    const produtoId = Number($("saidaProdutoId")?.value ?? 0);
+    if (produtoId <= 0) return;
+
+    const detalhe = produtoDetalheCache.get(produtoId);
+    const produto = detalhe?.resumo?.produto || detalhe?.produto || getProdutoCache(produtoId);
+    if (produto) {
+      atualizarAlertaModal("saida", produto);
+    }
+  });
 
   $("entradaSalvar")?.addEventListener("click", salvarEntrada);
   $("saidaSalvar")?.addEventListener("click", salvarSaida);

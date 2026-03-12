@@ -776,6 +776,10 @@ try {
             require_once __DIR__ . '/movimentacoes.php';
             require_auth();
 
+            if (!function_exists('mov_obter')) {
+                json_response(false, 'Função mov_obter não está disponível no arquivo api/movimentacoes.php.', null, 500);
+            }
+
             $movimentacaoId = (int)($_GET['movimentacao_id'] ?? $body['movimentacao_id'] ?? 0);
             if ($movimentacaoId <= 0) {
                 json_response(false, 'Movimentação inválida.', null, 400);
