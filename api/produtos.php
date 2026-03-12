@@ -49,6 +49,46 @@ function coluna_existe(mysqli $conn, string $tabela, string $coluna): bool
     return $ok;
 }
 
+function produto_normalizar_nome(string $nome): string
+{
+    return trim($nome);
+}
+
+function produto_nome_para_comparacao(string $nome): string
+{
+    $nome = trim($nome);
+
+    if (function_exists('mb_strtolower')) {
+        return mb_strtolower($nome, 'UTF-8');
+    }
+
+    return strtolower($nome);
+}
+
+function produto_nome_duplicado(mysqli $conn, string $nome, int $ignorarProdutoId = 0): bool
+{
+    $nomeComparacao = produto_nome_para_comparacao($nome);
+
+    $stmt = $conn->prepare("
+        SELECT id
+        FROM produtos
+        WHERE LOWER(TRIM(nome)) = ?
+          AND id <> ?
+        LIMIT 1
+    ");
+
+    if (!$stmt) {
+        throw new RuntimeException('Erro ao validar nome do produto.');
+    }
+
+    $stmt->bind_param('si', $nomeComparacao, $ignorarProdutoId);
+    $stmt->execute();
+    $duplicado = (bool)$stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return $duplicado;
+}
+
 function normalizar_ncm(?string $ncm): ?string
 {
     $valor = preg_replace('/\D+/', '', (string)$ncm) ?? '';
@@ -79,6 +119,12 @@ function normalizar_fornecedores(array $fornecedores): array
         $nome = trim((string)($f['nome'] ?? ''));
         $codigo = trim((string)($f['codigo'] ?? ''));
         $observacao = trim((string)($f['observacao'] ?? ''));
+        $precoCusto = isset($f['preco_custo']) && $f['preco_custo'] !== ''
+            ? (float)$f['preco_custo']
+            : 0.0;
+        $precoVenda = isset($f['preco_venda']) && $f['preco_venda'] !== ''
+            ? (float)$f['preco_venda']
+            : 0.0;
         $principal = !empty($f['principal']) ? 1 : 0;
 
         if ($fornecedorId <= 0) {
@@ -86,15 +132,19 @@ function normalizar_fornecedores(array $fornecedores): array
         }
 
         if (in_array($fornecedorId, $idsUsados, true)) {
-            continue;
+            throw new InvalidArgumentException('O mesmo fornecedor não pode ser adicionado mais de uma vez para o mesmo produto.');
+        }
+
+        if ($precoCusto < 0 || $precoVenda < 0) {
+            throw new InvalidArgumentException('Os preços dos fornecedores devem ser maiores ou iguais a zero.');
         }
 
         $out[] = [
             'fornecedor_id' => $fornecedorId,
             'nome'          => $nome,
             'codigo'        => $codigo,
-            'preco_custo'   => 0.0,
-            'preco_venda'   => 0.0,
+            'preco_custo'   => $precoCusto,
+            'preco_venda'   => $precoVenda,
             'observacao'    => $observacao,
             'principal'     => $principal,
         ];
@@ -138,7 +188,13 @@ function validar_fornecedores_existentes(mysqli $conn, array $fornecedores): voi
         return;
     }
 
-    $stmt = $conn->prepare('SELECT id FROM fornecedores WHERE id = ? LIMIT 1');
+    $stmt = $conn->prepare("
+        SELECT id, nome, ativo
+        FROM fornecedores
+        WHERE id = ?
+        LIMIT 1
+    ");
+
     if (!$stmt) {
         throw new RuntimeException('Erro ao validar fornecedores do produto.');
     }
@@ -159,6 +215,11 @@ function validar_fornecedores_existentes(mysqli $conn, array $fornecedores): voi
             $stmt->close();
             throw new InvalidArgumentException('Fornecedor informado não existe.');
         }
+
+        if ((int)($existe['ativo'] ?? 1) !== 1) {
+            $stmt->close();
+            throw new InvalidArgumentException('Fornecedor informado está inativo.');
+        }
     }
 
     $stmt->close();
@@ -175,7 +236,10 @@ function produto_fornecedores_salvar(mysqli $conn, int $produto_id, array $forne
     }
 
     $stmtDel->bind_param('i', $produto_id);
-    $stmtDel->execute();
+    if (!$stmtDel->execute()) {
+        $stmtDel->close();
+        throw new RuntimeException('Erro ao remover fornecedores antigos do produto.');
+    }
     $stmtDel->close();
 
     if (empty($fornecedores)) {
@@ -195,8 +259,8 @@ function produto_fornecedores_salvar(mysqli $conn, int $produto_id, array $forne
     foreach ($fornecedores as $f) {
         $fornecedorId = (int)$f['fornecedor_id'];
         $codigo = $f['codigo'] !== '' ? (string)$f['codigo'] : null;
-        $precoCusto = 0.0;
-        $precoVenda = 0.0;
+        $precoCusto = (float)$f['preco_custo'];
+        $precoVenda = (float)$f['preco_venda'];
         $observacao = $f['observacao'] !== '' ? (string)$f['observacao'] : null;
         $principal = (int)$f['principal'];
 
@@ -210,7 +274,11 @@ function produto_fornecedores_salvar(mysqli $conn, int $produto_id, array $forne
             $observacao,
             $principal
         );
-        $stmtIns->execute();
+
+        if (!$stmtIns->execute()) {
+            $stmtIns->close();
+            throw new RuntimeException('Erro ao inserir fornecedor do produto.');
+        }
     }
 
     $stmtIns->close();
@@ -263,10 +331,76 @@ function produto_fornecedores_listar(mysqli $conn, int $produto_id): array
 
 function fornecedor_principal_preco(array $fornecedores): array
 {
+    if (empty($fornecedores)) {
+        return [
+            'preco_custo' => 0.0,
+            'preco_venda' => 0.0,
+        ];
+    }
+
+    foreach ($fornecedores as $f) {
+        if ((int)($f['principal'] ?? 0) === 1) {
+            return [
+                'preco_custo' => (float)($f['preco_custo'] ?? 0),
+                'preco_venda' => (float)($f['preco_venda'] ?? 0),
+            ];
+        }
+    }
+
     return [
-        'preco_custo' => 0.0,
-        'preco_venda' => 0.0,
+        'preco_custo' => (float)($fornecedores[0]['preco_custo'] ?? 0),
+        'preco_venda' => (float)($fornecedores[0]['preco_venda'] ?? 0),
     ];
+}
+
+function produto_tem_movimentacoes(mysqli $conn, int $produto_id): bool
+{
+    $stmt = $conn->prepare("
+        SELECT 1
+        FROM movimentacoes
+        WHERE produto_id = ?
+        LIMIT 1
+    ");
+
+    if (!$stmt) {
+        throw new RuntimeException('Erro ao validar movimentações do produto.');
+    }
+
+    $stmt->bind_param('i', $produto_id);
+    $stmt->execute();
+    $tem = (bool)$stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return $tem;
+}
+
+function produtos_registrar_auditoria_segura(
+    mysqli $conn,
+    ?int $usuarioId,
+    string $acao,
+    string $entidade,
+    ?int $entidadeId,
+    mixed $dadosAnteriores,
+    mixed $dadosNovos
+): void {
+    $ok = auditoria_registrar(
+        $conn,
+        $usuarioId,
+        $acao,
+        $entidade,
+        $entidadeId,
+        $dadosAnteriores,
+        $dadosNovos
+    );
+
+    if (!$ok) {
+        logWarning('produtos', 'Falha ao registrar auditoria do produto', [
+            'acao'        => $acao,
+            'entidade'    => $entidade,
+            'entidade_id' => $entidadeId,
+            'usuario_id'  => $usuarioId
+        ]);
+    }
 }
 
 function produto_auditoria_snapshot(mysqli $conn, int $produto_id): ?array
@@ -343,7 +477,7 @@ function produtos_listar(mysqli $conn): array
                 " . ($hasCusto ? ",COALESCE(preco_custo,0) AS preco_custo" : ",0 AS preco_custo") . "
                 " . ($hasVenda ? ",COALESCE(preco_venda,0) AS preco_venda" : ",0 AS preco_venda") . "
             FROM produtos
-            ORDER BY nome ASC,id ASC
+            ORDER BY COALESCE(ativo, 1) DESC, nome ASC, id ASC
         ";
 
         $res = $conn->query($sql);
@@ -453,6 +587,7 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
         $hasCusto = coluna_existe($conn, 'produtos', 'preco_custo');
         $hasEstoqueMinimo = coluna_existe($conn, 'produtos', 'estoque_minimo');
         $hasNcm = coluna_existe($conn, 'produtos', 'ncm');
+        $hasAtivo = coluna_existe($conn, 'produtos', 'ativo');
 
         $like = '%' . $q . '%';
 
@@ -464,9 +599,10 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
                 quantidade
                 " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo, 0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
                 " . ($hasCusto ? ", COALESCE(preco_custo, 0) AS preco_custo" : ", 0 AS preco_custo") . "
+                " . ($hasAtivo ? ", COALESCE(ativo, 1) AS ativo" : ", 1 AS ativo") . "
             FROM produtos
-            WHERE nome LIKE ?
-            " . ($hasNcm ? "OR ncm LIKE ?" : "") . "
+            WHERE (" . ($hasNcm ? "nome LIKE ? OR ncm LIKE ?" : "nome LIKE ?") . ")
+              " . ($hasAtivo ? "AND COALESCE(ativo, 1) = 1" : "") . "
             ORDER BY nome ASC
             LIMIT ?
         ";
@@ -494,6 +630,7 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
                 'quantidade'     => (int)$r['quantidade'],
                 'estoque_minimo' => (int)$r['estoque_minimo'],
                 'preco_custo'    => (float)$r['preco_custo'],
+                'ativo'          => (int)$r['ativo'],
             ];
         }
 
@@ -518,6 +655,7 @@ function produto_resumo(mysqli $conn, int $produto_id): array
         $hasCusto = coluna_existe($conn, 'produtos', 'preco_custo');
         $hasEstoqueMinimo = coluna_existe($conn, 'produtos', 'estoque_minimo');
         $hasNcm = coluna_existe($conn, 'produtos', 'ncm');
+        $hasAtivo = coluna_existe($conn, 'produtos', 'ativo');
 
         $sqlP = "
             SELECT
@@ -527,6 +665,7 @@ function produto_resumo(mysqli $conn, int $produto_id): array
                 quantidade
                 " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo, 0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
                 " . ($hasCusto ? ", COALESCE(preco_custo, 0) AS preco_custo" : ", 0 AS preco_custo") . "
+                " . ($hasAtivo ? ", COALESCE(ativo, 1) AS ativo" : ", 1 AS ativo") . "
             FROM produtos
             WHERE id = ?
             LIMIT 1
@@ -590,6 +729,7 @@ function produto_resumo(mysqli $conn, int $produto_id): array
                 'quantidade'     => (int)$prod['quantidade'],
                 'estoque_minimo' => (int)$prod['estoque_minimo'],
                 'preco_custo'    => (float)$prod['preco_custo'],
+                'ativo'          => (int)$prod['ativo'],
             ],
             'ultimas_movimentacoes' => $movs
         ]);
@@ -617,7 +757,7 @@ function produtos_adicionar(
     array $fornecedores = []
 ): array {
     try {
-        $nome = trim($nome);
+        $nome = produto_normalizar_nome($nome);
         $ncmNormalizado = normalizar_ncm($ncm);
 
         if ($nome === '') {
@@ -626,6 +766,10 @@ function produtos_adicionar(
 
         if ($quantidade < 0 || $estoque_minimo < 0) {
             return resposta(false, 'Dados inválidos para o produto.', null);
+        }
+
+        if (produto_nome_duplicado($conn, $nome, 0)) {
+            return resposta(false, 'Já existe um produto com esse nome.', null);
         }
 
         $fornecedoresNormalizados = normalizar_fornecedores($fornecedores);
@@ -668,7 +812,12 @@ function produtos_adicionar(
             $stmt->bind_param('siidd', $nome, $quantidade, $estoque_minimo, $pc, $pv);
         }
 
-        $stmt->execute();
+        if (!$stmt->execute()) {
+            $stmt->close();
+            $conn->rollback();
+            return resposta(false, 'Erro ao cadastrar produto.', null);
+        }
+
         $id = (int)$stmt->insert_id;
         $stmt->close();
 
@@ -678,7 +827,7 @@ function produtos_adicionar(
 
         $depois = produto_auditoria_snapshot($conn, $id);
 
-        auditoria_registrar(
+        produtos_registrar_auditoria_segura(
             $conn,
             $usuario_id,
             'criar_produto',
@@ -701,10 +850,10 @@ function produtos_adicionar(
             'arquivo'        => $e->getFile(),
             'linha'          => $e->getLine(),
             'erro'           => $e->getMessage(),
-            'nome'           => $nome,
+            'nome'           => $nome ?? '',
             'ncm'            => $ncm ?? null,
-            'qtd'            => $quantidade,
-            'estoque_minimo' => $estoque_minimo,
+            'qtd'            => $quantidade ?? null,
+            'estoque_minimo' => $estoque_minimo ?? null,
             'usuario'        => $usuario_id,
             'preco_custo'    => $preco_custo,
             'preco_venda'    => $preco_venda,
@@ -728,11 +877,15 @@ function produtos_atualizar(
     array $fornecedores = []
 ): array {
     try {
-        $nome = trim($nome);
+        $nome = produto_normalizar_nome($nome);
         $ncmNormalizado = normalizar_ncm($ncm);
 
         if ($produto_id <= 0 || $nome === '' || $quantidade < 0 || $estoque_minimo < 0 || $preco_custo < 0 || $preco_venda < 0) {
             return resposta(false, 'Dados inválidos para atualização do produto.', null);
+        }
+
+        if (produto_nome_duplicado($conn, $nome, $produto_id)) {
+            return resposta(false, 'Já existe um produto com esse nome.', null);
         }
 
         $fornecedoresNormalizados = normalizar_fornecedores($fornecedores);
@@ -784,14 +937,18 @@ function produtos_atualizar(
             $stmt->bind_param('siiddi', $nome, $quantidade, $estoque_minimo, $pc, $pv, $produto_id);
         }
 
-        $stmt->execute();
+        if (!$stmt->execute()) {
+            $stmt->close();
+            $conn->rollback();
+            return resposta(false, 'Erro ao atualizar produto.', null);
+        }
         $stmt->close();
 
         produto_fornecedores_salvar($conn, $produto_id, $fornecedoresNormalizados);
 
         $depois = produto_auditoria_snapshot($conn, $produto_id);
 
-        auditoria_registrar(
+        produtos_registrar_auditoria_segura(
             $conn,
             $usuario_id,
             'editar_produto',
@@ -815,10 +972,10 @@ function produtos_atualizar(
             'linha'          => $e->getLine(),
             'erro'           => $e->getMessage(),
             'produto_id'     => $produto_id,
-            'nome'           => $nome,
+            'nome'           => $nome ?? '',
             'ncm'            => $ncm ?? null,
-            'qtd'            => $quantidade,
-            'estoque_minimo' => $estoque_minimo,
+            'qtd'            => $quantidade ?? null,
+            'estoque_minimo' => $estoque_minimo ?? null,
             'preco_custo'    => $preco_custo,
             'preco_venda'    => $preco_venda,
             'usuario'        => $usuario_id,
@@ -848,6 +1005,58 @@ function produtos_remover(
             return resposta(false, 'Produto não encontrado.', null);
         }
 
+        $hasAtivo = coluna_existe($conn, 'produtos', 'ativo');
+        $temMovimentacoes = produto_tem_movimentacoes($conn, $produto_id);
+
+        if ($hasAtivo) {
+            if ((int)($antes['ativo'] ?? 1) === 0) {
+                $conn->rollback();
+                return resposta(false, 'O produto já está inativo.', null);
+            }
+
+            $stmt = $conn->prepare("
+                UPDATE produtos
+                SET ativo = 0
+                WHERE id = ?
+            ");
+
+            if (!$stmt) {
+                $conn->rollback();
+                return resposta(false, 'Erro ao inativar produto.', null);
+            }
+
+            $stmt->bind_param('i', $produto_id);
+
+            if (!$stmt->execute()) {
+                $stmt->close();
+                $conn->rollback();
+                return resposta(false, 'Erro ao inativar produto.', null);
+            }
+
+            $stmt->close();
+
+            $depois = produto_auditoria_snapshot($conn, $produto_id);
+
+            produtos_registrar_auditoria_segura(
+                $conn,
+                $usuario_id,
+                'inativar_produto',
+                'produto',
+                $produto_id,
+                $antes,
+                $depois
+            );
+
+            $conn->commit();
+
+            return resposta(true, 'Produto inativado com sucesso.', ['id' => $produto_id]);
+        }
+
+        if ($temMovimentacoes) {
+            $conn->rollback();
+            return resposta(false, 'Este produto possui movimentações e não pode ser removido fisicamente.', null);
+        }
+
         $stmtDelRel = $conn->prepare('DELETE FROM produto_fornecedores WHERE produto_id = ?');
         if (!$stmtDelRel) {
             $conn->rollback();
@@ -855,7 +1064,11 @@ function produtos_remover(
         }
 
         $stmtDelRel->bind_param('i', $produto_id);
-        $stmtDelRel->execute();
+        if (!$stmtDelRel->execute()) {
+            $stmtDelRel->close();
+            $conn->rollback();
+            return resposta(false, 'Erro ao remover vínculos do produto.', null);
+        }
         $stmtDelRel->close();
 
         $stmt = $conn->prepare('DELETE FROM produtos WHERE id = ?');
@@ -865,10 +1078,14 @@ function produtos_remover(
         }
 
         $stmt->bind_param('i', $produto_id);
-        $stmt->execute();
+        if (!$stmt->execute()) {
+            $stmt->close();
+            $conn->rollback();
+            return resposta(false, 'Erro ao remover produto.', null);
+        }
         $stmt->close();
 
-        auditoria_registrar(
+        produtos_registrar_auditoria_segura(
             $conn,
             $usuario_id,
             'excluir_produto',
@@ -880,7 +1097,7 @@ function produtos_remover(
 
         $conn->commit();
 
-        return resposta(true, 'Produto removido com sucesso', null);
+        return resposta(true, 'Produto removido com sucesso.', null);
     } catch (Throwable $e) {
         try {
             $conn->rollback();
