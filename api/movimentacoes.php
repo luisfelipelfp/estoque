@@ -721,6 +721,78 @@ function mov_registrar(
     }
 }
 
+function mov_resumo_filtrado(mysqli $conn, string $whereSql, string $types, array $params): array
+{
+    $resumo = [
+        'total_registros'   => 0,
+        'quantidade_total'  => 0,
+        'custo_total'       => 0.0,
+        'lucro_total'       => 0.0,
+        'quantidade_entrada'=> 0,
+        'quantidade_saida'  => 0,
+    ];
+
+    $sqlResumoBase = "
+        SELECT
+            COUNT(*) AS total_registros,
+            COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN m.quantidade ELSE 0 END), 0) AS quantidade_entrada,
+            COALESCE(SUM(CASE WHEN m.tipo = 'saida' THEN m.quantidade ELSE 0 END), 0) AS quantidade_saida,
+            COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN COALESCE(m.custo_total, 0) ELSE 0 END), 0) AS custo_total,
+            COALESCE(SUM(CASE WHEN m.tipo = 'saida' THEN COALESCE(m.lucro, 0) ELSE 0 END), 0) AS lucro_total
+        FROM movimentacoes m
+        LEFT JOIN produtos p ON p.id = m.produto_id
+        $whereSql
+    ";
+
+    $stmtResumoBase = $conn->prepare($sqlResumoBase);
+    if (!$stmtResumoBase) {
+        throw new RuntimeException('Erro ao calcular resumo das movimentações.');
+    }
+
+    if ($types !== '') {
+        $stmtResumoBase->bind_param($types, ...$params);
+    }
+
+    $stmtResumoBase->execute();
+    $rowBase = $stmtResumoBase->get_result()->fetch_assoc();
+    $stmtResumoBase->close();
+
+    $resumo['total_registros']    = (int)($rowBase['total_registros'] ?? 0);
+    $resumo['custo_total']        = (float)($rowBase['custo_total'] ?? 0);
+    $resumo['lucro_total']        = (float)($rowBase['lucro_total'] ?? 0);
+    $resumo['quantidade_entrada'] = (int)($rowBase['quantidade_entrada'] ?? 0);
+    $resumo['quantidade_saida']   = (int)($rowBase['quantidade_saida'] ?? 0);
+
+    $sqlQtdEstoque = "
+        SELECT COALESCE(SUM(produtos_filtrados.quantidade_atual), 0) AS quantidade_total
+        FROM (
+            SELECT DISTINCT
+                p2.id,
+                COALESCE(p2.quantidade, 0) AS quantidade_atual
+            FROM movimentacoes m
+            INNER JOIN produtos p2 ON p2.id = m.produto_id
+            $whereSql
+        ) AS produtos_filtrados
+    ";
+
+    $stmtQtdEstoque = $conn->prepare($sqlQtdEstoque);
+    if (!$stmtQtdEstoque) {
+        throw new RuntimeException('Erro ao calcular quantidade total em estoque.');
+    }
+
+    if ($types !== '') {
+        $stmtQtdEstoque->bind_param($types, ...$params);
+    }
+
+    $stmtQtdEstoque->execute();
+    $rowQtd = $stmtQtdEstoque->get_result()->fetch_assoc();
+    $stmtQtdEstoque->close();
+
+    $resumo['quantidade_total'] = (int)($rowQtd['quantidade_total'] ?? 0);
+
+    return $resumo;
+}
+
 function mov_listar(mysqli $conn, array $f): array
 {
     $pagina = max(1, (int)($f['pagina'] ?? 1));
@@ -791,6 +863,8 @@ function mov_listar(mysqli $conn, array $f): array
         $total = (int)($stmtT->get_result()->fetch_assoc()['total'] ?? 0);
         $stmtT->close();
 
+        $resumo = mov_resumo_filtrado($conn, $whereSql, $types, $params);
+
         $sql = "
             SELECT
                 m.id,
@@ -860,6 +934,7 @@ function mov_listar(mysqli $conn, array $f): array
             'pagina'  => $pagina,
             'limite'  => $limite,
             'paginas' => (int)ceil($total / $limite),
+            'resumo'  => $resumo,
             'dados'   => $dados
         ]);
     } catch (Throwable $e) {

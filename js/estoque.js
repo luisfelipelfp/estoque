@@ -29,6 +29,10 @@ function formatBRL(valor) {
   });
 }
 
+function normalizarTexto(valor) {
+  return String(valor ?? "").trim().replace(/\s+/g, " ");
+}
+
 function obterStatusEstoque(produto) {
   const quantidade = Number(produto?.quantidade ?? 0);
   const estoqueMinimo = Number(produto?.estoque_minimo ?? 0);
@@ -221,12 +225,16 @@ function renderTabela(produtos) {
     const nomeOriginal = String(p?.nome ?? "");
     const qtd = Number(p?.quantidade ?? 0);
     const estoqueMinimo = Number(p?.estoque_minimo ?? 0);
+    const ativo = Number(p?.ativo ?? 1) === 1;
     const status = obterStatusEstoque(p);
 
     return `
       <tr class="${status.linhaClasse}">
         <td>${id}</td>
-        <td>${nomeEscapado}</td>
+        <td>
+          ${nomeEscapado}
+          ${!ativo ? `<div class="small text-muted">Produto inativo</div>` : ""}
+        </td>
         <td>
           <span class="badge ${status.emBaixa ? "bg-danger" : "bg-primary"}">${qtd}</span>
         </td>
@@ -242,6 +250,7 @@ function renderTabela(produtos) {
               data-acao="entrada"
               data-id="${id}"
               data-nome="${escapeHtml(nomeOriginal)}"
+              ${!ativo ? "disabled" : ""}
             >
               Entrada
             </button>
@@ -251,6 +260,7 @@ function renderTabela(produtos) {
               data-acao="saida"
               data-id="${id}"
               data-nome="${escapeHtml(nomeOriginal)}"
+              ${!ativo ? "disabled" : ""}
             >
               Saída
             </button>
@@ -262,15 +272,17 @@ function renderTabela(produtos) {
 }
 
 function filtrarProdutos() {
-  const termo = ($("buscaProduto")?.value ?? "").trim().toLowerCase();
+  const termo = normalizarTexto($("buscaProduto")?.value ?? "").toLowerCase();
   const filtroStatus = $("filtroStatusEstoque")?.value ?? "todos";
 
-  let filtrados = [...produtosCache];
+  let filtrados = produtosCache.filter((p) => Number(p?.ativo ?? 1) === 1);
 
   if (termo) {
-    filtrados = filtrados.filter((p) =>
-      String(p?.nome ?? "").toLowerCase().includes(termo)
-    );
+    filtrados = filtrados.filter((p) => {
+      const nome = String(p?.nome ?? "").toLowerCase();
+      const id = String(p?.id ?? "").toLowerCase();
+      return nome.includes(termo) || id.includes(termo);
+    });
   }
 
   if (filtroStatus === "baixo") {
@@ -289,7 +301,7 @@ function filtrarProdutos() {
 function aplicarFiltro() {
   const filtrados = filtrarProdutos();
   renderTabela(filtrados);
-  atualizarKPIs(produtosCache);
+  atualizarKPIs(produtosCache.filter((p) => Number(p?.ativo ?? 1) === 1));
   atualizarResumoFiltro(filtrados);
   atualizarStatusTopo(filtrados);
 }
@@ -699,7 +711,7 @@ function bindAutocomplete(prefixo) {
   if (!input || !box) return;
 
   input.addEventListener("input", () => {
-    const termo = input.value.trim().toLowerCase();
+    const termo = normalizarTexto(input.value).toLowerCase();
 
     if ($(`${prefixo}ProdutoId`)) $(`${prefixo}ProdutoId`).value = "";
     resetResumo(prefixo);
@@ -718,6 +730,7 @@ function bindAutocomplete(prefixo) {
     }
 
     const encontrados = produtosCache.filter((p) =>
+      Number(p?.ativo ?? 1) === 1 &&
       String(p?.nome ?? "").toLowerCase().includes(termo)
     );
 
@@ -727,10 +740,11 @@ function bindAutocomplete(prefixo) {
   input.addEventListener("keydown", (ev) => {
     if (ev.key !== "Enter") return;
 
-    const termo = input.value.trim().toLowerCase();
+    const termo = normalizarTexto(input.value).toLowerCase();
     if (!termo) return;
 
     const encontrados = produtosCache.filter((p) =>
+      Number(p?.ativo ?? 1) === 1 &&
       String(p?.nome ?? "").toLowerCase().includes(termo)
     );
 

@@ -134,23 +134,31 @@ function renderTipoBadge(tipo) {
 }
 
 function renderResumo(payload) {
-  const dados = Array.isArray(payload?.dados) ? payload.dados : [];
-  const totalRegistros = Number(payload?.total ?? 0);
+  const resumo = payload?.resumo || {};
 
-  let quantidadeTotal = 0;
-  let custoTotal = 0;
-  let lucroTotal = 0;
+  const totalRegistros = Number(
+    resumo?.total_registros ?? payload?.total ?? 0
+  );
 
-  for (const item of dados) {
-    quantidadeTotal += Number(item?.quantidade ?? 0);
-    custoTotal += Number(item?.custo_total ?? 0);
-    lucroTotal += Number(item?.lucro ?? 0);
+  const quantidadeTotal = Number(resumo?.quantidade_total ?? 0);
+  const custoTotal = Number(resumo?.custo_total ?? 0);
+  const lucroTotal = Number(resumo?.lucro_total ?? 0);
+
+  if ($("resumoTotalRegistros")) {
+    $("resumoTotalRegistros").textContent = String(totalRegistros);
   }
 
-  if ($("resumoTotalRegistros")) $("resumoTotalRegistros").textContent = String(totalRegistros);
-  if ($("resumoQuantidadeTotal")) $("resumoQuantidadeTotal").textContent = String(quantidadeTotal);
-  if ($("resumoCustoTotal")) $("resumoCustoTotal").textContent = formatBRL(custoTotal);
-  if ($("resumoLucroTotal")) $("resumoLucroTotal").textContent = formatBRL(lucroTotal);
+  if ($("resumoQuantidadeTotal")) {
+    $("resumoQuantidadeTotal").textContent = String(quantidadeTotal);
+  }
+
+  if ($("resumoCustoTotal")) {
+    $("resumoCustoTotal").textContent = formatBRL(custoTotal);
+  }
+
+  if ($("resumoLucroTotal")) {
+    $("resumoLucroTotal").textContent = formatBRL(lucroTotal);
+  }
 }
 
 function renderTabela(movimentacoes) {
@@ -327,7 +335,11 @@ async function buscarProdutosAutocomplete(termo) {
       return;
     }
 
-    const dados = Array.isArray(resp?.dados) ? resp.dados : [];
+    const dadosBrutos = resp?.dados;
+    const dados = Array.isArray(dadosBrutos?.itens)
+      ? dadosBrutos.itens
+      : (Array.isArray(dadosBrutos) ? dadosBrutos : []);
+
     renderSugestoesProduto(dados);
   } catch (err) {
     renderSugestoesProduto([]);
@@ -407,7 +419,8 @@ async function listarMovimentacoes(filtros = {}, pagina = 1) {
       mensagem: "Movimentações carregadas com sucesso",
       pagina: paginaAtual,
       total_registros_pagina: dados.length,
-      total_geral: total
+      total_geral: total,
+      resumo: payload?.resumo ?? null
     });
   } catch (err) {
     renderMensagemTabela("Erro inesperado ao carregar movimentações.", "text-danger");
