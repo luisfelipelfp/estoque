@@ -55,6 +55,21 @@ function removerUsuarioLocal() {
   }
 }
 
+function obterUsuarioLocal() {
+  try {
+    const raw = localStorage.getItem("usuario");
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    logJsError({
+      origem: "main.js",
+      mensagem: "Erro ao ler usuário do localStorage",
+      detalhe: err?.message || String(err),
+      stack: err?.stack || null
+    });
+    return null;
+  }
+}
+
 async function verificarLogin() {
   try {
     const resp = await apiRequest("usuario_atual", null, "GET");
@@ -120,6 +135,11 @@ async function carregarComponente(seletorOuId, url) {
   }
 }
 
+function usuarioEhAdmin(usuario) {
+  const nivel = String(usuario?.nivel ?? "").trim().toLowerCase();
+  return nivel === "admin" || nivel === "administrador";
+}
+
 function preencherUsuario(usuario) {
   const nome = String(usuario?.nome ?? "").trim();
   const nivel = String(usuario?.nivel ?? "").trim();
@@ -136,11 +156,6 @@ function preencherUsuario(usuario) {
     sidebarUser.textContent = textoUsuario;
     sidebarUser.setAttribute("title", textoUsuario);
   }
-}
-
-function usuarioEhAdmin(usuario) {
-  const nivel = String(usuario?.nivel ?? "").trim().toLowerCase();
-  return nivel === "admin" || nivel === "administrador";
 }
 
 function aplicarPermissoes(usuario) {
@@ -217,6 +232,29 @@ function marcarLinkAtivoSidebar() {
   });
 }
 
+function fecharNavbarMobile() {
+  const navbarCollapse = $("navbarEstoque");
+  if (!navbarCollapse || !window.bootstrap?.Collapse) return;
+
+  if (navbarCollapse.classList.contains("show")) {
+    const inst = window.bootstrap.Collapse.getInstance(navbarCollapse)
+      || new window.bootstrap.Collapse(navbarCollapse, { toggle: false });
+
+    inst.hide();
+  }
+}
+
+function bindFecharNavbarAoClicarLink() {
+  document.querySelectorAll("#navbarEstoque .nav-link").forEach((link) => {
+    if (link.dataset.boundCloseNav === "1") return;
+
+    link.dataset.boundCloseNav = "1";
+    link.addEventListener("click", () => {
+      fecharNavbarMobile();
+    });
+  });
+}
+
 async function executarLogout() {
   try {
     await apiRequest("logout", null, "POST");
@@ -245,8 +283,8 @@ function bindLogout() {
 }
 
 async function carregarLayout(usuario) {
-  const navbarEl = await carregarComponente("#navbar", `${APP_BASE}/components/navbar.html?v=20260310-user4`);
-  const sidebarEl = await carregarComponente("#sidebar", `${APP_BASE}/components/sidebar.html?v=20260310-user4`);
+  const navbarEl = await carregarComponente("#navbar", `${APP_BASE}/components/navbar.html?v=20260311-s3`);
+  const sidebarEl = await carregarComponente("#sidebar", `${APP_BASE}/components/sidebar.html?v=20260311-s3`);
 
   if (sidebarEl) {
     sidebarEl.classList.remove("d-none");
@@ -257,6 +295,7 @@ async function carregarLayout(usuario) {
     aplicarPermissoes(usuario);
     marcarLinkAtivoSidebar();
     bindLogout();
+    bindFecharNavbarAoClicarLink();
   }
 }
 
@@ -264,10 +303,22 @@ function paginaExigeAutenticacao() {
   return obterPaginaAtual() !== "login";
 }
 
+async function sincronizarUsuarioDaSessao() {
+  const usuarioLocal = obterUsuarioLocal();
+
+  if (!usuarioLocal) {
+    return null;
+  }
+
+  return usuarioLocal;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   if (!paginaExigeAutenticacao()) {
     return;
   }
+
+  await sincronizarUsuarioDaSessao();
 
   const usuario = await verificarLogin();
   if (!usuario) return;
@@ -281,7 +332,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   logJsInfo({
     origem: "main.js",
     mensagem: "Usuário autenticado",
-    usuario: usuario.nome || null,
+    usuario: usuario?.nome || null,
     pagina: obterPaginaAtual(),
     nivel: usuario?.nivel || null
   });

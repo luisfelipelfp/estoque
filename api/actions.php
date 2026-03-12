@@ -887,4 +887,4 @@ try {
     ]);
 
     json_response(false, 'Erro interno no servidor.', null, 500);
-}
+} 

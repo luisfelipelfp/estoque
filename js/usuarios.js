@@ -2,6 +2,7 @@ import { apiRequest } from "./api.js";
 import { logJsInfo, logJsError } from "./logger.js";
 
 let usuariosCache = [];
+let usuariosFiltradosCache = [];
 let modalUsuarioInstance = null;
 
 function $(id) {
@@ -100,6 +101,7 @@ function setTelaRestrita() {
   const tbody = $("tabelaUsuarios");
   const btnNovo = $("btnNovoUsuario");
   const filtroCard = $("usuariosFiltroCard");
+  const resumoCard = $("usuariosResumoCard");
 
   if (topo) {
     topo.textContent = "Acesso restrito.";
@@ -111,6 +113,10 @@ function setTelaRestrita() {
 
   if (filtroCard) {
     filtroCard.classList.add("d-none");
+  }
+
+  if (resumoCard) {
+    resumoCard.classList.add("d-none");
   }
 
   if (tbody) {
@@ -143,6 +149,20 @@ function contarAdminsAtivos(lista) {
     const ativo = Number(u?.ativo ?? 1);
     return nivel === "admin" && ativo === 1;
   }).length;
+}
+
+function contarUsuariosAtivos(lista) {
+  return (Array.isArray(lista) ? lista : []).filter((u) => Number(u?.ativo ?? 1) === 1).length;
+}
+
+function atualizarResumoUsuarios(lista) {
+  const total = Array.isArray(lista) ? lista.length : 0;
+  const ativos = contarUsuariosAtivos(lista);
+  const admins = contarAdminsAtivos(lista);
+
+  if ($("usuariosKpiTotal")) $("usuariosKpiTotal").textContent = String(total);
+  if ($("usuariosKpiAtivos")) $("usuariosKpiAtivos").textContent = String(ativos);
+  if ($("usuariosKpiAdmins")) $("usuariosKpiAdmins").textContent = String(admins);
 }
 
 function renderTabela(usuarios) {
@@ -233,21 +253,42 @@ function renderTabela(usuarios) {
   }).join("");
 }
 
-function aplicarFiltro() {
-  const termo = ($("buscaUsuario")?.value ?? "").trim().toLowerCase();
+function obterFiltros() {
+  return {
+    busca: ($("buscaUsuario")?.value ?? "").trim().toLowerCase(),
+    nivel: ($("filtroNivelUsuario")?.value ?? "").trim().toLowerCase(),
+    ativo: ($("filtroStatusUsuario")?.value ?? "").trim()
+  };
+}
 
-  if (!termo) {
-    renderTabela(usuariosCache);
-    return;
+function aplicarFiltro() {
+  const { busca, nivel, ativo } = obterFiltros();
+
+  let lista = [...usuariosCache];
+
+  if (busca) {
+    lista = lista.filter((u) => {
+      const nome = String(u?.nome ?? "").toLowerCase();
+      const email = String(u?.email ?? "").toLowerCase();
+      return nome.includes(busca) || email.includes(busca);
+    });
   }
 
-  const filtrados = usuariosCache.filter((u) => {
-    const nome = String(u?.nome ?? "").toLowerCase();
-    const email = String(u?.email ?? "").toLowerCase();
-    return nome.includes(termo) || email.includes(termo);
-  });
+  if (nivel) {
+    lista = lista.filter((u) => String(u?.nivel ?? "").toLowerCase() === nivel);
+  }
 
-  renderTabela(filtrados);
+  if (ativo !== "") {
+    lista = lista.filter((u) => String(Number(u?.ativo ?? 1)) === ativo);
+  }
+
+  usuariosFiltradosCache = lista;
+  renderTabela(lista);
+
+  const topo = $("usuariosStatusTopo");
+  if (topo) {
+    topo.textContent = `${lista.length} usuário(s) exibido(s) de ${usuariosCache.length}.`;
+  }
 }
 
 async function carregarUsuarios() {
@@ -273,7 +314,10 @@ async function carregarUsuarios() {
 
     if (!resp?.sucesso) {
       usuariosCache = [];
+      usuariosFiltradosCache = [];
       renderTabela([]);
+      atualizarResumoUsuarios([]);
+
       if (topo) {
         topo.textContent = resp?.mensagem || "Erro ao carregar usuários.";
       }
@@ -281,11 +325,8 @@ async function carregarUsuarios() {
     }
 
     usuariosCache = Array.isArray(resp?.dados) ? resp.dados : [];
+    atualizarResumoUsuarios(usuariosCache);
     aplicarFiltro();
-
-    if (topo) {
-      topo.textContent = `${usuariosCache.length} usuário(s) carregado(s).`;
-    }
 
     logJsInfo({
       origem: "usuarios.js",
@@ -294,7 +335,9 @@ async function carregarUsuarios() {
     });
   } catch (err) {
     usuariosCache = [];
+    usuariosFiltradosCache = [];
     renderTabela([]);
+    atualizarResumoUsuarios([]);
 
     if (topo) {
       topo.textContent = "Erro ao carregar usuários.";
@@ -320,7 +363,9 @@ function limparModal() {
   if ($("tituloModalUsuario")) $("tituloModalUsuario").textContent = "Novo usuário";
   if ($("subtituloModalUsuario")) $("subtituloModalUsuario").textContent = "Preencha os dados para salvar o usuário.";
   if ($("labelSenhaUsuario")) $("labelSenhaUsuario").textContent = "Senha";
-  if ($("usuarioSenhaHint")) $("usuarioSenhaHint").textContent = "A senha é obrigatória no cadastro e deve ter pelo menos 6 caracteres.";
+  if ($("usuarioSenhaHint")) {
+    $("usuarioSenhaHint").textContent = "A senha é obrigatória no cadastro e deve ter pelo menos 6 caracteres.";
+  }
 
   setStatusMensagem("");
 }
@@ -352,7 +397,10 @@ async function abrirModalEditarUsuario(usuarioId) {
     if ($("tituloModalUsuario")) $("tituloModalUsuario").textContent = "Editar usuário";
     if ($("subtituloModalUsuario")) $("subtituloModalUsuario").textContent = "Atualize os dados do usuário.";
     if ($("labelSenhaUsuario")) $("labelSenhaUsuario").textContent = "Nova senha";
-    if ($("usuarioSenhaHint")) $("usuarioSenhaHint").textContent = "Deixe em branco para manter a senha atual. Se informar, a senha deve ter pelo menos 6 caracteres.";
+    if ($("usuarioSenhaHint")) {
+      $("usuarioSenhaHint").textContent =
+        "Deixe em branco para manter a senha atual. Se informar, a senha deve ter pelo menos 6 caracteres.";
+    }
 
     getModalUsuario()?.show();
   } catch (err) {
@@ -530,9 +578,13 @@ function bindEventos() {
   $("btnSalvarUsuario")?.addEventListener("click", salvarUsuario);
 
   $("buscaUsuario")?.addEventListener("input", aplicarFiltro);
+  $("filtroNivelUsuario")?.addEventListener("change", aplicarFiltro);
+  $("filtroStatusUsuario")?.addEventListener("change", aplicarFiltro);
 
   $("btnLimparBuscaUsuario")?.addEventListener("click", () => {
     if ($("buscaUsuario")) $("buscaUsuario").value = "";
+    if ($("filtroNivelUsuario")) $("filtroNivelUsuario").value = "";
+    if ($("filtroStatusUsuario")) $("filtroStatusUsuario").value = "";
     aplicarFiltro();
   });
 

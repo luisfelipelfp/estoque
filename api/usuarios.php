@@ -32,6 +32,41 @@ function usuarios_strlen(string $valor): int
         : strlen($valor);
 }
 
+function usuarios_tabela_existe(mysqli $conn, string $nomeTabela): bool
+{
+    static $cache = [];
+
+    $nomeTabela = trim($nomeTabela);
+    if ($nomeTabela === '') {
+        return false;
+    }
+
+    if (array_key_exists($nomeTabela, $cache)) {
+        return $cache[$nomeTabela];
+    }
+
+    $stmt = $conn->prepare("
+        SELECT 1
+        FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = ?
+        LIMIT 1
+    ");
+
+    if (!$stmt) {
+        $cache[$nomeTabela] = false;
+        return false;
+    }
+
+    $stmt->bind_param('s', $nomeTabela);
+    $stmt->execute();
+    $existe = (bool)$stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    $cache[$nomeTabela] = $existe;
+    return $existe;
+}
+
 function usuarios_contar_admins_ativos(mysqli $conn, ?int $ignorarUsuarioId = null): int
 {
     $sql = "
@@ -113,8 +148,8 @@ function usuarios_registrar_auditoria_segura(
     string $acao,
     string $entidade,
     ?int $entidadeId,
-    mixed $dadosAnteriores,
-    mixed $dadosNovos
+    $dadosAnteriores,
+    $dadosNovos
 ): void {
     $ok = auditoria_registrar(
         $conn,
@@ -134,6 +169,51 @@ function usuarios_registrar_auditoria_segura(
             'usuario_logado_id' => $usuarioLogadoId
         ]);
     }
+}
+
+function usuario_possui_historico(mysqli $conn, int $usuarioId): bool
+{
+    if ($usuarioId <= 0) {
+        return false;
+    }
+
+    $consultas = [];
+
+    if (usuarios_tabela_existe($conn, 'movimentacoes')) {
+        $consultas[] = "
+            SELECT 1
+            FROM movimentacoes
+            WHERE usuario_id = ?
+            LIMIT 1
+        ";
+    }
+
+    if (usuarios_tabela_existe($conn, 'auditoria')) {
+        $consultas[] = "
+            SELECT 1
+            FROM auditoria
+            WHERE usuario_id = ?
+            LIMIT 1
+        ";
+    }
+
+    foreach ($consultas as $sql) {
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            continue;
+        }
+
+        $stmt->bind_param('i', $usuarioId);
+        $stmt->execute();
+        $existe = (bool)$stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        if ($existe) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 function usuarios_listar(mysqli $conn): array
@@ -596,6 +676,11 @@ function usuario_excluir(
                 $conn->rollback();
                 return resposta(false, 'Não é permitido excluir o último administrador ativo do sistema.');
             }
+        }
+
+        if (usuario_possui_historico($conn, $usuarioId)) {
+            $conn->rollback();
+            return resposta(false, 'Este usuário possui histórico no sistema e não pode ser excluído. Inative-o em vez de excluir.');
         }
 
         $stmt = $conn->prepare("
