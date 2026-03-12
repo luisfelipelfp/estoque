@@ -670,7 +670,7 @@ function mov_registrar(
                 'produto_antes' => $produtoAntes,
             ],
             [
-                'movimentacao'  => $movDepois,
+                'movimentacao'   => $movDepois,
                 'produto_depois' => $produtoDepois,
             ]
         );
@@ -724,12 +724,12 @@ function mov_registrar(
 function mov_resumo_filtrado(mysqli $conn, string $whereSql, string $types, array $params): array
 {
     $resumo = [
-        'total_registros'   => 0,
-        'quantidade_total'  => 0,
-        'custo_total'       => 0.0,
-        'lucro_total'       => 0.0,
-        'quantidade_entrada'=> 0,
-        'quantidade_saida'  => 0,
+        'total_registros'    => 0,
+        'quantidade_total'   => 0,
+        'custo_total'        => 0.0,
+        'lucro_total'        => 0.0,
+        'quantidade_entrada' => 0,
+        'quantidade_saida'   => 0,
     ];
 
     $sqlResumoBase = "
@@ -767,10 +767,10 @@ function mov_resumo_filtrado(mysqli $conn, string $whereSql, string $types, arra
         SELECT COALESCE(SUM(produtos_filtrados.quantidade_atual), 0) AS quantidade_total
         FROM (
             SELECT DISTINCT
-                p2.id,
-                COALESCE(p2.quantidade, 0) AS quantidade_atual
+                p.id,
+                COALESCE(p.quantidade, 0) AS quantidade_atual
             FROM movimentacoes m
-            INNER JOIN produtos p2 ON p2.id = m.produto_id
+            INNER JOIN produtos p ON p.id = m.produto_id
             $whereSql
         ) AS produtos_filtrados
     ";
