@@ -3,14 +3,27 @@
   overflow: hidden;
 }
 
-#tabelaProdutos th {
+table thead th {
   background-color: #e9ecef;
-  font-weight: bold;
+  font-weight: 700;
   white-space: nowrap;
+  vertical-align: middle;
 }
 
-#tabelaProdutos td {
+table td {
   vertical-align: middle;
+}
+
+.produto-inativo-row {
+  opacity: 0.78;
+}
+
+.produto-inativo-row td {
+  background-color: #f8f9fa !important;
+}
+
+#resumoListagemProdutos {
+  min-height: 20px;
 }
 
 #modalProduto .modal-content {
@@ -49,6 +62,11 @@
 
 .fornecedor-card {
   border-radius: 16px;
+  transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.fornecedor-card:hover {
+  transform: translateY(-1px);
 }
 
 .fornecedor-card .card-body {
@@ -63,8 +81,44 @@
   letter-spacing: 0.06em;
 }
 
+#produtoInfoStatusBox {
+  border-radius: 14px;
+}
+
+.badge.text-bg-secondary,
+.badge.text-bg-success {
+  font-weight: 600;
+  padding: 0.5em 0.7em;
+}
+
+.input-group-text {
+  white-space: nowrap;
+}
+
+#listaFornecedores .alert {
+  border-radius: 14px;
+}
+
 @media (max-width: 991px) {
   #modalProduto .modal-dialog {
     margin: 0.75rem;
   }
-}   
+}
+
+@media (max-width: 767px) {
+  .page-head {
+    gap: 12px;
+  }
+
+  #modalProduto .modal-footer {
+    justify-content: stretch !important;
+  }
+
+  #modalProduto .modal-footer > div {
+    width: 100%;
+  }
+
+  #modalProduto .modal-footer .btn {
+    flex: 1 1 auto;
+  }
+}

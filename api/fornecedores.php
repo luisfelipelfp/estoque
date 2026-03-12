@@ -9,7 +9,9 @@ initLog('fornecedores');
 
 function fornecedor_normalizar_texto(?string $valor): string
 {
-    return trim((string)$valor);
+    $valor = trim((string)$valor);
+    $valor = preg_replace('/\s+/u', ' ', $valor) ?? $valor;
+    return $valor;
 }
 
 function fornecedor_normalizar_cnpj(string $cnpj): string
@@ -47,6 +49,22 @@ function fornecedor_total_produtos(mysqli $conn, int $fornecedorId): int
 
 function fornecedor_produtos_listar(mysqli $conn, int $fornecedorId): array
 {
+    $hasAtivoProduto = false;
+
+    $stmtCol = $conn->prepare("
+        SELECT 1
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'produtos'
+          AND COLUMN_NAME = 'ativo'
+        LIMIT 1
+    ");
+    if ($stmtCol) {
+        $stmtCol->execute();
+        $hasAtivoProduto = (bool)$stmtCol->get_result()->fetch_assoc();
+        $stmtCol->close();
+    }
+
     $sql = "
         SELECT
             p.id,
@@ -54,11 +72,14 @@ function fornecedor_produtos_listar(mysqli $conn, int $fornecedorId): array
             COALESCE(pf.codigo_produto_fornecedor, '') AS codigo_produto_fornecedor,
             COALESCE(pf.observacao, '') AS observacao,
             COALESCE(pf.principal, 0) AS principal
+            " . ($hasAtivoProduto ? ", COALESCE(p.ativo, 1) AS ativo" : ", 1 AS ativo") . "
         FROM produto_fornecedores pf
         INNER JOIN produtos p
             ON p.id = pf.produto_id
         WHERE pf.fornecedor_id = ?
-        ORDER BY p.nome ASC
+        ORDER BY
+            " . ($hasAtivoProduto ? "COALESCE(p.ativo, 1) DESC," : "") . "
+            p.nome ASC
     ";
 
     $stmt = $conn->prepare($sql);
@@ -78,6 +99,7 @@ function fornecedor_produtos_listar(mysqli $conn, int $fornecedorId): array
             'codigo_produto_fornecedor' => (string)$row['codigo_produto_fornecedor'],
             'observacao'                => (string)$row['observacao'],
             'principal'                 => (int)$row['principal'],
+            'ativo'                     => (int)($row['ativo'] ?? 1),
         ];
     }
 
@@ -199,7 +221,9 @@ function fornecedores_listar(mysqli $conn): array
                 ON pf.fornecedor_id = f.id
             GROUP BY
                 f.id, f.nome, f.cnpj, f.telefone, f.email, f.ativo, f.observacao
-            ORDER BY f.nome ASC
+            ORDER BY
+                COALESCE(f.ativo, 1) DESC,
+                f.nome ASC
         ";
 
         $res = $conn->query($sql);
@@ -329,7 +353,7 @@ function fornecedor_salvar(
         $stmtDupNome = $conn->prepare("
             SELECT id
             FROM fornecedores
-            WHERE LOWER(nome) = LOWER(?)
+            WHERE LOWER(TRIM(nome)) = LOWER(TRIM(?))
               AND id <> ?
             LIMIT 1
         ");

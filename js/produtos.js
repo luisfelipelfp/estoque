@@ -14,6 +14,10 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+function normalizarTexto(valor) {
+  return String(valor ?? "").trim().replace(/\s+/g, " ");
+}
+
 function normalizarNcm(valor) {
   return String(valor ?? "").replace(/\D/g, "").slice(0, 8);
 }
@@ -23,10 +27,21 @@ function valorSeguroNumero(valor, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function statusProdutoLabel(ativo) {
+  return Number(ativo ?? 1) === 1 ? "Ativo" : "Inativo";
+}
+
+function statusProdutoBadge(ativo) {
+  return Number(ativo ?? 1) === 1
+    ? `<span class="badge text-bg-success">Ativo</span>`
+    : `<span class="badge text-bg-secondary">Inativo</span>`;
+}
+
 let produtosCache = [];
 let fornecedoresCadastrados = [];
 let modalInstance = null;
 let fornecedoresTemp = [];
+let produtoAtualEmEdicao = null;
 
 function setStatusMensagem(texto = "", tipo = "muted") {
   const el = $("produtoStatus");
@@ -49,6 +64,88 @@ function setStatusMensagem(texto = "", tipo = "muted") {
   }
 
   el.textContent = texto;
+}
+
+function atualizarResumoListagem(totalExibidos = 0, totalGeral = 0) {
+  const el = $("resumoListagemProdutos");
+  if (!el) return;
+
+  if (totalGeral <= 0) {
+    el.textContent = "Nenhum produto cadastrado.";
+    return;
+  }
+
+  if (totalExibidos === totalGeral) {
+    el.textContent = `${totalGeral} produto(s) listado(s).`;
+    return;
+  }
+
+  el.textContent = `${totalExibidos} de ${totalGeral} produto(s) exibido(s).`;
+}
+
+function setCamposProdutoHabilitados(habilitado) {
+  const ids = [
+    "produtoNome",
+    "produtoNcm",
+    "produtoEstoqueMinimo",
+    "btnSalvarProduto",
+    "btnAdicionarFornecedor"
+  ];
+
+  ids.forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    el.disabled = !habilitado;
+  });
+
+  const inputsLista = $("listaFornecedores")?.querySelectorAll("input, select, button");
+  if (inputsLista) {
+    inputsLista.forEach((el) => {
+      if (el.hasAttribute("data-remover-fornecedor")) {
+        el.disabled = !habilitado;
+        return;
+      }
+
+      if (
+        el.hasAttribute("data-campo") ||
+        el.hasAttribute("data-marcar-principal")
+      ) {
+        el.disabled = !habilitado;
+      }
+    });
+  }
+}
+
+function atualizarBoxStatusProduto(produto = null) {
+  const box = $("produtoInfoStatusBox");
+  const texto = $("produtoInfoStatusTexto");
+  const btnInativar = $("btnInativarProduto");
+
+  if (!box || !texto || !btnInativar) return;
+
+  const produtoId = Number(produto?.id ?? 0);
+  const ativo = Number(produto?.ativo ?? 1) === 1;
+
+  if (produtoId <= 0) {
+    box.classList.add("d-none");
+    texto.textContent = "";
+    btnInativar.classList.add("d-none");
+    btnInativar.disabled = false;
+    return;
+  }
+
+  box.classList.remove("d-none");
+  btnInativar.classList.remove("d-none");
+
+  if (ativo) {
+    box.className = "alert alert-secondary";
+    texto.textContent = "Este produto está ativo e disponível para uso no sistema.";
+    btnInativar.disabled = false;
+  } else {
+    box.className = "alert alert-warning";
+    texto.textContent = "Este produto está inativo. A edição fica bloqueada para evitar alterações indevidas.";
+    btnInativar.disabled = true;
+  }
 }
 
 function getFornecedorSelecionadosCount() {
@@ -95,7 +192,7 @@ function renderTabela(produtos) {
   if (!Array.isArray(produtos) || produtos.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="4" class="text-center text-muted">Nenhum produto encontrado.</td>
+        <td colspan="6" class="text-center text-muted">Nenhum produto encontrado.</td>
       </tr>
     `;
     return;
@@ -106,21 +203,40 @@ function renderTabela(produtos) {
     const nome = escapeHtml(p?.nome ?? "");
     const ncmNormalizado = normalizarNcm(p?.ncm ?? "");
     const ncm = ncmNormalizado ? escapeHtml(ncmNormalizado) : "—";
+    const quantidade = valorSeguroNumero(p?.quantidade, 0);
+    const ativo = Number(p?.ativo ?? 1);
 
     return `
-      <tr>
+      <tr class="${ativo === 1 ? "" : "produto-inativo-row"}">
         <td>${id}</td>
-        <td>${nome}</td>
-        <td>${ncm}</td>
         <td>
-          <button
-            class="btn btn-sm btn-outline-primary"
-            data-acao="abrir"
-            data-id="${id}"
-            type="button"
-          >
-            Abrir
-          </button>
+          <div class="fw-semibold">${nome}</div>
+        </td>
+        <td>${ncm}</td>
+        <td>${quantidade}</td>
+        <td>${statusProdutoBadge(ativo)}</td>
+        <td>
+          <div class="d-flex gap-2 flex-wrap">
+            <button
+              class="btn btn-sm btn-outline-primary"
+              data-acao="abrir"
+              data-id="${id}"
+              type="button"
+            >
+              Abrir
+            </button>
+
+            ${ativo === 1 ? `
+              <button
+                class="btn btn-sm btn-outline-danger"
+                data-acao="inativar"
+                data-id="${id}"
+                type="button"
+              >
+                Inativar
+              </button>
+            ` : ""}
+          </div>
         </td>
       </tr>
     `;
@@ -128,20 +244,29 @@ function renderTabela(produtos) {
 }
 
 function aplicarFiltro() {
-  const termo = ($("buscaProduto")?.value ?? "").trim().toLowerCase();
+  const termo = normalizarTexto($("buscaProduto")?.value ?? "").toLowerCase();
+  const filtroStatus = String($("filtroStatusProduto")?.value ?? "ativos");
 
-  if (!termo) {
-    renderTabela(produtosCache);
-    return;
+  let filtrados = [...produtosCache];
+
+  if (filtroStatus === "ativos") {
+    filtrados = filtrados.filter((p) => Number(p?.ativo ?? 1) === 1);
+  } else if (filtroStatus === "inativos") {
+    filtrados = filtrados.filter((p) => Number(p?.ativo ?? 1) === 0);
   }
 
-  const filtrados = produtosCache.filter((p) => {
-    const nome = String(p?.nome ?? "").toLowerCase();
-    const ncm = String(p?.ncm ?? "").toLowerCase();
-    return nome.includes(termo) || ncm.includes(termo);
-  });
+  if (termo) {
+    filtrados = filtrados.filter((p) => {
+      const id = String(p?.id ?? "").toLowerCase();
+      const nome = normalizarTexto(p?.nome ?? "").toLowerCase();
+      const ncm = normalizarNcm(p?.ncm ?? "").toLowerCase();
+
+      return id.includes(termo) || nome.includes(termo) || ncm.includes(termo);
+    });
+  }
 
   renderTabela(filtrados);
+  atualizarResumoListagem(filtrados.length, produtosCache.length);
 }
 
 async function carregarProdutos() {
@@ -149,7 +274,7 @@ async function carregarProdutos() {
   if (tbody) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="4" class="text-center text-muted">Carregando...</td>
+        <td colspan="6" class="text-center text-muted">Carregando...</td>
       </tr>
     `;
   }
@@ -160,6 +285,7 @@ async function carregarProdutos() {
     if (!resp?.sucesso) {
       produtosCache = [];
       renderTabela([]);
+      atualizarResumoListagem(0, 0);
       return;
     }
 
@@ -174,6 +300,7 @@ async function carregarProdutos() {
   } catch (err) {
     produtosCache = [];
     renderTabela([]);
+    atualizarResumoListagem(0, 0);
 
     logJsError({
       origem: "produtos.js",
@@ -196,6 +323,7 @@ async function carregarFornecedoresCadastrados() {
     }
 
     fornecedoresCadastrados = (Array.isArray(resp?.dados) ? resp.dados : [])
+      .filter((f) => Number(f?.ativo ?? 1) === 1)
       .sort((a, b) => String(a?.nome ?? "").localeCompare(String(b?.nome ?? ""), "pt-BR"));
 
     atualizarAvisoFornecedores();
@@ -236,6 +364,8 @@ function criarFornecedorVazio() {
     fornecedor_id: "",
     nome: "",
     codigo: "",
+    preco_custo: "",
+    preco_venda: "",
     observacao: "",
     principal: 0
   };
@@ -297,6 +427,12 @@ function existeFornecedorDuplicado(noIndex, fornecedorId) {
 function atualizarFornecedor(index, campo, valor) {
   if (!fornecedoresTemp[index]) return;
 
+  if (produtoAtualEmEdicao && Number(produtoAtualEmEdicao?.ativo ?? 1) !== 1) {
+    setStatusMensagem("Produto inativo não pode ser alterado.", "erro");
+    renderListaFornecedores();
+    return;
+  }
+
   if (campo === "fornecedor_id") {
     const fornecedorId = String(valor ?? "");
     const fornecedorIdNum = Number(fornecedorId || 0);
@@ -317,7 +453,11 @@ function atualizarFornecedor(index, campo, valor) {
     return;
   }
 
-  fornecedoresTemp[index][campo] = valor;
+  if (campo === "preco_custo" || campo === "preco_venda") {
+    fornecedoresTemp[index][campo] = String(valor ?? "").replace(",", ".");
+  } else {
+    fornecedoresTemp[index][campo] = valor;
+  }
 
   if (campo === "principal" && Number(valor) === 1) {
     fornecedoresTemp = fornecedoresTemp.map((f, i) => ({
@@ -337,6 +477,11 @@ function atualizarFornecedor(index, campo, valor) {
 }
 
 function removerFornecedor(index) {
+  if (produtoAtualEmEdicao && Number(produtoAtualEmEdicao?.ativo ?? 1) !== 1) {
+    setStatusMensagem("Produto inativo não pode ser alterado.", "erro");
+    return;
+  }
+
   fornecedoresTemp.splice(index, 1);
   garantirFornecedorPrincipal();
   renderListaFornecedores();
@@ -350,7 +495,6 @@ function montarOptionsFornecedor(fornecedor, indexAtual) {
   options += fornecedoresCadastrados.map((f) => {
     const id = Number(f?.id ?? 0);
     const nome = String(f?.nome ?? "");
-    const ativo = Number(f?.ativo ?? 1) === 1;
     const selected = id === selecionadoId ? "selected" : "";
 
     const usadoEmOutraLinha = fornecedoresTemp.some((item, idx) => {
@@ -358,10 +502,8 @@ function montarOptionsFornecedor(fornecedor, indexAtual) {
       return Number(item?.fornecedor_id ?? 0) === id;
     });
 
-    const disabled = (!ativo || usadoEmOutraLinha) ? "disabled" : "";
-    const labelExtra = !ativo
-      ? " (Inativo)"
-      : (usadoEmOutraLinha ? " (Já selecionado)" : "");
+    const disabled = usadoEmOutraLinha ? "disabled" : "";
+    const labelExtra = usadoEmOutraLinha ? " (Já selecionado)" : "";
 
     return `
       <option value="${id}" ${selected} ${disabled}>
@@ -377,6 +519,7 @@ function criarFornecedorCard(fornecedor, index) {
   const principal = Number(fornecedor?.principal || 0) === 1;
   const tituloFornecedor = escapeHtml((fornecedor?.nome ?? "").trim() || `Fornecedor ${index + 1}`);
   const fornecedorSelecionado = Number(fornecedor?.fornecedor_id ?? 0) > 0;
+  const produtoAtivo = !produtoAtualEmEdicao || Number(produtoAtualEmEdicao?.ativo ?? 1) === 1;
 
   return `
     <div class="card fornecedor-card border mb-3 ${principal ? "border-primary shadow-sm" : ""}">
@@ -397,7 +540,7 @@ function criarFornecedorCard(fornecedor, index) {
                 name="fornecedorPrincipal"
                 ${principal ? "checked" : ""}
                 data-marcar-principal="${index}"
-                ${!fornecedorSelecionado ? "disabled" : ""}
+                ${!fornecedorSelecionado || !produtoAtivo ? "disabled" : ""}
               >
               <label class="form-check-label">Principal</label>
             </div>
@@ -406,6 +549,7 @@ function criarFornecedorCard(fornecedor, index) {
               type="button"
               class="btn btn-sm btn-outline-danger"
               data-remover-fornecedor="${index}"
+              ${!produtoAtivo ? "disabled" : ""}
             >
               Remover
             </button>
@@ -414,7 +558,7 @@ function criarFornecedorCard(fornecedor, index) {
 
         ${principal ? `
           <div class="alert alert-primary py-2 mb-3">
-            Este é o fornecedor principal usado como referência de vínculo do produto.
+            Este é o fornecedor principal usado como referência do produto.
           </div>
         ` : ""}
 
@@ -425,6 +569,7 @@ function criarFornecedorCard(fornecedor, index) {
               class="form-select"
               data-campo="fornecedor_id"
               data-index="${index}"
+              ${!produtoAtivo ? "disabled" : ""}
             >
               ${montarOptionsFornecedor(fornecedor, index)}
             </select>
@@ -438,6 +583,33 @@ function criarFornecedorCard(fornecedor, index) {
               data-campo="codigo"
               data-index="${index}"
               placeholder="Ex.: 83921"
+              ${!produtoAtivo ? "disabled" : ""}
+            >
+          </div>
+
+          <div class="col-12 col-lg-6">
+            <label class="form-label">Preço de custo</label>
+            <input
+              class="form-control"
+              value="${escapeHtml(fornecedor?.preco_custo ?? "")}"
+              data-campo="preco_custo"
+              data-index="${index}"
+              inputmode="decimal"
+              placeholder="0.00"
+              ${!produtoAtivo ? "disabled" : ""}
+            >
+          </div>
+
+          <div class="col-12 col-lg-6">
+            <label class="form-label">Preço de venda</label>
+            <input
+              class="form-control"
+              value="${escapeHtml(fornecedor?.preco_venda ?? "")}"
+              data-campo="preco_venda"
+              data-index="${index}"
+              inputmode="decimal"
+              placeholder="0.00"
+              ${!produtoAtivo ? "disabled" : ""}
             >
           </div>
 
@@ -449,6 +621,7 @@ function criarFornecedorCard(fornecedor, index) {
               data-campo="observacao"
               data-index="${index}"
               placeholder="Ex.: acabamento fosco, cromado, lote especial..."
+              ${!produtoAtivo ? "disabled" : ""}
             >
           </div>
         </div>
@@ -483,6 +656,11 @@ function renderListaFornecedores() {
 }
 
 function adicionarFornecedor() {
+  if (produtoAtualEmEdicao && Number(produtoAtualEmEdicao?.ativo ?? 1) !== 1) {
+    setStatusMensagem("Produto inativo não pode ser alterado.", "erro");
+    return;
+  }
+
   if (fornecedoresCadastrados.length === 0) {
     setStatusMensagem("Não há fornecedores cadastrados para adicionar.", "erro");
     return;
@@ -500,10 +678,14 @@ function limparModal() {
   if ($("produtoNcm")) $("produtoNcm").value = "";
   if ($("produtoEstoqueMinimo")) $("produtoEstoqueMinimo").value = "0";
   if ($("tituloModalProduto")) $("tituloModalProduto").textContent = "Novo Produto";
+  if ($("subtituloModalProduto")) $("subtituloModalProduto").textContent = "";
 
+  produtoAtualEmEdicao = null;
   setStatusMensagem("");
   fornecedoresTemp = [];
+  atualizarBoxStatusProduto(null);
   renderListaFornecedores();
+  setCamposProdutoHabilitados(true);
 }
 
 async function abrirModalNovoProduto() {
@@ -535,18 +717,24 @@ async function abrirModalProdutoExistente(produtoId) {
   if (!produto) return;
 
   limparModal();
+  produtoAtualEmEdicao = produto;
 
   if ($("produtoId")) $("produtoId").value = String(produto.id ?? "");
   if ($("produtoNome")) $("produtoNome").value = String(produto.nome ?? "");
   if ($("produtoNcm")) $("produtoNcm").value = normalizarNcm(produto.ncm ?? "");
   if ($("produtoEstoqueMinimo")) $("produtoEstoqueMinimo").value = String(valorSeguroNumero(produto.estoque_minimo, 0));
   if ($("tituloModalProduto")) $("tituloModalProduto").textContent = "Cadastro do Produto";
+  if ($("subtituloModalProduto")) {
+    $("subtituloModalProduto").textContent = `ID ${produto.id} • Status: ${statusProdutoLabel(produto.ativo)}`;
+  }
 
   if (Array.isArray(produto.fornecedores) && produto.fornecedores.length > 0) {
     fornecedoresTemp = produto.fornecedores.map((f) => ({
       fornecedor_id: String(f?.fornecedor_id ?? ""),
       nome: f?.nome ?? "",
       codigo: f?.codigo ?? "",
+      preco_custo: f?.preco_custo ?? "",
+      preco_venda: f?.preco_venda ?? "",
       observacao: f?.observacao ?? "",
       principal: Number(f?.principal ?? 0) === 1 ? 1 : 0
     }));
@@ -556,6 +744,11 @@ async function abrirModalProdutoExistente(produtoId) {
 
   garantirFornecedorPrincipal();
   renderListaFornecedores();
+  atualizarBoxStatusProduto(produto);
+
+  const ativo = Number(produto?.ativo ?? 1) === 1;
+  setCamposProdutoHabilitados(ativo);
+
   getModal()?.show();
 }
 
@@ -564,13 +757,21 @@ function fornecedoresValidosParaEnvio() {
     .map((f) => {
       const fornecedorId = Number(f?.fornecedor_id ?? 0);
       const nome = fornecedorId > 0
-        ? obterNomeFornecedorPorId(fornecedorId)
+        ? obterNomeFornecedorPorId(fornecedorId) || String(f?.nome ?? "").trim()
         : "";
+
+      const precoCustoRaw = String(f?.preco_custo ?? "").trim().replace(",", ".");
+      const precoVendaRaw = String(f?.preco_venda ?? "").trim().replace(",", ".");
+
+      const precoCusto = precoCustoRaw === "" ? 0 : Number(precoCustoRaw);
+      const precoVenda = precoVendaRaw === "" ? 0 : Number(precoVendaRaw);
 
       return {
         fornecedor_id: fornecedorId,
         nome: String(nome ?? "").trim(),
         codigo: String(f?.codigo ?? "").trim(),
+        preco_custo: Number.isFinite(precoCusto) ? precoCusto : 0,
+        preco_venda: Number.isFinite(precoVenda) ? precoVenda : 0,
         observacao: String(f?.observacao ?? "").trim(),
         principal: Number(f?.principal ?? 0) === 1 ? 1 : 0
       };
@@ -580,11 +781,16 @@ function fornecedoresValidosParaEnvio() {
 
 async function salvarProduto() {
   const produtoId = Number($("produtoId")?.value ?? 0);
-  const nome = ($("produtoNome")?.value ?? "").trim();
+  const nome = normalizarTexto($("produtoNome")?.value ?? "");
   const ncm = normalizarNcm($("produtoNcm")?.value ?? "");
   const estoqueMinimo = Number($("produtoEstoqueMinimo")?.value ?? 0);
 
   setStatusMensagem("");
+
+  if (produtoId > 0 && produtoAtualEmEdicao && Number(produtoAtualEmEdicao?.ativo ?? 1) !== 1) {
+    setStatusMensagem("Produto inativo não pode ser alterado.", "erro");
+    return;
+  }
 
   if (!nome) {
     setStatusMensagem("Informe o nome do produto.", "erro");
@@ -612,6 +818,15 @@ async function salvarProduto() {
     return;
   }
 
+  const fornecedorPrecoInvalido = fornecedores.find(
+    (f) => Number(f.preco_custo) < 0 || Number(f.preco_venda) < 0
+  );
+
+  if (fornecedorPrecoInvalido) {
+    setStatusMensagem("Os preços dos fornecedores devem ser maiores ou iguais a zero.", "erro");
+    return;
+  }
+
   if (fornecedores.length > 0) {
     const principalCount = fornecedores.filter((f) => Number(f.principal) === 1).length;
     if (principalCount !== 1) {
@@ -635,7 +850,7 @@ async function salvarProduto() {
     const payload = {
       nome,
       ncm,
-      quantidade: produtoId > 0 ? Number(produtoAtual?.quantidade ?? 0) : 0,
+      quantidade: produtoId > 0 ? Number(produtoAtual?.quantidade ?? produtoAtualEmEdicao?.quantidade ?? 0) : 0,
       estoque_minimo: estoqueMinimo,
       fornecedores
     };
@@ -692,12 +907,59 @@ async function salvarProduto() {
   }
 }
 
+async function inativarProduto(produtoId) {
+  const produto = produtosCache.find((p) => Number(p?.id ?? 0) === Number(produtoId));
+  const nomeProduto = produto?.nome ? ` "${produto.nome}"` : "";
+
+  const confirmou = window.confirm(`Deseja realmente inativar o produto${nomeProduto}?`);
+  if (!confirmou) return;
+
+  try {
+    const resp = await apiRequest("remover_produto", { produto_id: produtoId }, "POST");
+
+    if (!resp?.sucesso) {
+      window.alert(resp?.mensagem || "Não foi possível inativar o produto.");
+      return;
+    }
+
+    if (Number($("produtoId")?.value ?? 0) === Number(produtoId)) {
+      getModal()?.hide();
+    }
+
+    await carregarProdutos();
+
+    logJsInfo({
+      origem: "produtos.js",
+      mensagem: "Produto inativado com sucesso",
+      produto_id: produtoId
+    });
+
+    window.alert(resp?.mensagem || "Produto inativado com sucesso.");
+  } catch (err) {
+    logJsError({
+      origem: "produtos.js",
+      mensagem: "Erro ao inativar produto",
+      detalhe: err?.message,
+      stack: err?.stack,
+      produto_id: produtoId
+    });
+
+    window.alert("Erro inesperado ao inativar produto.");
+  }
+}
+
 function bindTabelaAcoes() {
   $("tabelaProdutos")?.addEventListener("click", (ev) => {
-    const btn = ev.target.closest("button[data-acao='abrir'][data-id]");
-    if (!btn) return;
+    const btnAbrir = ev.target.closest("button[data-acao='abrir'][data-id]");
+    if (btnAbrir) {
+      abrirModalProdutoExistente(Number(btnAbrir.dataset.id || 0));
+      return;
+    }
 
-    abrirModalProdutoExistente(Number(btn.dataset.id || 0));
+    const btnInativar = ev.target.closest("button[data-acao='inativar'][data-id]");
+    if (btnInativar) {
+      inativarProduto(Number(btnInativar.dataset.id || 0));
+    }
   });
 }
 
@@ -708,6 +970,8 @@ function bindBusca() {
     if ($("buscaProduto")) $("buscaProduto").value = "";
     aplicarFiltro();
   });
+
+  $("filtroStatusProduto")?.addEventListener("change", aplicarFiltro);
 }
 
 function bindAcoesTopo() {
@@ -728,6 +992,12 @@ function bindAcoesTopo() {
 
 function bindModal() {
   $("btnSalvarProduto")?.addEventListener("click", salvarProduto);
+
+  $("btnInativarProduto")?.addEventListener("click", async () => {
+    const produtoId = Number($("produtoId")?.value ?? 0);
+    if (produtoId <= 0) return;
+    await inativarProduto(produtoId);
+  });
 
   $("produtoNcm")?.addEventListener("input", (ev) => {
     ev.target.value = normalizarNcm(ev.target.value);

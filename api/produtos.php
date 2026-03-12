@@ -49,14 +49,21 @@ function coluna_existe(mysqli $conn, string $tabela, string $coluna): bool
     return $ok;
 }
 
+function produto_colapsar_espacos(string $valor): string
+{
+    $valor = trim($valor);
+    $valor = preg_replace('/\s+/u', ' ', $valor) ?? $valor;
+    return $valor;
+}
+
 function produto_normalizar_nome(string $nome): string
 {
-    return trim($nome);
+    return produto_colapsar_espacos($nome);
 }
 
 function produto_nome_para_comparacao(string $nome): string
 {
-    $nome = trim($nome);
+    $nome = produto_colapsar_espacos($nome);
 
     if (function_exists('mb_strtolower')) {
         return mb_strtolower($nome, 'UTF-8');
@@ -70,20 +77,29 @@ function produto_nome_duplicado(mysqli $conn, string $nome, int $ignorarProdutoI
     $nomeComparacao = produto_nome_para_comparacao($nome);
 
     $stmt = $conn->prepare("
-        SELECT id
+        SELECT id, nome
         FROM produtos
-        WHERE LOWER(TRIM(nome)) = ?
-          AND id <> ?
-        LIMIT 1
+        WHERE id <> ?
     ");
 
     if (!$stmt) {
         throw new RuntimeException('Erro ao validar nome do produto.');
     }
 
-    $stmt->bind_param('si', $nomeComparacao, $ignorarProdutoId);
+    $stmt->bind_param('i', $ignorarProdutoId);
     $stmt->execute();
-    $duplicado = (bool)$stmt->get_result()->fetch_assoc();
+    $res = $stmt->get_result();
+
+    $duplicado = false;
+
+    while ($row = $res->fetch_assoc()) {
+        $nomeExistente = produto_nome_para_comparacao((string)($row['nome'] ?? ''));
+        if ($nomeExistente === $nomeComparacao) {
+            $duplicado = true;
+            break;
+        }
+    }
+
     $stmt->close();
 
     return $duplicado;
@@ -477,7 +493,10 @@ function produtos_listar(mysqli $conn): array
                 " . ($hasCusto ? ",COALESCE(preco_custo,0) AS preco_custo" : ",0 AS preco_custo") . "
                 " . ($hasVenda ? ",COALESCE(preco_venda,0) AS preco_venda" : ",0 AS preco_venda") . "
             FROM produtos
-            ORDER BY COALESCE(ativo, 1) DESC, nome ASC, id ASC
+            ORDER BY
+                COALESCE(ativo, 1) DESC,
+                nome ASC,
+                id ASC
         ";
 
         $res = $conn->query($sql);
@@ -581,7 +600,7 @@ function produto_obter(mysqli $conn, int $produto_id): array
 function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
 {
     try {
-        $q = trim($q);
+        $q = produto_colapsar_espacos($q);
         $limit = max(1, min(25, $limit));
 
         $hasCusto = coluna_existe($conn, 'produtos', 'preco_custo');
@@ -590,6 +609,50 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
         $hasAtivo = coluna_existe($conn, 'produtos', 'ativo');
 
         $like = '%' . $q . '%';
+        $prefix = $q . '%';
+
+        if ($q === '') {
+            $sql = "
+                SELECT
+                    id,
+                    nome,
+                    " . ($hasNcm ? "COALESCE(ncm, '') AS ncm," : "'' AS ncm,") . "
+                    quantidade
+                    " . ($hasEstoqueMinimo ? ", COALESCE(estoque_minimo, 0) AS estoque_minimo" : ", 0 AS estoque_minimo") . "
+                    " . ($hasCusto ? ", COALESCE(preco_custo, 0) AS preco_custo" : ", 0 AS preco_custo") . "
+                    " . ($hasAtivo ? ", COALESCE(ativo, 1) AS ativo" : ", 1 AS ativo") . "
+                FROM produtos
+                " . ($hasAtivo ? "WHERE COALESCE(ativo, 1) = 1" : "") . "
+                ORDER BY nome ASC, id ASC
+                LIMIT ?
+            ";
+
+            $stmt = $conn->prepare($sql);
+            if (!$stmt) {
+                return resposta(false, 'Erro ao buscar produtos', ['itens' => []]);
+            }
+
+            $stmt->bind_param('i', $limit);
+            $stmt->execute();
+            $res = $stmt->get_result();
+
+            $itens = [];
+            while ($r = $res->fetch_assoc()) {
+                $itens[] = [
+                    'id'             => (int)$r['id'],
+                    'nome'           => (string)$r['nome'],
+                    'ncm'            => (string)($r['ncm'] ?? ''),
+                    'quantidade'     => (int)$r['quantidade'],
+                    'estoque_minimo' => (int)$r['estoque_minimo'],
+                    'preco_custo'    => (float)$r['preco_custo'],
+                    'ativo'          => (int)$r['ativo'],
+                ];
+            }
+
+            $stmt->close();
+
+            return resposta(true, 'OK', ['itens' => $itens]);
+        }
 
         $sql = "
             SELECT
@@ -601,9 +664,20 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
                 " . ($hasCusto ? ", COALESCE(preco_custo, 0) AS preco_custo" : ", 0 AS preco_custo") . "
                 " . ($hasAtivo ? ", COALESCE(ativo, 1) AS ativo" : ", 1 AS ativo") . "
             FROM produtos
-            WHERE (" . ($hasNcm ? "nome LIKE ? OR ncm LIKE ?" : "nome LIKE ?") . ")
-              " . ($hasAtivo ? "AND COALESCE(ativo, 1) = 1" : "") . "
-            ORDER BY nome ASC
+            WHERE (
+                nome LIKE ?
+                " . ($hasNcm ? " OR ncm LIKE ?" : "") . "
+            )
+            " . ($hasAtivo ? "AND COALESCE(ativo, 1) = 1" : "") . "
+            ORDER BY
+                CASE
+                    WHEN nome = ? THEN 0
+                    WHEN nome LIKE ? THEN 1
+                    " . ($hasNcm ? "WHEN ncm = ? THEN 2 WHEN ncm LIKE ? THEN 3" : "") . "
+                    ELSE 4
+                END,
+                nome ASC,
+                id ASC
             LIMIT ?
         ";
 
@@ -613,9 +687,24 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
         }
 
         if ($hasNcm) {
-            $stmt->bind_param('ssi', $like, $like, $limit);
+            $stmt->bind_param(
+                'ssssssi',
+                $like,
+                $like,
+                $q,
+                $prefix,
+                $q,
+                $prefix,
+                $limit
+            );
         } else {
-            $stmt->bind_param('si', $like, $limit);
+            $stmt->bind_param(
+                'sssi',
+                $like,
+                $q,
+                $prefix,
+                $limit
+            );
         }
 
         $stmt->execute();
@@ -787,8 +876,9 @@ function produtos_adicionar(
         $pc = (float)$precos['preco_custo'];
         $pv = (float)$precos['preco_venda'];
         $hasNcm = coluna_existe($conn, 'produtos', 'ncm');
+        $hasAtivo = coluna_existe($conn, 'produtos', 'ativo');
 
-        if ($hasNcm) {
+        if ($hasNcm && $hasAtivo) {
             $stmt = $conn->prepare(
                 'INSERT INTO produtos (nome, ncm, quantidade, estoque_minimo, ativo, preco_custo, preco_venda)
                  VALUES (?, ?, ?, ?, 1, ?, ?)'
@@ -799,10 +889,32 @@ function produtos_adicionar(
             }
 
             $stmt->bind_param('ssiidd', $nome, $ncmNormalizado, $quantidade, $estoque_minimo, $pc, $pv);
-        } else {
+        } elseif ($hasNcm) {
+            $stmt = $conn->prepare(
+                'INSERT INTO produtos (nome, ncm, quantidade, estoque_minimo, preco_custo, preco_venda)
+                 VALUES (?, ?, ?, ?, ?, ?)'
+            );
+            if (!$stmt) {
+                $conn->rollback();
+                return resposta(false, 'Erro ao cadastrar produto.', null);
+            }
+
+            $stmt->bind_param('ssiidd', $nome, $ncmNormalizado, $quantidade, $estoque_minimo, $pc, $pv);
+        } elseif ($hasAtivo) {
             $stmt = $conn->prepare(
                 'INSERT INTO produtos (nome, quantidade, estoque_minimo, ativo, preco_custo, preco_venda)
                  VALUES (?, ?, ?, 1, ?, ?)'
+            );
+            if (!$stmt) {
+                $conn->rollback();
+                return resposta(false, 'Erro ao cadastrar produto.', null);
+            }
+
+            $stmt->bind_param('siidd', $nome, $quantidade, $estoque_minimo, $pc, $pv);
+        } else {
+            $stmt = $conn->prepare(
+                'INSERT INTO produtos (nome, quantidade, estoque_minimo, preco_custo, preco_venda)
+                 VALUES (?, ?, ?, ?, ?)'
             );
             if (!$stmt) {
                 $conn->rollback();

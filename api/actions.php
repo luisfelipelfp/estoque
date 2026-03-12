@@ -74,6 +74,13 @@ function lower_text(string $value): string
     return strtolower($value);
 }
 
+function normalize_spaces(string $value): string
+{
+    $value = trim($value);
+    $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+    return $value;
+}
+
 function read_body(): array
 {
     static $cache = null;
@@ -204,6 +211,18 @@ function normalizar_login(string $login): string
     return lower_text($login);
 }
 
+function normalizar_ncm_payload(?string $ncm): ?string
+{
+    $valor = preg_replace('/\D+/', '', (string)$ncm) ?? '';
+    $valor = trim($valor);
+
+    if ($valor === '') {
+        return null;
+    }
+
+    return $valor;
+}
+
 function normalizar_fornecedores_payload(mysqli $conn, $fornecedoresRaw): array
 {
     if (!is_array($fornecedoresRaw) || empty($fornecedoresRaw)) {
@@ -212,6 +231,17 @@ function normalizar_fornecedores_payload(mysqli $conn, $fornecedoresRaw): array
 
     $normalizados = [];
     $idsUsados = [];
+
+    $stmt = $conn->prepare("
+        SELECT id, nome, ativo
+        FROM fornecedores
+        WHERE id = ?
+        LIMIT 1
+    ");
+
+    if (!$stmt) {
+        throw new RuntimeException('Erro ao validar fornecedor.');
+    }
 
     foreach ($fornecedoresRaw as $item) {
         if (!is_array($item)) {
@@ -225,44 +255,51 @@ function normalizar_fornecedores_payload(mysqli $conn, $fornecedoresRaw): array
         }
 
         if (in_array($fornecedorId, $idsUsados, true)) {
+            $stmt->close();
             throw new InvalidArgumentException('O mesmo fornecedor não pode ser adicionado mais de uma vez para o mesmo produto.');
-        }
-
-        $stmt = $conn->prepare("
-            SELECT id, nome, ativo
-            FROM fornecedores
-            WHERE id = ?
-            LIMIT 1
-        ");
-        if (!$stmt) {
-            throw new RuntimeException('Erro ao validar fornecedor.');
         }
 
         $stmt->bind_param('i', $fornecedorId);
         $stmt->execute();
         $fornecedorDb = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
 
         if (!$fornecedorDb) {
+            $stmt->close();
             throw new InvalidArgumentException('Fornecedor informado não existe.');
         }
 
         if ((int)($fornecedorDb['ativo'] ?? 1) !== 1) {
+            $stmt->close();
             throw new InvalidArgumentException('Fornecedor informado está inativo.');
+        }
+
+        $precoCusto = isset($item['preco_custo']) && $item['preco_custo'] !== ''
+            ? (float)$item['preco_custo']
+            : 0.0;
+
+        $precoVenda = isset($item['preco_venda']) && $item['preco_venda'] !== ''
+            ? (float)$item['preco_venda']
+            : 0.0;
+
+        if ($precoCusto < 0 || $precoVenda < 0) {
+            $stmt->close();
+            throw new InvalidArgumentException('Os preços dos fornecedores devem ser maiores ou iguais a zero.');
         }
 
         $normalizados[] = [
             'fornecedor_id' => $fornecedorId,
             'nome'          => (string)$fornecedorDb['nome'],
-            'codigo'        => trim((string)($item['codigo'] ?? '')),
-            'preco_custo'   => 0.0,
-            'preco_venda'   => 0.0,
-            'observacao'    => trim((string)($item['observacao'] ?? '')),
+            'codigo'        => normalize_spaces((string)($item['codigo'] ?? '')),
+            'preco_custo'   => $precoCusto,
+            'preco_venda'   => $precoVenda,
+            'observacao'    => normalize_spaces((string)($item['observacao'] ?? '')),
             'principal'     => !empty($item['principal']) ? 1 : 0,
         ];
 
         $idsUsados[] = $fornecedorId;
     }
+
+    $stmt->close();
 
     if (empty($normalizados)) {
         return [];
@@ -612,8 +649,9 @@ try {
             require_once __DIR__ . '/produtos.php';
             $usuario = require_auth();
 
-            $nome = trim((string)($body['nome'] ?? ''));
+            $nome = normalize_spaces((string)($body['nome'] ?? ''));
             $qtd  = (int)($body['quantidade'] ?? 0);
+            $estoqueMinimo = (int)($body['estoque_minimo'] ?? 0);
 
             if ($nome === '') {
                 json_response(false, 'Nome do produto obrigatório.', null, 400);
@@ -623,13 +661,26 @@ try {
                 json_response(false, 'Quantidade inválida.', null, 400);
             }
 
+            if ($estoqueMinimo < 0) {
+                json_response(false, 'Estoque mínimo inválido.', null, 400);
+            }
+
+            try {
+                $fornecedores = normalizar_fornecedores_payload($conn, $body['fornecedores'] ?? []);
+            } catch (InvalidArgumentException $e) {
+                json_response(false, $e->getMessage(), null, 400);
+            }
+
             $res = produtos_adicionar(
                 $conn,
                 $nome,
-                isset($body['ncm']) ? trim((string)$body['ncm']) : null,
+                isset($body['ncm']) ? normalizar_ncm_payload((string)$body['ncm']) : null,
                 $qtd,
-                0,
-                (int)$usuario['id']
+                $estoqueMinimo,
+                (int)$usuario['id'],
+                null,
+                null,
+                $fornecedores
             );
 
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
@@ -639,8 +690,8 @@ try {
             require_once __DIR__ . '/produtos.php';
             $usuario = require_auth();
 
-            $nome = trim((string)($body['nome'] ?? ''));
-            $ncm = isset($body['ncm']) ? trim((string)$body['ncm']) : null;
+            $nome = normalize_spaces((string)($body['nome'] ?? ''));
+            $ncm = isset($body['ncm']) ? normalizar_ncm_payload((string)$body['ncm']) : null;
             $qtd = (int)($body['quantidade'] ?? 0);
             $estoqueMinimo = (int)($body['estoque_minimo'] ?? 0);
 
@@ -682,8 +733,8 @@ try {
             $usuario = require_auth();
 
             $produtoId = (int)($body['produto_id'] ?? 0);
-            $nome = trim((string)($body['nome'] ?? ''));
-            $ncm = isset($body['ncm']) ? trim((string)$body['ncm']) : null;
+            $nome = normalize_spaces((string)($body['nome'] ?? ''));
+            $ncm = isset($body['ncm']) ? normalizar_ncm_payload((string)$body['ncm']) : null;
             $qtd = (int)($body['quantidade'] ?? 0);
             $estoqueMinimo = (int)($body['estoque_minimo'] ?? 0);
 
@@ -742,7 +793,7 @@ try {
             require_once __DIR__ . '/produtos.php';
             require_auth();
 
-            $q = trim((string)($_GET['q'] ?? $body['q'] ?? ''));
+            $q = normalize_spaces((string)($_GET['q'] ?? $body['q'] ?? ''));
             $limit = (int)($_GET['limit'] ?? $body['limit'] ?? 10);
             $limit = max(1, min(25, $limit));
 
