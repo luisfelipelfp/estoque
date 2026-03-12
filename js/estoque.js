@@ -35,8 +35,10 @@ function obterStatusEstoque(produto) {
 
   if (quantidade <= 0) {
     return {
+      chave: "zerado",
       texto: "Sem estoque",
       badge: "bg-danger",
+      linhaClasse: "table-danger",
       alertaClasse: "fw-bold text-danger",
       alertaTexto: "Produto sem estoque.",
       emBaixa: true
@@ -45,8 +47,10 @@ function obterStatusEstoque(produto) {
 
   if (quantidade <= estoqueMinimo) {
     return {
+      chave: "baixo",
       texto: "Estoque baixo",
       badge: "bg-warning text-dark",
+      linhaClasse: "table-warning",
       alertaClasse: "fw-bold text-warning",
       alertaTexto: "Produto em estoque baixo.",
       emBaixa: true
@@ -54,8 +58,10 @@ function obterStatusEstoque(produto) {
   }
 
   return {
+    chave: "normal",
     texto: "Normal",
     badge: "bg-success",
+    linhaClasse: "",
     alertaClasse: "fw-bold text-success",
     alertaTexto: "Estoque normal.",
     emBaixa: false
@@ -135,6 +141,67 @@ function setBtnLoading(id, loading, textoLoading = "Salvando...") {
   btn.textContent = loading ? textoLoading : btn.dataset.originalText;
 }
 
+function atualizarKPIs(lista) {
+  const produtos = Array.isArray(lista) ? lista : [];
+
+  const total = produtos.length;
+  const baixo = produtos.filter((p) => {
+    const status = obterStatusEstoque(p);
+    return status.chave === "baixo";
+  }).length;
+  const zerado = produtos.filter((p) => {
+    const status = obterStatusEstoque(p);
+    return status.chave === "zerado";
+  }).length;
+
+  setTexto("kpiTotalProdutos", total);
+  setTexto("kpiProdutosBaixo", baixo);
+  setTexto("kpiProdutosSemEstoque", zerado);
+}
+
+function atualizarResumoFiltro(listaFiltrada) {
+  const el = $("estoqueResumoFiltro");
+  if (!el) return;
+
+  const total = Array.isArray(produtosCache) ? produtosCache.length : 0;
+  const exibidos = Array.isArray(listaFiltrada) ? listaFiltrada.length : 0;
+  const filtroStatus = $("filtroStatusEstoque")?.value ?? "todos";
+  const busca = ($("buscaProduto")?.value ?? "").trim();
+
+  let descricaoStatus = "todos os produtos";
+  if (filtroStatus === "baixo") descricaoStatus = "somente produtos com estoque baixo";
+  if (filtroStatus === "zerado") descricaoStatus = "somente produtos sem estoque";
+  if (filtroStatus === "alerta") descricaoStatus = "somente produtos em alerta";
+  if (filtroStatus === "normal") descricaoStatus = "somente produtos com estoque normal";
+
+  if (busca) {
+    el.textContent = `Exibindo ${exibidos} de ${total} produto(s), filtrando por "${busca}" em ${descricaoStatus}.`;
+    return;
+  }
+
+  el.textContent = `Exibindo ${exibidos} de ${total} produto(s) em ${descricaoStatus}.`;
+}
+
+function atualizarStatusTopo(listaFiltrada) {
+  const el = $("estoqueStatusTopo");
+  if (!el) return;
+
+  const exibidos = Array.isArray(listaFiltrada) ? listaFiltrada.length : 0;
+  const alertas = (Array.isArray(listaFiltrada) ? listaFiltrada : []).filter((p) => obterStatusEstoque(p).emBaixa).length;
+
+  if (exibidos === 0) {
+    el.textContent = "Nenhum produto encontrado.";
+    return;
+  }
+
+  if (alertas > 0) {
+    el.textContent = `${exibidos} produto(s) exibido(s) • ${alertas} em alerta`;
+    return;
+  }
+
+  el.textContent = `${exibidos} produto(s) exibido(s)`;
+}
+
 function renderTabela(produtos) {
   const tbody = $("tabelaEstoque");
   if (!tbody) return;
@@ -142,7 +209,7 @@ function renderTabela(produtos) {
   if (!Array.isArray(produtos) || produtos.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="5" class="text-center text-muted">Nenhum produto encontrado.</td>
+        <td colspan="6" class="text-center text-muted">Nenhum produto encontrado.</td>
       </tr>
     `;
     return;
@@ -156,7 +223,7 @@ function renderTabela(produtos) {
     const status = obterStatusEstoque(p);
 
     return `
-      <tr class="${status.emBaixa ? "table-warning" : ""}">
+      <tr class="${status.linhaClasse}">
         <td>${id}</td>
         <td>${nome}</td>
         <td>
@@ -166,34 +233,80 @@ function renderTabela(produtos) {
         <td>
           <span class="badge ${status.badge}">${status.texto}</span>
         </td>
+        <td>
+          <div class="d-flex gap-2 flex-wrap">
+            <button
+              class="btn btn-sm btn-outline-success"
+              type="button"
+              data-acao="entrada"
+              data-id="${id}"
+              data-nome="${nome}"
+            >
+              Entrada
+            </button>
+            <button
+              class="btn btn-sm btn-outline-danger"
+              type="button"
+              data-acao="saida"
+              data-id="${id}"
+              data-nome="${nome}"
+            >
+              Saída
+            </button>
+          </div>
+        </td>
       </tr>
     `;
   }).join("");
 }
 
-function aplicarFiltro() {
+function filtrarProdutos() {
   const termo = ($("buscaProduto")?.value ?? "").trim().toLowerCase();
+  const filtroStatus = $("filtroStatusEstoque")?.value ?? "todos";
 
-  if (!termo) {
-    renderTabela(produtosCache);
-    return;
+  let filtrados = [...produtosCache];
+
+  if (termo) {
+    filtrados = filtrados.filter((p) =>
+      String(p?.nome ?? "").toLowerCase().includes(termo)
+    );
   }
 
-  const filtrados = produtosCache.filter((p) =>
-    String(p?.nome ?? "").toLowerCase().includes(termo)
-  );
+  if (filtroStatus === "baixo") {
+    filtrados = filtrados.filter((p) => obterStatusEstoque(p).chave === "baixo");
+  } else if (filtroStatus === "zerado") {
+    filtrados = filtrados.filter((p) => obterStatusEstoque(p).chave === "zerado");
+  } else if (filtroStatus === "alerta") {
+    filtrados = filtrados.filter((p) => obterStatusEstoque(p).emBaixa);
+  } else if (filtroStatus === "normal") {
+    filtrados = filtrados.filter((p) => obterStatusEstoque(p).chave === "normal");
+  }
 
+  return filtrados;
+}
+
+function aplicarFiltro() {
+  const filtrados = filtrarProdutos();
   renderTabela(filtrados);
+  atualizarKPIs(produtosCache);
+  atualizarResumoFiltro(filtrados);
+  atualizarStatusTopo(filtrados);
 }
 
 async function carregarProdutos() {
   const tbody = $("tabelaEstoque");
+  const topo = $("estoqueStatusTopo");
+
   if (tbody) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="5" class="text-center text-muted">Carregando...</td>
+        <td colspan="6" class="text-center text-muted">Carregando...</td>
       </tr>
     `;
+  }
+
+  if (topo) {
+    topo.textContent = "Carregando...";
   }
 
   try {
@@ -202,6 +315,9 @@ async function carregarProdutos() {
     if (!resp?.sucesso) {
       produtosCache = [];
       renderTabela([]);
+      atualizarKPIs([]);
+      atualizarResumoFiltro([]);
+      atualizarStatusTopo([]);
       return;
     }
 
@@ -211,17 +327,20 @@ async function carregarProdutos() {
     logJsInfo({
       origem: "estoque.js",
       mensagem: "Produtos carregados com sucesso",
-      total: produtosCache.length,
+      total: produtosCache.length
     });
   } catch (err) {
     produtosCache = [];
     renderTabela([]);
+    atualizarKPIs([]);
+    atualizarResumoFiltro([]);
+    atualizarStatusTopo([]);
 
     logJsError({
       origem: "estoque.js",
       mensagem: "Erro ao carregar produtos",
       detalhe: err?.message,
-      stack: err?.stack,
+      stack: err?.stack
     });
   }
 }
@@ -302,8 +421,8 @@ function renderUltimasMovimentacoes(prefixo, movs) {
       tipo === "saida"
         ? "bg-danger"
         : tipo === "entrada"
-        ? "bg-success"
-        : "bg-secondary";
+          ? "bg-success"
+          : "bg-secondary";
 
     const borderClass = index < ultimas.length - 1 ? "border-bottom" : "";
 
@@ -642,6 +761,16 @@ function bindBusca() {
     if ($("buscaProduto")) $("buscaProduto").value = "";
     aplicarFiltro();
   });
+
+  $("filtroStatusEstoque")?.addEventListener("change", aplicarFiltro);
+
+  $("btnSomenteAlertas")?.addEventListener("click", () => {
+    const select = $("filtroStatusEstoque");
+    if (select) {
+      select.value = "alerta";
+    }
+    aplicarFiltro();
+  });
 }
 
 function bindAcoesTopo() {
@@ -743,7 +872,7 @@ async function salvarEntrada() {
       origem: "estoque.js",
       mensagem: "Erro ao salvar entrada",
       detalhe: err?.message,
-      stack: err?.stack,
+      stack: err?.stack
     });
   } finally {
     setBtnLoading("entradaSalvar", false);
@@ -823,11 +952,31 @@ async function salvarSaida() {
       origem: "estoque.js",
       mensagem: "Erro ao salvar saída",
       detalhe: err?.message,
-      stack: err?.stack,
+      stack: err?.stack
     });
   } finally {
     setBtnLoading("saidaSalvar", false);
   }
+}
+
+function bindTabelaAcoes() {
+  $("tabelaEstoque")?.addEventListener("click", async (ev) => {
+    const btn = ev.target.closest("button[data-acao][data-id]");
+    if (!btn) return;
+
+    const acao = btn.dataset.acao || "";
+    const id = Number(btn.dataset.id || 0);
+    const nome = btn.dataset.nome || "";
+
+    if (acao === "entrada") {
+      await abrirModalEntrada({ id, nome });
+      return;
+    }
+
+    if (acao === "saida") {
+      await abrirModalSaida({ id, nome });
+    }
+  });
 }
 
 function bindModais() {
@@ -854,6 +1003,7 @@ function bindModais() {
 document.addEventListener("DOMContentLoaded", async () => {
   bindBusca();
   bindAcoesTopo();
+  bindTabelaAcoes();
   bindModais();
 
   await carregarFornecedores();

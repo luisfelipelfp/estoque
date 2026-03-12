@@ -13,6 +13,7 @@ function coluna_existe(mysqli $conn, string $tabela, string $coluna): bool
 
     $dbRow = $conn->query("SELECT DATABASE() AS db");
     $db = '';
+
     if ($dbRow instanceof mysqli_result) {
         $assoc = $dbRow->fetch_assoc();
         $db = (string)($assoc['db'] ?? '');
@@ -41,13 +42,10 @@ function coluna_existe(mysqli $conn, string $tabela, string $coluna): bool
 
     $stmt->bind_param('ss', $tabela, $coluna);
     $stmt->execute();
-
     $ok = (bool)$stmt->get_result()->fetch_assoc();
-
     $stmt->close();
 
     $cache[$key] = $ok;
-
     return $ok;
 }
 

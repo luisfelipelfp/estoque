@@ -4,10 +4,46 @@
 #tabelaEstoque th {
   background: #f4f6fa;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 #tabelaEstoque td {
   vertical-align: middle;
+}
+
+#tabelaEstoque .btn {
+  min-width: 82px;
+}
+
+/* =========================
+   Cards de resumo
+   ========================= */
+.estoque-kpi-card {
+  border: 1px solid #e9edf3;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+  padding: 18px 18px 16px;
+  height: 100%;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+}
+
+.estoque-kpi-label {
+  font-size: 0.88rem;
+  color: #6c757d;
+  margin-bottom: 6px;
+}
+
+.estoque-kpi-value {
+  font-size: 1.9rem;
+  font-weight: 800;
+  line-height: 1;
+  color: #212529;
+  margin-bottom: 8px;
+}
+
+.estoque-kpi-helper {
+  font-size: 0.86rem;
+  color: #6c757d;
 }
 
 /* =========================
@@ -66,6 +102,13 @@
 }
 
 /* =========================
+   Cabeçalho do card principal
+   ========================= */
+#estoqueResumoFiltro {
+  min-height: 20px;
+}
+
+/* =========================
    Responsivo
    ========================= */
 @media (max-width: 991.98px) {
@@ -73,4 +116,12 @@
   #modalSaida .modal-dialog {
     margin: 0.75rem;
   }
-}   
+
+  #tabelaEstoque .btn {
+    min-width: auto;
+  }
+
+  .estoque-kpi-value {
+    font-size: 1.6rem;
+  }
+}
