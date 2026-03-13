@@ -18,6 +18,24 @@ function removeAcentos(string $s): string
     );
 }
 
+function rel_normalizar_texto(?string $valor): string
+{
+    $texto = trim((string)$valor);
+    $texto = preg_replace('/\s+/u', ' ', $texto) ?? $texto;
+    return $texto;
+}
+
+function rel_data_valida(?string $data): bool
+{
+    $valor = trim((string)$data);
+    if ($valor === '') {
+        return false;
+    }
+
+    $dt = DateTime::createFromFormat('Y-m-d', $valor);
+    return $dt instanceof DateTime && $dt->format('Y-m-d') === $valor;
+}
+
 function normalizaTipoMov(?string $tipo): string
 {
     $t = strtolower(trim((string)$tipo));
@@ -59,6 +77,97 @@ function normalizaTipoMov(?string $tipo): string
     return '';
 }
 
+function rel_montar_where(array $filtros): array
+{
+    $where  = [];
+    $params = [];
+    $types  = '';
+
+    $tipo         = normalizaTipoMov((string)($filtros['tipo'] ?? ''));
+    $produtoId    = (int)($filtros['produto_id'] ?? 0);
+    $produto      = rel_normalizar_texto((string)($filtros['produto'] ?? ''));
+    $fornecedorId = (int)($filtros['fornecedor_id'] ?? 0);
+    $usuarioId    = (int)($filtros['usuario_id'] ?? 0);
+    $usuario      = rel_normalizar_texto((string)($filtros['usuario'] ?? ''));
+    $dataInicio   = rel_normalizar_texto((string)($filtros['data_inicio'] ?? ''));
+    $dataFim      = rel_normalizar_texto((string)($filtros['data_fim'] ?? ''));
+
+    if ($tipo !== '') {
+        $where[]  = 'm.tipo = ?';
+        $params[] = $tipo;
+        $types   .= 's';
+    }
+
+    if ($produtoId > 0) {
+        $where[]  = 'm.produto_id = ?';
+        $params[] = $produtoId;
+        $types   .= 'i';
+    }
+
+    if ($produto !== '') {
+        $where[]  = 'COALESCE(m.produto_nome, p.nome, "") LIKE ?';
+        $params[] = '%' . $produto . '%';
+        $types   .= 's';
+    }
+
+    if ($fornecedorId > 0) {
+        $where[]  = 'm.fornecedor_id = ?';
+        $params[] = $fornecedorId;
+        $types   .= 'i';
+    }
+
+    if ($usuarioId > 0) {
+        $where[]  = 'm.usuario_id = ?';
+        $params[] = $usuarioId;
+        $types   .= 'i';
+    }
+
+    if ($usuario !== '') {
+        $where[]  = 'COALESCE(u.nome, "Sistema") LIKE ?';
+        $params[] = '%' . $usuario . '%';
+        $types   .= 's';
+    }
+
+    if ($dataInicio !== '') {
+        if (!rel_data_valida($dataInicio)) {
+            throw new InvalidArgumentException('Data inicial inválida.');
+        }
+
+        $where[]  = 'm.data >= ?';
+        $params[] = $dataInicio . ' 00:00:00';
+        $types   .= 's';
+    }
+
+    if ($dataFim !== '') {
+        if (!rel_data_valida($dataFim)) {
+            throw new InvalidArgumentException('Data final inválida.');
+        }
+
+        $where[]  = 'm.data <= ?';
+        $params[] = $dataFim . ' 23:59:59';
+        $types   .= 's';
+    }
+
+    if ($dataInicio !== '' && $dataFim !== '' && strcmp($dataInicio, $dataFim) > 0) {
+        throw new InvalidArgumentException('A data inicial não pode ser maior que a data final.');
+    }
+
+    return [
+        'whereSql' => $where ? ' WHERE ' . implode(' AND ', $where) : '',
+        'params'   => $params,
+        'types'    => $types,
+    ];
+}
+
+function rel_bind_execute(mysqli_stmt $stmt, string $types, array $params): void
+{
+    if ($types !== '') {
+        $stmt->bind_param($types, ...$params);
+    }
+
+    $stmt->execute();
+}
+
 function relatorio_estoque_atual(mysqli $conn): array
 {
     try {
@@ -69,34 +178,52 @@ function relatorio_estoque_atual(mysqli $conn): array
                 COALESCE(p.quantidade, 0) AS quantidade,
                 COALESCE(p.preco_custo, 0) AS preco_custo,
                 COALESCE(p.preco_venda, 0) AS preco_venda,
+                COALESCE(p.estoque_minimo, 0) AS estoque_minimo,
                 (COALESCE(p.quantidade, 0) * COALESCE(p.preco_custo, 0)) AS valor_custo_estimado,
                 (COALESCE(p.quantidade, 0) * COALESCE(p.preco_venda, 0)) AS valor_venda_estimado
             FROM produtos p
-            ORDER BY p.nome ASC
+            ORDER BY p.nome ASC, p.id ASC
         ";
 
         $res = $conn->query($sql);
+        if (!$res instanceof mysqli_result) {
+            throw new RuntimeException('Erro ao consultar estoque atual.');
+        }
 
         $itens = [];
         $totalQtd = 0;
         $totalCusto = 0.0;
         $totalVenda = 0.0;
+        $totalAbaixoMinimo = 0;
+        $totalSemEstoque = 0;
 
         while ($row = $res->fetch_assoc()) {
             $quantidade = (int)($row['quantidade'] ?? 0);
+            $estoqueMinimo = (int)($row['estoque_minimo'] ?? 0);
             $precoCusto = (float)($row['preco_custo'] ?? 0);
             $precoVenda = (float)($row['preco_venda'] ?? 0);
             $valorCusto = (float)($row['valor_custo_estimado'] ?? 0);
             $valorVenda = (float)($row['valor_venda_estimado'] ?? 0);
 
+            $status = 'normal';
+            if ($quantidade <= 0) {
+                $status = 'sem_estoque';
+                $totalSemEstoque++;
+            } elseif ($quantidade <= $estoqueMinimo) {
+                $status = 'abaixo_minimo';
+                $totalAbaixoMinimo++;
+            }
+
             $itens[] = [
                 'id'                   => (int)$row['id'],
                 'nome'                 => (string)$row['nome'],
                 'quantidade'           => $quantidade,
+                'estoque_minimo'       => $estoqueMinimo,
                 'preco_custo'          => $precoCusto,
                 'preco_venda'          => $precoVenda,
                 'valor_custo_estimado' => $valorCusto,
                 'valor_venda_estimado' => $valorVenda,
+                'status'               => $status,
             ];
 
             $totalQtd += $quantidade;
@@ -104,12 +231,16 @@ function relatorio_estoque_atual(mysqli $conn): array
             $totalVenda += $valorVenda;
         }
 
+        $res->free();
+
         return resposta(true, 'Estoque atual gerado com sucesso.', [
             'itens' => $itens,
             'totais' => [
-                'total_qtd'   => $totalQtd,
-                'total_custo' => $totalCusto,
-                'total_venda' => $totalVenda,
+                'total_qtd'           => $totalQtd,
+                'total_custo'         => $totalCusto,
+                'total_venda'         => $totalVenda,
+                'total_abaixo_minimo' => $totalAbaixoMinimo,
+                'total_sem_estoque'   => $totalSemEstoque,
             ],
         ]);
     } catch (Throwable $e) {
@@ -129,55 +260,12 @@ function relatorio(mysqli $conn, array $filtros): array
     $limite = max(1, min(5000, (int)($filtros['limite'] ?? 50)));
     $offset = ($pagina - 1) * $limite;
 
-    $where  = [];
-    $params = [];
-    $types  = '';
-
-    if (!empty($filtros['tipo']) && in_array($filtros['tipo'], ['entrada', 'saida', 'remocao'], true)) {
-        $where[]  = 'm.tipo = ?';
-        $params[] = (string)$filtros['tipo'];
-        $types   .= 's';
-    }
-
-    if (!empty($filtros['produto_id'])) {
-        $where[]  = 'm.produto_id = ?';
-        $params[] = (int)$filtros['produto_id'];
-        $types   .= 'i';
-    }
-
-    if (!empty($filtros['produto'])) {
-        $where[]  = 'COALESCE(m.produto_nome, p.nome, "") LIKE ?';
-        $params[] = '%' . trim((string)$filtros['produto']) . '%';
-        $types   .= 's';
-    }
-
-    if (!empty($filtros['fornecedor_id'])) {
-        $where[]  = 'm.fornecedor_id = ?';
-        $params[] = (int)$filtros['fornecedor_id'];
-        $types   .= 'i';
-    }
-
-    if (!empty($filtros['usuario_id'])) {
-        $where[]  = 'm.usuario_id = ?';
-        $params[] = (int)$filtros['usuario_id'];
-        $types   .= 'i';
-    }
-
-    if (!empty($filtros['data_inicio'])) {
-        $where[]  = 'm.data >= ?';
-        $params[] = (string)$filtros['data_inicio'] . ' 00:00:00';
-        $types   .= 's';
-    }
-
-    if (!empty($filtros['data_fim'])) {
-        $where[]  = 'm.data <= ?';
-        $params[] = (string)$filtros['data_fim'] . ' 23:59:59';
-        $types   .= 's';
-    }
-
-    $whereSql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
-
     try {
+        $whereData = rel_montar_where($filtros);
+        $whereSql = $whereData['whereSql'];
+        $params   = $whereData['params'];
+        $types    = $whereData['types'];
+
         $sqlBaseFrom = "
             FROM movimentacoes m
             LEFT JOIN produtos p ON p.id = m.produto_id
@@ -187,10 +275,11 @@ function relatorio(mysqli $conn, array $filtros): array
         ";
 
         $stmtCount = $conn->prepare("SELECT COUNT(*) AS total $sqlBaseFrom");
-        if ($types !== '') {
-            $stmtCount->bind_param($types, ...$params);
+        if (!$stmtCount) {
+            throw new RuntimeException('Erro ao preparar contagem do relatório.');
         }
-        $stmtCount->execute();
+
+        rel_bind_execute($stmtCount, $types, $params);
         $total = (int)($stmtCount->get_result()->fetch_assoc()['total'] ?? 0);
         $stmtCount->close();
 
@@ -202,22 +291,23 @@ function relatorio(mysqli $conn, array $filtros): array
                 COALESCE(SUM(m.lucro), 0) AS total_lucro,
 
                 COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN m.quantidade ELSE 0 END), 0) AS entrada_qtd,
-                COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN m.custo_total ELSE 0 END), 0) AS entrada_custo,
-                COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN m.valor_total ELSE 0 END), 0) AS entrada_valor,
+                COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN COALESCE(m.custo_total, 0) ELSE 0 END), 0) AS entrada_custo,
+                COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN COALESCE(m.valor_total, 0) ELSE 0 END), 0) AS entrada_valor,
 
                 COALESCE(SUM(CASE WHEN m.tipo = 'saida' THEN m.quantidade ELSE 0 END), 0) AS saida_qtd,
-                COALESCE(SUM(CASE WHEN m.tipo = 'saida' THEN m.custo_total ELSE 0 END), 0) AS saida_custo,
-                COALESCE(SUM(CASE WHEN m.tipo = 'saida' THEN m.valor_total ELSE 0 END), 0) AS saida_valor,
-                COALESCE(SUM(CASE WHEN m.tipo = 'saida' THEN m.lucro ELSE 0 END), 0) AS saida_lucro,
+                COALESCE(SUM(CASE WHEN m.tipo = 'saida' THEN COALESCE(m.custo_total, 0) ELSE 0 END), 0) AS saida_custo,
+                COALESCE(SUM(CASE WHEN m.tipo = 'saida' THEN COALESCE(m.valor_total, 0) ELSE 0 END), 0) AS saida_valor,
+                COALESCE(SUM(CASE WHEN m.tipo = 'saida' THEN COALESCE(m.lucro, 0) ELSE 0 END), 0) AS saida_lucro,
 
                 COALESCE(SUM(CASE WHEN m.tipo = 'remocao' THEN m.quantidade ELSE 0 END), 0) AS remocao_qtd,
-                COALESCE(SUM(CASE WHEN m.tipo = 'remocao' THEN m.custo_total ELSE 0 END), 0) AS remocao_custo
+                COALESCE(SUM(CASE WHEN m.tipo = 'remocao' THEN COALESCE(m.custo_total, 0) ELSE 0 END), 0) AS remocao_custo
             $sqlBaseFrom
         ");
-        if ($types !== '') {
-            $stmtTot->bind_param($types, ...$params);
+        if (!$stmtTot) {
+            throw new RuntimeException('Erro ao preparar totais do relatório.');
         }
-        $stmtTot->execute();
+
+        rel_bind_execute($stmtTot, $types, $params);
         $totRow = $stmtTot->get_result()->fetch_assoc() ?: [];
         $stmtTot->close();
 
@@ -256,6 +346,7 @@ function relatorio(mysqli $conn, array $filtros): array
                 m.lucro,
                 m.observacao,
                 m.data,
+                m.usuario_id,
                 COALESCE(u.nome, 'Sistema') AS usuario
             $sqlBaseFrom
             ORDER BY m.data DESC, m.id DESC
@@ -263,6 +354,10 @@ function relatorio(mysqli $conn, array $filtros): array
         ";
 
         $stmtDados = $conn->prepare($sqlDados);
+        if (!$stmtDados) {
+            throw new RuntimeException('Erro ao preparar dados do relatório.');
+        }
+
         $paramsPage = $params;
         $typesPage  = $types . 'ii';
         $paramsPage[] = $limite;
@@ -290,6 +385,7 @@ function relatorio(mysqli $conn, array $filtros): array
                 'lucro'           => $r['lucro'] !== null ? (float)$r['lucro'] : null,
                 'observacao'      => (string)($r['observacao'] ?? ''),
                 'data'            => (string)$r['data'],
+                'usuario_id'      => $r['usuario_id'] !== null ? (int)$r['usuario_id'] : null,
                 'usuario'         => (string)$r['usuario']
             ];
         }
@@ -306,10 +402,11 @@ function relatorio(mysqli $conn, array $filtros): array
             GROUP BY DATE(m.data)
             ORDER BY dia ASC
         ");
-        if ($types !== '') {
-            $stmtGraf->bind_param($types, ...$params);
+        if (!$stmtGraf) {
+            throw new RuntimeException('Erro ao preparar gráfico temporal do relatório.');
         }
-        $stmtGraf->execute();
+
+        rel_bind_execute($stmtGraf, $types, $params);
         $resGraf = $stmtGraf->get_result();
 
         $graficoLabels = [];
@@ -335,58 +432,30 @@ function relatorio(mysqli $conn, array $filtros): array
             'lucro'       => $graficoLucro,
         ];
 
-        $stmtRankProdutosQtd = $conn->prepare("
+        $whereSqlSaida = $whereSql . ($whereSql ? ' AND ' : ' WHERE ') . "m.tipo = 'saida'";
+
+        $sqlRankProdutosQtd = "
             SELECT
                 COALESCE(m.produto_nome, p.nome, '[Produto removido]') AS produto_nome,
                 COALESCE(SUM(m.quantidade), 0) AS quantidade_total,
                 COALESCE(SUM(m.valor_total), 0) AS valor_total,
                 COALESCE(SUM(m.lucro), 0) AS lucro_total
-            $sqlBaseFrom
-            AND m.tipo = 'saida'
+            FROM movimentacoes m
+            LEFT JOIN produtos p ON p.id = m.produto_id
+            LEFT JOIN fornecedores f ON f.id = m.fornecedor_id
+            LEFT JOIN usuarios u ON u.id = m.usuario_id
+            $whereSqlSaida
             GROUP BY COALESCE(m.produto_nome, p.nome, '[Produto removido]')
             ORDER BY quantidade_total DESC, produto_nome ASC
             LIMIT 10
-        ");
+        ";
 
-        if ($types !== '') {
-            $typesRank = $types . 's';
-            $paramsRank = $params;
-            $paramsRank[] = 'saida';
-            $stmtRankProdutosQtd = $conn->prepare("
-                SELECT
-                    COALESCE(m.produto_nome, p.nome, '[Produto removido]') AS produto_nome,
-                    COALESCE(SUM(m.quantidade), 0) AS quantidade_total,
-                    COALESCE(SUM(m.valor_total), 0) AS valor_total,
-                    COALESCE(SUM(m.lucro), 0) AS lucro_total
-                FROM movimentacoes m
-                LEFT JOIN produtos p ON p.id = m.produto_id
-                LEFT JOIN fornecedores f ON f.id = m.fornecedor_id
-                LEFT JOIN usuarios u ON u.id = m.usuario_id
-                $whereSql " . ($whereSql ? "AND" : "WHERE") . " m.tipo = ?
-                GROUP BY COALESCE(m.produto_nome, p.nome, '[Produto removido]')
-                ORDER BY quantidade_total DESC, produto_nome ASC
-                LIMIT 10
-            ");
-            $stmtRankProdutosQtd->bind_param($typesRank, ...$paramsRank);
-        } else {
-            $stmtRankProdutosQtd = $conn->prepare("
-                SELECT
-                    COALESCE(m.produto_nome, p.nome, '[Produto removido]') AS produto_nome,
-                    COALESCE(SUM(m.quantidade), 0) AS quantidade_total,
-                    COALESCE(SUM(m.valor_total), 0) AS valor_total,
-                    COALESCE(SUM(m.lucro), 0) AS lucro_total
-                FROM movimentacoes m
-                LEFT JOIN produtos p ON p.id = m.produto_id
-                LEFT JOIN fornecedores f ON f.id = m.fornecedor_id
-                LEFT JOIN usuarios u ON u.id = m.usuario_id
-                WHERE m.tipo = 'saida'
-                GROUP BY COALESCE(m.produto_nome, p.nome, '[Produto removido]')
-                ORDER BY quantidade_total DESC, produto_nome ASC
-                LIMIT 10
-            ");
+        $stmtRankProdutosQtd = $conn->prepare($sqlRankProdutosQtd);
+        if (!$stmtRankProdutosQtd) {
+            throw new RuntimeException('Erro ao preparar ranking de produtos por quantidade.');
         }
 
-        $stmtRankProdutosQtd->execute();
+        rel_bind_execute($stmtRankProdutosQtd, $types, $params);
         $resRankProdutosQtd = $stmtRankProdutosQtd->get_result();
         $ranking_produtos_qtd = [];
 
@@ -400,45 +469,28 @@ function relatorio(mysqli $conn, array $filtros): array
         }
         $stmtRankProdutosQtd->close();
 
-        if ($types !== '') {
-            $typesRank = $types . 's';
-            $paramsRank = $params;
-            $paramsRank[] = 'saida';
-            $stmtRankLucro = $conn->prepare("
-                SELECT
-                    COALESCE(m.produto_nome, p.nome, '[Produto removido]') AS produto_nome,
-                    COALESCE(SUM(m.lucro), 0) AS lucro_total,
-                    COALESCE(SUM(m.quantidade), 0) AS quantidade_total,
-                    COALESCE(SUM(m.valor_total), 0) AS valor_total
-                FROM movimentacoes m
-                LEFT JOIN produtos p ON p.id = m.produto_id
-                LEFT JOIN fornecedores f ON f.id = m.fornecedor_id
-                LEFT JOIN usuarios u ON u.id = m.usuario_id
-                $whereSql " . ($whereSql ? "AND" : "WHERE") . " m.tipo = ?
-                GROUP BY COALESCE(m.produto_nome, p.nome, '[Produto removido]')
-                ORDER BY lucro_total DESC, produto_nome ASC
-                LIMIT 10
-            ");
-            $stmtRankLucro->bind_param($typesRank, ...$paramsRank);
-        } else {
-            $stmtRankLucro = $conn->prepare("
-                SELECT
-                    COALESCE(m.produto_nome, p.nome, '[Produto removido]') AS produto_nome,
-                    COALESCE(SUM(m.lucro), 0) AS lucro_total,
-                    COALESCE(SUM(m.quantidade), 0) AS quantidade_total,
-                    COALESCE(SUM(m.valor_total), 0) AS valor_total
-                FROM movimentacoes m
-                LEFT JOIN produtos p ON p.id = m.produto_id
-                LEFT JOIN fornecedores f ON f.id = m.fornecedor_id
-                LEFT JOIN usuarios u ON u.id = m.usuario_id
-                WHERE m.tipo = 'saida'
-                GROUP BY COALESCE(m.produto_nome, p.nome, '[Produto removido]')
-                ORDER BY lucro_total DESC, produto_nome ASC
-                LIMIT 10
-            ");
+        $sqlRankLucro = "
+            SELECT
+                COALESCE(m.produto_nome, p.nome, '[Produto removido]') AS produto_nome,
+                COALESCE(SUM(m.lucro), 0) AS lucro_total,
+                COALESCE(SUM(m.quantidade), 0) AS quantidade_total,
+                COALESCE(SUM(m.valor_total), 0) AS valor_total
+            FROM movimentacoes m
+            LEFT JOIN produtos p ON p.id = m.produto_id
+            LEFT JOIN fornecedores f ON f.id = m.fornecedor_id
+            LEFT JOIN usuarios u ON u.id = m.usuario_id
+            $whereSqlSaida
+            GROUP BY COALESCE(m.produto_nome, p.nome, '[Produto removido]')
+            ORDER BY lucro_total DESC, produto_nome ASC
+            LIMIT 10
+        ";
+
+        $stmtRankLucro = $conn->prepare($sqlRankLucro);
+        if (!$stmtRankLucro) {
+            throw new RuntimeException('Erro ao preparar ranking de produtos por lucro.');
         }
 
-        $stmtRankLucro->execute();
+        rel_bind_execute($stmtRankLucro, $types, $params);
         $resRankLucro = $stmtRankLucro->get_result();
         $ranking_produtos_lucro = [];
 
@@ -452,50 +504,37 @@ function relatorio(mysqli $conn, array $filtros): array
         }
         $stmtRankLucro->close();
 
-        if ($types !== '') {
-            $stmtRankFornecedor = $conn->prepare("
-                SELECT
-                    COALESCE(f.nome, '[Sem fornecedor]') AS fornecedor_nome,
-                    COALESCE(SUM(m.quantidade), 0) AS quantidade_total,
-                    COALESCE(SUM(m.custo_total), 0) AS custo_total,
-                    COUNT(*) AS total_movimentacoes
-                FROM movimentacoes m
-                LEFT JOIN produtos p ON p.id = m.produto_id
-                LEFT JOIN fornecedores f ON f.id = m.fornecedor_id
-                LEFT JOIN usuarios u ON u.id = m.usuario_id
-                $whereSql
-                GROUP BY COALESCE(f.nome, '[Sem fornecedor]')
-                ORDER BY quantidade_total DESC, fornecedor_nome ASC
-                LIMIT 10
-            ");
-            $stmtRankFornecedor->bind_param($types, ...$params);
-        } else {
-            $stmtRankFornecedor = $conn->prepare("
-                SELECT
-                    COALESCE(f.nome, '[Sem fornecedor]') AS fornecedor_nome,
-                    COALESCE(SUM(m.quantidade), 0) AS quantidade_total,
-                    COALESCE(SUM(m.custo_total), 0) AS custo_total,
-                    COUNT(*) AS total_movimentacoes
-                FROM movimentacoes m
-                LEFT JOIN produtos p ON p.id = m.produto_id
-                LEFT JOIN fornecedores f ON f.id = m.fornecedor_id
-                LEFT JOIN usuarios u ON u.id = m.usuario_id
-                GROUP BY COALESCE(f.nome, '[Sem fornecedor]')
-                ORDER BY quantidade_total DESC, fornecedor_nome ASC
-                LIMIT 10
-            ");
+        $sqlRankFornecedor = "
+            SELECT
+                COALESCE(f.nome, '[Sem fornecedor]') AS fornecedor_nome,
+                COALESCE(SUM(m.quantidade), 0) AS quantidade_total,
+                COALESCE(SUM(m.custo_total), 0) AS custo_total,
+                COUNT(*) AS total_movimentacoes
+            FROM movimentacoes m
+            LEFT JOIN produtos p ON p.id = m.produto_id
+            LEFT JOIN fornecedores f ON f.id = m.fornecedor_id
+            LEFT JOIN usuarios u ON u.id = m.usuario_id
+            $whereSql
+            GROUP BY COALESCE(f.nome, '[Sem fornecedor]')
+            ORDER BY quantidade_total DESC, fornecedor_nome ASC
+            LIMIT 10
+        ";
+
+        $stmtRankFornecedor = $conn->prepare($sqlRankFornecedor);
+        if (!$stmtRankFornecedor) {
+            throw new RuntimeException('Erro ao preparar ranking de fornecedores.');
         }
 
-        $stmtRankFornecedor->execute();
+        rel_bind_execute($stmtRankFornecedor, $types, $params);
         $resRankFornecedor = $stmtRankFornecedor->get_result();
         $ranking_fornecedores = [];
 
         while ($row = $resRankFornecedor->fetch_assoc()) {
             $ranking_fornecedores[] = [
-                'fornecedor_nome'    => (string)$row['fornecedor_nome'],
-                'quantidade_total'   => (int)($row['quantidade_total'] ?? 0),
-                'custo_total'        => (float)($row['custo_total'] ?? 0),
-                'total_movimentacoes'=> (int)($row['total_movimentacoes'] ?? 0),
+                'fornecedor_nome'     => (string)$row['fornecedor_nome'],
+                'quantidade_total'    => (int)($row['quantidade_total'] ?? 0),
+                'custo_total'         => (float)($row['custo_total'] ?? 0),
+                'total_movimentacoes' => (int)($row['total_movimentacoes'] ?? 0),
             ];
         }
         $stmtRankFornecedor->close();
@@ -503,20 +542,30 @@ function relatorio(mysqli $conn, array $filtros): array
         logInfo('relatorios', 'Relatório gerado', [
             'total'  => $total,
             'pagina' => $pagina,
-            'limite' => $limite
+            'limite' => $limite,
+            'filtros' => [
+                'tipo'         => $filtros['tipo'] ?? '',
+                'produto_id'   => $filtros['produto_id'] ?? '',
+                'produto'      => $filtros['produto'] ?? '',
+                'fornecedor_id'=> $filtros['fornecedor_id'] ?? '',
+                'usuario_id'   => $filtros['usuario_id'] ?? '',
+                'usuario'      => $filtros['usuario'] ?? '',
+                'data_inicio'  => $filtros['data_inicio'] ?? '',
+                'data_fim'     => $filtros['data_fim'] ?? '',
+            ]
         ]);
 
         return resposta(true, 'Relatório gerado com sucesso.', [
             'total'   => $total,
             'pagina'  => $pagina,
             'limite'  => $limite,
-            'paginas' => (int)ceil($total / $limite),
+            'paginas' => $limite > 0 ? (int)ceil($total / $limite) : 0,
             'dados'   => $dados,
             'totais'  => $totais,
-            'grafico_temporal'      => $grafico_temporal,
-            'ranking_produtos_qtd'  => $ranking_produtos_qtd,
-            'ranking_produtos_lucro'=> $ranking_produtos_lucro,
-            'ranking_fornecedores'  => $ranking_fornecedores,
+            'grafico_temporal'       => $grafico_temporal,
+            'ranking_produtos_qtd'   => $ranking_produtos_qtd,
+            'ranking_produtos_lucro' => $ranking_produtos_lucro,
+            'ranking_fornecedores'   => $ranking_fornecedores,
             'cards' => [
                 'entradas' => [
                     'quantidade' => $totais['entrada_qtd'],
@@ -535,6 +584,13 @@ function relatorio(mysqli $conn, array $filtros): array
                 ]
             ]
         ]);
+    } catch (InvalidArgumentException $e) {
+        logWarning('relatorios', 'Filtro inválido no relatório', [
+            'erro' => $e->getMessage(),
+            'filtros' => $filtros
+        ]);
+
+        return resposta(false, $e->getMessage(), []);
     } catch (Throwable $e) {
         logError('relatorios', 'Erro ao gerar relatório', [
             'arquivo' => $e->getFile(),
@@ -542,6 +598,6 @@ function relatorio(mysqli $conn, array $filtros): array
             'erro'    => $e->getMessage()
         ]);
 
-        return resposta(false, 'Erro interno ao gerar relatório.');
+        return resposta(false, 'Erro interno ao gerar relatório.', []);
     }
 }

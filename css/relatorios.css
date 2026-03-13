@@ -1,5 +1,8 @@
+/* =========================
+   Cards de resumo
+   ========================= */
 .resumo-card {
-  border-radius: 16px;
+  border-radius: 18px;
   padding: 18px 20px;
   min-height: 112px;
   border: 1px solid #e9ecef;
@@ -7,6 +10,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
 }
 
 .resumo-card-label {
@@ -17,9 +21,10 @@
 
 .resumo-card-valor {
   font-size: 1.7rem;
-  font-weight: 700;
+  font-weight: 800;
   color: #212529;
-  line-height: 1.2;
+  line-height: 1.15;
+  word-break: break-word;
 }
 
 .resumo-card-light {
@@ -35,12 +40,16 @@
   border-color: #d9f0df;
 }
 
+/* =========================
+   Blocos por tipo
+   ========================= */
 .bloco-tipo {
   border-radius: 18px;
   padding: 18px;
   border: 1px solid #e9edf3;
   background: #fff;
   height: 100%;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
 }
 
 .bloco-tipo-entrada {
@@ -87,13 +96,21 @@
 .bloco-tipo-linha strong {
   color: #111827;
   font-size: 1rem;
+  text-align: right;
 }
 
+/* =========================
+   Área do gráfico
+   ========================= */
 .chart-box {
   position: relative;
   width: 100%;
   min-height: 380px;
   height: 460px;
+  border: 1px solid #e9edf3;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+  padding: 14px;
 }
 
 #graficoTemporal {
@@ -105,10 +122,9 @@
   min-height: 20px;
 }
 
-#modalFiltrosRelatorio .modal-content {
-  border-radius: 20px;
-}
-
+/* =========================
+   Filtros do gráfico
+   ========================= */
 .grafico-tipo-box,
 .grafico-metrica-box {
   min-width: 180px;
@@ -121,10 +137,61 @@
   margin-bottom: 4px;
 }
 
-#produtoSugestoes .list-group-item {
-  cursor: pointer;
+/* =========================
+   Modal de filtros
+   ========================= */
+#modalFiltrosRelatorio .modal-content {
+  border-radius: 20px;
+  border: 0;
+  overflow: hidden;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
 }
 
+#modalFiltrosRelatorio .modal-header {
+  background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+  border-bottom: 1px solid #e9ecef;
+}
+
+#modalFiltrosRelatorio .modal-footer {
+  border-top: 1px solid #e9ecef;
+  background: #fbfbfc;
+}
+
+/* =========================
+   Autocomplete de produto
+   ========================= */
+#produtoSugestoes {
+  z-index: 2000;
+  display: none;
+  max-height: 220px;
+  overflow-y: auto;
+  border-radius: 12px;
+  border: 1px solid #dfe6ef;
+  background: #ffffff;
+  margin-top: 4px;
+}
+
+#produtoSugestoes .list-group-item {
+  cursor: pointer;
+  border-left: 0;
+  border-right: 0;
+}
+
+#produtoSugestoes .list-group-item:first-child {
+  border-top: 0;
+}
+
+#produtoSugestoes .list-group-item:last-child {
+  border-bottom: 0;
+}
+
+#produtoSugestoes .list-group-item:hover {
+  background: #f8fafc;
+}
+
+/* =========================
+   Ranking
+   ========================= */
 .ranking-lista {
   display: flex;
   flex-direction: column;
@@ -172,6 +239,29 @@
   font-size: 0.92rem;
 }
 
+/* =========================
+   Badge e textos auxiliares
+   ========================= */
+#badgePeriodoRelatorio {
+  white-space: normal;
+  text-align: center;
+}
+
+#resumoFiltrosTexto {
+  word-break: break-word;
+}
+
+/* =========================
+   Ajustes gerais
+   ========================= */
+.card h5,
+.card h6 {
+  color: #1f2937;
+}
+
+/* =========================
+   Responsivo
+   ========================= */
 @media (max-width: 991px) {
   .chart-box {
     min-height: 300px;
@@ -181,5 +271,30 @@
   .grafico-tipo-box,
   .grafico-metrica-box {
     width: 100%;
+  }
+
+  .resumo-card-valor {
+    font-size: 1.45rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .resumo-card {
+    min-height: 96px;
+    padding: 16px;
+  }
+
+  .resumo-card-valor {
+    font-size: 1.3rem;
+  }
+
+  .bloco-tipo {
+    padding: 16px;
+  }
+
+  .chart-box {
+    min-height: 260px;
+    height: 300px;
+    padding: 10px;
   }
 }

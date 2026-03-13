@@ -83,16 +83,16 @@ function setStatusRelatorio(texto = "", tipo = "muted") {
   el.textContent = texto;
 }
 
-function setBtnLoading(id, loading, textoOriginal = "") {
+function setBtnLoading(id, loading, textoLoading = "Processando...") {
   const btn = $(id);
   if (!btn) return;
 
   if (!btn.dataset.originalText) {
-    btn.dataset.originalText = textoOriginal || btn.textContent || "";
+    btn.dataset.originalText = btn.textContent || "";
   }
 
   btn.disabled = !!loading;
-  btn.textContent = loading ? "Processando..." : btn.dataset.originalText;
+  btn.textContent = loading ? textoLoading : btn.dataset.originalText;
 }
 
 function getModalFiltros() {
@@ -128,12 +128,31 @@ function setDefaultDatesIfEmpty() {
   elIni.value = toYMD(ini);
 }
 
+function normalizarTexto(valor) {
+  return String(valor ?? "").trim().replace(/\s+/g, " ");
+}
+
+function validarPeriodo(dataInicio, dataFim) {
+  if (!dataInicio || !dataFim) {
+    return { ok: true, mensagem: "" };
+  }
+
+  if (dataInicio > dataFim) {
+    return {
+      ok: false,
+      mensagem: "A data final não pode ser menor que a data inicial."
+    };
+  }
+
+  return { ok: true, mensagem: "" };
+}
+
 function getFiltros() {
   return {
     data_inicio: $("dataInicio")?.value || "",
     data_fim: $("dataFim")?.value || "",
     tipo: $("tipo")?.value || "",
-    produto: ($("produto")?.value || "").trim(),
+    produto: normalizarTexto($("produto")?.value || ""),
     fornecedor_id: $("fornecedor")?.value || "",
     pagina: 1,
     limite: DEFAULT_LIMITE_TABELA
@@ -182,24 +201,6 @@ function atualizarResumoFiltros() {
 
   setTexto("resumoFiltrosTexto", `${partes.join(", ")}.`);
   setTexto("badgePeriodoRelatorio", badgePartes.join(" • "));
-}
-
-function limparFiltros() {
-  if ($("dataInicio")) $("dataInicio").value = "";
-  if ($("dataFim")) $("dataFim").value = "";
-  if ($("tipo")) $("tipo").value = "";
-  if ($("produto")) $("produto").value = "";
-  if ($("fornecedor")) $("fornecedor").value = "";
-
-  limparSugestoesProduto();
-  setDefaultDatesIfEmpty();
-  atualizarResumoFiltros();
-  carregarRelatorio();
-
-  logJsInfo({
-    origem: "relatorios.js",
-    mensagem: "Filtros limpos"
-  });
 }
 
 function toNumArray(arr, len) {
@@ -513,7 +514,8 @@ async function carregarProdutos() {
       return;
     }
 
-    produtosCache = Array.isArray(resp?.dados) ? resp.dados : [];
+    produtosCache = (Array.isArray(resp?.dados) ? resp.dados : [])
+      .filter((p) => Number(p?.ativo ?? 1) === 1);
   } catch (err) {
     produtosCache = [];
 
@@ -561,7 +563,7 @@ function renderSugestoesProduto(produtos) {
 }
 
 function buscarProdutosAutocomplete(termo) {
-  const texto = String(termo || "").trim().toLowerCase();
+  const texto = normalizarTexto(termo).toLowerCase();
 
   if (!texto) {
     limparSugestoesProduto();
@@ -583,10 +585,23 @@ function debounce(fn, delay = 350) {
   };
 }
 
+function gerarNomeArquivo(base) {
+  const agora = new Date();
+  const stamp = `${agora.getFullYear()}-${pad2(agora.getMonth() + 1)}-${pad2(agora.getDate())}_${pad2(agora.getHours())}-${pad2(agora.getMinutes())}`;
+  return `${base}_${stamp}`;
+}
+
 async function exportarXlsx() {
   const filtros = getFiltros();
+  const validacao = validarPeriodo(filtros.data_inicio, filtros.data_fim);
+
+  if (!validacao.ok) {
+    setStatusRelatorio(validacao.mensagem, "erro");
+    return;
+  }
 
   setStatusRelatorio("Preparando exportação XLSX...", "processando");
+  setBtnLoading("btnExportarXlsx", true);
 
   try {
     const resp = await apiRequest("relatorio_movimentacoes", filtros, "GET");
@@ -609,11 +624,11 @@ async function exportarXlsx() {
       Fornecedor: item?.fornecedor_nome ?? "",
       Tipo: item?.tipo ?? "",
       Quantidade: Number(item?.quantidade ?? 0),
-      "Custo Unitário": Number(item?.custo_unitario ?? 0),
-      "Valor Unitário": Number(item?.valor_unitario ?? 0),
-      "Custo Total": Number(item?.custo_total ?? 0),
-      "Valor Total": Number(item?.valor_total ?? 0),
-      Lucro: Number(item?.lucro ?? 0),
+      "Custo Unitário": item?.custo_unitario != null ? Number(item.custo_unitario) : "",
+      "Valor Unitário": item?.valor_unitario != null ? Number(item.valor_unitario) : "",
+      "Custo Total": item?.custo_total != null ? Number(item.custo_total) : "",
+      "Valor Total": item?.valor_total != null ? Number(item.valor_total) : "",
+      Lucro: item?.lucro != null ? Number(item.lucro) : "",
       Usuário: item?.usuario ?? "",
       Observação: item?.observacao ?? ""
     }));
@@ -621,7 +636,7 @@ async function exportarXlsx() {
     const worksheet = window.XLSX.utils.json_to_sheet(linhas);
     const workbook = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(workbook, worksheet, "Relatorio");
-    window.XLSX.writeFile(workbook, "relatorio_movimentacoes.xlsx");
+    window.XLSX.writeFile(workbook, `${gerarNomeArquivo("relatorio_movimentacoes")}.xlsx`);
 
     setStatusRelatorio("Exportação XLSX concluída com sucesso.", "sucesso");
   } catch (err) {
@@ -633,13 +648,22 @@ async function exportarXlsx() {
       detalhe: err?.message,
       stack: err?.stack
     });
+  } finally {
+    setBtnLoading("btnExportarXlsx", false);
   }
 }
 
 async function exportarPDF() {
   const filtros = getFiltros();
+  const validacao = validarPeriodo(filtros.data_inicio, filtros.data_fim);
+
+  if (!validacao.ok) {
+    setStatusRelatorio(validacao.mensagem, "erro");
+    return;
+  }
 
   setStatusRelatorio("Preparando exportação PDF...", "processando");
+  setBtnLoading("btnExportarPdf", true);
 
   try {
     const resp = await apiRequest("relatorio_movimentacoes", filtros, "GET");
@@ -662,20 +686,23 @@ async function exportarPDF() {
     doc.setFontSize(14);
     doc.text("Relatório de Movimentações", 14, 14);
 
+    doc.setFontSize(9);
+    doc.text(`Gerado em: ${new Date().toLocaleString("pt-BR")}`, 14, 20);
+
     const body = registros.map((item) => [
       item?.data ?? "",
       item?.produto_nome ?? "",
       item?.fornecedor_nome ?? "",
       item?.tipo ?? "",
       Number(item?.quantidade ?? 0),
-      formatBRLComPrefixo(item?.custo_total ?? 0),
-      formatBRLComPrefixo(item?.valor_total ?? 0),
-      formatBRLComPrefixo(item?.lucro ?? 0),
+      item?.custo_total != null ? formatBRLComPrefixo(item.custo_total) : "—",
+      item?.valor_total != null ? formatBRLComPrefixo(item.valor_total) : "—",
+      item?.lucro != null ? formatBRLComPrefixo(item.lucro) : "—",
       item?.usuario ?? ""
     ]);
 
     doc.autoTable({
-      startY: 20,
+      startY: 24,
       head: [[
         "Data",
         "Produto",
@@ -687,10 +714,14 @@ async function exportarPDF() {
         "Lucro",
         "Usuário"
       ]],
-      body
+      body,
+      styles: {
+        fontSize: 8,
+        cellPadding: 2
+      }
     });
 
-    doc.save("relatorio_movimentacoes.pdf");
+    doc.save(`${gerarNomeArquivo("relatorio_movimentacoes")}.pdf`);
 
     setStatusRelatorio("Exportação PDF concluída com sucesso.", "sucesso");
   } catch (err) {
@@ -702,11 +733,44 @@ async function exportarPDF() {
       detalhe: err?.message,
       stack: err?.stack
     });
+  } finally {
+    setBtnLoading("btnExportarPdf", false);
   }
+}
+
+function limparRenderRelatorio() {
+  renderTotais({
+    total_qtd: 0,
+    total_custo: 0,
+    total_valor: 0,
+    total_lucro: 0
+  });
+
+  renderCards({});
+  renderRankingLista("rankingProdutosQtd", [], "produtos_qtd");
+  renderRankingLista("rankingProdutosLucro", [], "produtos_lucro");
+  renderRankingLista("rankingFornecedores", [], "fornecedores");
+
+  ultimoGraficoPayload = {
+    labels: [],
+    quantidade: [],
+    custo_total: [],
+    valor_total: [],
+    lucro: []
+  };
+
+  renderGraficoTemporal(ultimoGraficoPayload);
 }
 
 async function carregarRelatorio() {
   const filtros = getFiltros();
+  const validacao = validarPeriodo(filtros.data_inicio, filtros.data_fim);
+
+  if (!validacao.ok) {
+    limparRenderRelatorio();
+    setStatusRelatorio(validacao.mensagem, "erro");
+    return;
+  }
 
   setStatusRelatorio("Carregando relatório...", "processando");
   setBtnLoading("btnAplicarFiltros", true);
@@ -719,27 +783,7 @@ async function carregarRelatorio() {
     const resp = await apiRequest("relatorio_movimentacoes", filtros, "GET");
 
     if (!resp?.sucesso) {
-      renderTotais({
-        total_qtd: 0,
-        total_custo: 0,
-        total_valor: 0,
-        total_lucro: 0
-      });
-
-      renderCards({});
-      renderRankingLista("rankingProdutosQtd", [], "produtos_qtd");
-      renderRankingLista("rankingProdutosLucro", [], "produtos_lucro");
-      renderRankingLista("rankingFornecedores", [], "fornecedores");
-
-      ultimoGraficoPayload = {
-        labels: [],
-        quantidade: [],
-        custo_total: [],
-        valor_total: [],
-        lucro: []
-      };
-
-      renderGraficoTemporal(ultimoGraficoPayload);
+      limparRenderRelatorio();
       setStatusRelatorio(resp?.mensagem || "Não foi possível carregar o relatório.", "erro");
       return;
     }
@@ -774,27 +818,7 @@ async function carregarRelatorio() {
       metrica: getMetricaGraficoSelecionada()
     });
   } catch (err) {
-    renderTotais({
-      total_qtd: 0,
-      total_custo: 0,
-      total_valor: 0,
-      total_lucro: 0
-    });
-
-    renderCards({});
-    renderRankingLista("rankingProdutosQtd", [], "produtos_qtd");
-    renderRankingLista("rankingProdutosLucro", [], "produtos_lucro");
-    renderRankingLista("rankingFornecedores", [], "fornecedores");
-
-    ultimoGraficoPayload = {
-      labels: [],
-      quantidade: [],
-      custo_total: [],
-      valor_total: [],
-      lucro: []
-    };
-
-    renderGraficoTemporal(ultimoGraficoPayload);
+    limparRenderRelatorio();
     setStatusRelatorio("Erro inesperado ao carregar relatório.", "erro");
 
     logJsError({
@@ -868,12 +892,38 @@ function bindAutocompleteProduto() {
   });
 }
 
+function limparFiltros() {
+  if ($("dataInicio")) $("dataInicio").value = "";
+  if ($("dataFim")) $("dataFim").value = "";
+  if ($("tipo")) $("tipo").value = "";
+  if ($("produto")) $("produto").value = "";
+  if ($("fornecedor")) $("fornecedor").value = "";
+
+  limparSugestoesProduto();
+  setDefaultDatesIfEmpty();
+  atualizarResumoFiltros();
+  carregarRelatorio();
+
+  logJsInfo({
+    origem: "relatorios.js",
+    mensagem: "Filtros limpos"
+  });
+}
+
 function bindEventos() {
   $("btnAbrirFiltros")?.addEventListener("click", () => {
     getModalFiltros()?.show();
   });
 
   $("btnAplicarFiltros")?.addEventListener("click", async () => {
+    const filtros = getFiltros();
+    const validacao = validarPeriodo(filtros.data_inicio, filtros.data_fim);
+
+    if (!validacao.ok) {
+      setStatusRelatorio(validacao.mensagem, "erro");
+      return;
+    }
+
     atualizarResumoFiltros();
     await carregarRelatorio();
     getModalFiltros()?.hide();
@@ -913,15 +963,15 @@ function bindEventos() {
     }
   });
 
-  const d = debounce(() => {
+  const atualizarResumoDebounced = debounce(() => {
     atualizarResumoFiltros();
   }, 200);
 
-  $("dataInicio")?.addEventListener("change", d);
-  $("dataFim")?.addEventListener("change", d);
-  $("tipo")?.addEventListener("change", d);
-  $("fornecedor")?.addEventListener("change", d);
-  $("produto")?.addEventListener("input", d);
+  $("dataInicio")?.addEventListener("change", atualizarResumoDebounced);
+  $("dataFim")?.addEventListener("change", atualizarResumoDebounced);
+  $("tipo")?.addEventListener("change", atualizarResumoDebounced);
+  $("fornecedor")?.addEventListener("change", atualizarResumoDebounced);
+  $("produto")?.addEventListener("input", atualizarResumoDebounced);
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -931,5 +981,5 @@ document.addEventListener("DOMContentLoaded", async () => {
   await carregarFornecedores();
   await carregarProdutos();
   atualizarResumoFiltros();
-  carregarRelatorio();
+  await carregarRelatorio();
 });
