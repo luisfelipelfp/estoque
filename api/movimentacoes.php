@@ -53,8 +53,25 @@ function mov_normalizar_observacao(?string $observacao): ?string
 {
     $valor = trim((string)$observacao);
     $valor = preg_replace('/\s+/u', ' ', $valor) ?? $valor;
-
     return $valor !== '' ? $valor : null;
+}
+
+function mov_normalizar_texto(?string $valor): string
+{
+    $texto = trim((string)$valor);
+    $texto = preg_replace('/\s+/u', ' ', $texto) ?? $texto;
+    return $texto;
+}
+
+function mov_data_valida(?string $data): bool
+{
+    $valor = trim((string)$data);
+    if ($valor === '') {
+        return false;
+    }
+
+    $dt = DateTime::createFromFormat('Y-m-d', $valor);
+    return $dt instanceof DateTime && $dt->format('Y-m-d') === $valor;
 }
 
 function mov_obter_produto_for_update(mysqli $conn, int $produto_id): ?array
@@ -559,7 +576,10 @@ function mov_aplicar_consumo_fifo(
         $custoTotal = (float)$item['custo_total'];
 
         $stmtUpd->bind_param('iii', $qtd, $loteId, $qtd);
-        $stmtUpd->execute();
+
+        if (!$stmtUpd->execute()) {
+            throw new RuntimeException('Falha ao baixar saldo do lote ' . $loteId . '.');
+        }
 
         if ($stmtUpd->affected_rows <= 0) {
             throw new RuntimeException('Falha ao baixar saldo do lote ' . $loteId . '.');
@@ -726,7 +746,6 @@ function mov_registrar(
             }
 
             $novoSaldo = $estoqueAtual - $quantidade;
-            $novoPrecoCustoReferencia = 0.0;
 
             $stmtUpd = $conn->prepare('UPDATE produtos SET quantidade = ? WHERE id = ?');
             if (!$stmtUpd) {
@@ -858,9 +877,11 @@ function mov_resumo_filtrado(mysqli $conn, string $whereSql, string $types, arra
         'total_registros'    => 0,
         'quantidade_total'   => 0,
         'custo_total'        => 0.0,
+        'valor_total'        => 0.0,
         'lucro_total'        => 0.0,
         'quantidade_entrada' => 0,
         'quantidade_saida'   => 0,
+        'quantidade_remocao' => 0,
     ];
 
     $sqlResumoBase = "
@@ -868,10 +889,13 @@ function mov_resumo_filtrado(mysqli $conn, string $whereSql, string $types, arra
             COUNT(*) AS total_registros,
             COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN m.quantidade ELSE 0 END), 0) AS quantidade_entrada,
             COALESCE(SUM(CASE WHEN m.tipo = 'saida' THEN m.quantidade ELSE 0 END), 0) AS quantidade_saida,
+            COALESCE(SUM(CASE WHEN m.tipo = 'remocao' THEN m.quantidade ELSE 0 END), 0) AS quantidade_remocao,
             COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN COALESCE(m.custo_total, 0) ELSE 0 END), 0) AS custo_total,
+            COALESCE(SUM(CASE WHEN m.tipo = 'saida' THEN COALESCE(m.valor_total, 0) ELSE 0 END), 0) AS valor_total,
             COALESCE(SUM(CASE WHEN m.tipo = 'saida' THEN COALESCE(m.lucro, 0) ELSE 0 END), 0) AS lucro_total
         FROM movimentacoes m
         LEFT JOIN produtos p ON p.id = m.produto_id
+        LEFT JOIN usuarios u ON u.id = m.usuario_id
         $whereSql
     ";
 
@@ -890,9 +914,11 @@ function mov_resumo_filtrado(mysqli $conn, string $whereSql, string $types, arra
 
     $resumo['total_registros']    = (int)($rowBase['total_registros'] ?? 0);
     $resumo['custo_total']        = (float)($rowBase['custo_total'] ?? 0);
+    $resumo['valor_total']        = (float)($rowBase['valor_total'] ?? 0);
     $resumo['lucro_total']        = (float)($rowBase['lucro_total'] ?? 0);
     $resumo['quantidade_entrada'] = (int)($rowBase['quantidade_entrada'] ?? 0);
     $resumo['quantidade_saida']   = (int)($rowBase['quantidade_saida'] ?? 0);
+    $resumo['quantidade_remocao'] = (int)($rowBase['quantidade_remocao'] ?? 0);
 
     $sqlQtdEstoque = "
         SELECT COALESCE(SUM(produtos_filtrados.quantidade_atual), 0) AS quantidade_total
@@ -902,6 +928,7 @@ function mov_resumo_filtrado(mysqli $conn, string $whereSql, string $types, arra
                 COALESCE(p.quantidade, 0) AS quantidade_atual
             FROM movimentacoes m
             INNER JOIN produtos p ON p.id = m.produto_id
+            LEFT JOIN usuarios u ON u.id = m.usuario_id
             $whereSql
         ) AS produtos_filtrados
     ";
@@ -927,21 +954,29 @@ function mov_resumo_filtrado(mysqli $conn, string $whereSql, string $types, arra
 function mov_listar(mysqli $conn, array $f): array
 {
     $pagina = max(1, (int)($f['pagina'] ?? 1));
-    $limite = max(1, min(100, (int)($f['limite'] ?? 50)));
+    $limite = max(1, min(5000, (int)($f['limite'] ?? 50)));
     $offset = ($pagina - 1) * $limite;
 
     $where  = [];
     $params = [];
     $types  = '';
 
-    if (!empty($f['produto_id'])) {
+    $produtoId  = (int)($f['produto_id'] ?? 0);
+    $produto    = mov_normalizar_texto((string)($f['produto'] ?? ''));
+    $tipo       = mov_normalizar_texto((string)($f['tipo'] ?? ''));
+    $dataInicio = mov_normalizar_texto((string)($f['data_inicio'] ?? ''));
+    $dataFim    = mov_normalizar_texto((string)($f['data_fim'] ?? ''));
+    $usuarioId  = (int)($f['usuario_id'] ?? 0);
+    $usuario    = mov_normalizar_texto((string)($f['usuario'] ?? ''));
+
+    if ($produtoId > 0) {
         $where[]  = 'm.produto_id = ?';
-        $params[] = (int)$f['produto_id'];
+        $params[] = $produtoId;
         $types   .= 'i';
     }
 
-    if (!empty($f['produto'])) {
-        $termo = '%' . trim((string)$f['produto']) . '%';
+    if ($produto !== '') {
+        $termo = '%' . $produto . '%';
         $where[] = '(COALESCE(m.produto_nome, p.nome, "") LIKE ?)';
         $params[] = $termo;
         $types .= 's';
@@ -953,22 +988,47 @@ function mov_listar(mysqli $conn, array $f): array
         $types   .= 'i';
     }
 
-    if (!empty($f['tipo']) && in_array($f['tipo'], ['entrada', 'saida', 'remocao'], true)) {
+    if ($tipo !== '' && in_array($tipo, ['entrada', 'saida', 'remocao'], true)) {
         $where[]  = 'm.tipo = ?';
-        $params[] = (string)$f['tipo'];
+        $params[] = $tipo;
         $types   .= 's';
     }
 
-    if (!empty($f['data_inicio'])) {
+    if ($usuarioId > 0) {
+        $where[]  = 'm.usuario_id = ?';
+        $params[] = $usuarioId;
+        $types   .= 'i';
+    }
+
+    if ($usuario !== '') {
+        $termoUsuario = '%' . $usuario . '%';
+        $where[]  = 'COALESCE(u.nome, "Sistema") LIKE ?';
+        $params[] = $termoUsuario;
+        $types   .= 's';
+    }
+
+    if ($dataInicio !== '') {
+        if (!mov_data_valida($dataInicio)) {
+            return resposta(false, 'Data inicial inválida.', []);
+        }
+
         $where[]  = 'm.data >= ?';
-        $params[] = (string)$f['data_inicio'] . ' 00:00:00';
+        $params[] = $dataInicio . ' 00:00:00';
         $types   .= 's';
     }
 
-    if (!empty($f['data_fim'])) {
+    if ($dataFim !== '') {
+        if (!mov_data_valida($dataFim)) {
+            return resposta(false, 'Data final inválida.', []);
+        }
+
         $where[]  = 'm.data <= ?';
-        $params[] = (string)$f['data_fim'] . ' 23:59:59';
+        $params[] = $dataFim . ' 23:59:59';
         $types   .= 's';
+    }
+
+    if ($dataInicio !== '' && $dataFim !== '' && strcmp($dataInicio, $dataFim) > 0) {
+        return resposta(false, 'A data inicial não pode ser maior que a data final.', []);
     }
 
     $whereSql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
@@ -978,6 +1038,7 @@ function mov_listar(mysqli $conn, array $f): array
             SELECT COUNT(*) AS total
             FROM movimentacoes m
             LEFT JOIN produtos p ON p.id = m.produto_id
+            LEFT JOIN usuarios u ON u.id = m.usuario_id
             $whereSql
         ";
 
@@ -1012,6 +1073,7 @@ function mov_listar(mysqli $conn, array $f): array
                 m.lucro,
                 m.observacao,
                 m.data,
+                m.usuario_id,
                 COALESCE(u.nome, 'Sistema') AS usuario
             FROM movimentacoes m
             LEFT JOIN produtos p ON p.id = m.produto_id
@@ -1054,6 +1116,7 @@ function mov_listar(mysqli $conn, array $f): array
                 'lucro'           => $row['lucro'] !== null ? (float)$row['lucro'] : null,
                 'observacao'      => (string)($row['observacao'] ?? ''),
                 'data'            => (string)$row['data'],
+                'usuario_id'      => $row['usuario_id'] !== null ? (int)$row['usuario_id'] : null,
                 'usuario'         => (string)$row['usuario']
             ];
         }
@@ -1064,7 +1127,7 @@ function mov_listar(mysqli $conn, array $f): array
             'total'   => $total,
             'pagina'  => $pagina,
             'limite'  => $limite,
-            'paginas' => (int)ceil($total / $limite),
+            'paginas' => $limite > 0 ? (int)ceil($total / $limite) : 0,
             'resumo'  => $resumo,
             'dados'   => $dados
         ]);
@@ -1102,6 +1165,7 @@ function mov_obter(mysqli $conn, int $movimentacaoId): array
                 m.lucro,
                 m.observacao,
                 m.data,
+                m.usuario_id,
                 COALESCE(u.nome, 'Sistema') AS usuario
             FROM movimentacoes m
             LEFT JOIN produtos p ON p.id = m.produto_id
@@ -1138,6 +1202,7 @@ function mov_obter(mysqli $conn, int $movimentacaoId): array
             'lucro'           => $row['lucro'] !== null ? (float)$row['lucro'] : null,
             'observacao'      => (string)($row['observacao'] ?? ''),
             'data'            => (string)$row['data'],
+            'usuario_id'      => $row['usuario_id'] !== null ? (int)$row['usuario_id'] : null,
             'usuario'         => (string)$row['usuario'],
             'lotes'           => []
         ];
@@ -1191,4 +1256,4 @@ function mov_obter(mysqli $conn, int $movimentacaoId): array
 
         return resposta(false, 'Erro ao obter movimentação.');
     }
-}
+}   

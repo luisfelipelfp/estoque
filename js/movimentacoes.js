@@ -6,9 +6,10 @@ let paginaAtual = 1;
 const limitePorPagina = 10;
 let ultimoFiltroAplicado = {};
 let totalPaginasAtual = 0;
+let totalRegistrosAtual = 0;
 let modalDetalhesInstance = null;
 let produtosCache = [];
-let autocompleteAbortController = null;
+let fornecedoresCache = [];
 
 function $(id) {
   return document.getElementById(id);
@@ -29,6 +30,14 @@ function formatBRL(valor) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })}`;
+}
+
+function normalizarTexto(valor) {
+  return String(valor ?? "").trim().replace(/\s+/g, " ");
+}
+
+function possuiFiltrosAtivos(filtros) {
+  return Object.values(filtros).some((v) => String(v || "").trim() !== "");
 }
 
 function getModalDetalhes() {
@@ -68,8 +77,11 @@ function limparResumo() {
 }
 
 function getFiltrosTela() {
+  const produtoId = Number($("filtroProdutoId")?.value ?? 0);
+
   return {
-    produto: ($("filtroProduto")?.value ?? "").trim(),
+    produto_id: produtoId > 0 ? produtoId : "",
+    produto: normalizarTexto($("filtroProduto")?.value ?? ""),
     fornecedor_id: ($("filtroFornecedor")?.value ?? "").trim(),
     tipo: ($("filtroTipo")?.value ?? "").trim(),
     data_inicio: ($("filtroDataInicio")?.value ?? "").trim(),
@@ -83,7 +95,12 @@ function montarPayloadConsulta(filtros, pagina, limite = limitePorPagina) {
     limite
   };
 
-  if (filtros.produto) payload.produto = filtros.produto;
+  if (filtros.produto_id) {
+    payload.produto_id = filtros.produto_id;
+  } else if (filtros.produto) {
+    payload.produto = filtros.produto;
+  }
+
   if (filtros.fornecedor_id) payload.fornecedor_id = filtros.fornecedor_id;
   if (filtros.tipo) payload.tipo = filtros.tipo;
   if (filtros.data_inicio) payload.data_inicio = filtros.data_inicio;
@@ -98,7 +115,7 @@ function atualizarEstadoPaginacao() {
   const txt = $("movimentacoesPaginacaoTexto");
 
   if (btnAnterior) {
-    btnAnterior.disabled = paginaAtual <= 1;
+    btnAnterior.disabled = paginaAtual <= 1 || totalPaginasAtual <= 0;
   }
 
   if (btnProxima) {
@@ -136,10 +153,7 @@ function renderTipoBadge(tipo) {
 function renderResumo(payload) {
   const resumo = payload?.resumo || {};
 
-  const totalRegistros = Number(
-    resumo?.total_registros ?? payload?.total ?? 0
-  );
-
+  const totalRegistros = Number(resumo?.total_registros ?? payload?.total ?? 0);
   const quantidadeTotal = Number(resumo?.quantidade_total ?? 0);
   const custoTotal = Number(resumo?.custo_total ?? 0);
   const lucroTotal = Number(resumo?.lucro_total ?? 0);
@@ -212,7 +226,9 @@ async function carregarProdutosAutocomplete() {
       return;
     }
 
-    produtosCache = Array.isArray(resp?.dados) ? resp.dados : [];
+    produtosCache = (Array.isArray(resp?.dados) ? resp.dados : [])
+      .filter((p) => Number(p?.ativo ?? 1) === 1)
+      .sort((a, b) => String(a?.nome ?? "").localeCompare(String(b?.nome ?? ""), "pt-BR"));
 
     logJsInfo({
       origem: "movimentacoes.js",
@@ -239,21 +255,23 @@ async function carregarFornecedoresFiltro() {
     const resp = await apiRequest("listar_fornecedores", {}, "GET");
 
     if (!resp?.sucesso) {
+      fornecedoresCache = [];
       return;
     }
 
-    const fornecedores = Array.isArray(resp?.dados) ? resp.dados : [];
-    const ativos = fornecedores
+    fornecedoresCache = (Array.isArray(resp?.dados) ? resp.dados : [])
       .filter((f) => Number(f?.ativo ?? 1) === 1)
       .sort((a, b) => String(a?.nome ?? "").localeCompare(String(b?.nome ?? ""), "pt-BR"));
 
     select.innerHTML = `
       <option value="">Todos</option>
-      ${ativos.map((f) => `
+      ${fornecedoresCache.map((f) => `
         <option value="${Number(f?.id ?? 0)}">${escapeHtml(f?.nome ?? "")}</option>
       `).join("")}
     `;
   } catch (err) {
+    fornecedoresCache = [];
+
     logJsError({
       origem: "movimentacoes.js",
       mensagem: "Erro ao carregar fornecedores para filtro",
@@ -305,7 +323,7 @@ function selecionarProdutoSugestao(id, nome) {
 }
 
 async function buscarProdutosAutocomplete(termo) {
-  const texto = String(termo || "").trim();
+  const texto = normalizarTexto(termo);
 
   if (!texto) {
     limparSugestoesProduto();
@@ -313,44 +331,15 @@ async function buscarProdutosAutocomplete(termo) {
   }
 
   const encontradosCache = produtosCache
-    .filter((p) => String(p?.nome ?? "").toLowerCase().includes(texto.toLowerCase()))
+    .filter((p) => {
+      const nome = String(p?.nome ?? "").toLowerCase();
+      const id = String(p?.id ?? "").toLowerCase();
+      const t = texto.toLowerCase();
+      return nome.includes(t) || id.includes(t);
+    })
     .slice(0, 8);
 
-  if (encontradosCache.length > 0) {
-    renderSugestoesProduto(encontradosCache);
-    return;
-  }
-
-  try {
-    if (autocompleteAbortController) {
-      autocompleteAbortController.abort();
-    }
-
-    autocompleteAbortController = new AbortController();
-
-    const resp = await apiRequest("buscar_produtos", { q: texto, limit: 8 }, "GET");
-
-    if (!resp?.sucesso) {
-      renderSugestoesProduto([]);
-      return;
-    }
-
-    const dadosBrutos = resp?.dados;
-    const dados = Array.isArray(dadosBrutos?.itens)
-      ? dadosBrutos.itens
-      : (Array.isArray(dadosBrutos) ? dadosBrutos : []);
-
-    renderSugestoesProduto(dados);
-  } catch (err) {
-    renderSugestoesProduto([]);
-
-    logJsError({
-      origem: "movimentacoes.js",
-      mensagem: "Erro no autocomplete de produtos",
-      detalhe: err?.message,
-      stack: err?.stack
-    });
-  }
+  renderSugestoesProduto(encontradosCache);
 }
 
 function debounce(fn, delay = 250) {
@@ -363,17 +352,39 @@ function debounce(fn, delay = 250) {
 
 const buscarProdutosAutocompleteDebounced = debounce(buscarProdutosAutocomplete, 200);
 
-async function listarMovimentacoes(filtros = {}, pagina = 1) {
-  const filtrosPossuemValor = Object.values(filtros).some((v) => String(v || "").trim() !== "");
+function validarPeriodo() {
+  const inicio = ($("filtroDataInicio")?.value ?? "").trim();
+  const fim = ($("filtroDataFim")?.value ?? "").trim();
 
-  if (!filtrosPossuemValor) {
+  if (inicio && fim && inicio > fim) {
+    setStatus("A data final não pode ser menor que a data inicial.");
+    setResumoPagina("Período inválido.");
+    renderMensagemTabela("A data final não pode ser menor que a data inicial.", "text-danger");
+    limparResumo();
+    totalPaginasAtual = 0;
+    totalRegistrosAtual = 0;
+    paginaAtual = 1;
+    atualizarEstadoPaginacao();
+    return false;
+  }
+
+  return true;
+}
+
+async function listarMovimentacoes(filtros = {}, pagina = 1) {
+  if (!possuiFiltrosAtivos(filtros)) {
     renderMensagemTabela("Use os filtros para buscar movimentações.");
     setStatus("Aguardando filtros para consulta.");
     setResumoPagina("Nenhuma consulta realizada.");
     paginaAtual = 1;
     totalPaginasAtual = 0;
+    totalRegistrosAtual = 0;
     limparResumo();
     atualizarEstadoPaginacao();
+    return;
+  }
+
+  if (!validarPeriodo()) {
     return;
   }
 
@@ -392,6 +403,7 @@ async function listarMovimentacoes(filtros = {}, pagina = 1) {
       setStatus(resp?.mensagem || "Erro ao buscar movimentações.");
       setResumoPagina("Falha ao consultar movimentações.");
       totalPaginasAtual = 0;
+      totalRegistrosAtual = 0;
       limparResumo();
       atualizarEstadoPaginacao();
       return;
@@ -401,15 +413,15 @@ async function listarMovimentacoes(filtros = {}, pagina = 1) {
     const dados = Array.isArray(payload?.dados) ? payload.dados : [];
 
     totalPaginasAtual = Number(payload?.paginas ?? 0);
+    totalRegistrosAtual = Number(payload?.total ?? 0);
 
     renderTabela(dados);
     renderResumo(payload);
     atualizarEstadoPaginacao();
 
-    const total = Number(payload?.total ?? 0);
-    setResumoPagina(`Exibindo ${dados.length} registro(s) nesta página. Total encontrado: ${total}.`);
+    setResumoPagina(`Exibindo ${dados.length} registro(s) nesta página. Total encontrado: ${totalRegistrosAtual}.`);
     setStatus(
-      total > 0
+      totalRegistrosAtual > 0
         ? `Consulta concluída. Página ${paginaAtual} carregada com sucesso.`
         : "Nenhum registro encontrado."
     );
@@ -419,7 +431,7 @@ async function listarMovimentacoes(filtros = {}, pagina = 1) {
       mensagem: "Movimentações carregadas com sucesso",
       pagina: paginaAtual,
       total_registros_pagina: dados.length,
-      total_geral: total,
+      total_geral: totalRegistrosAtual,
       resumo: payload?.resumo ?? null
     });
   } catch (err) {
@@ -427,6 +439,7 @@ async function listarMovimentacoes(filtros = {}, pagina = 1) {
     setStatus("Erro inesperado ao carregar movimentações.");
     setResumoPagina("Erro na consulta.");
     totalPaginasAtual = 0;
+    totalRegistrosAtual = 0;
     limparResumo();
     atualizarEstadoPaginacao();
 
@@ -468,12 +481,22 @@ function montarLinhasExportacao(registros) {
   }));
 }
 
+function gerarNomeArquivo(base) {
+  const agora = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const stamp = `${agora.getFullYear()}-${pad(agora.getMonth() + 1)}-${pad(agora.getDate())}_${pad(agora.getHours())}-${pad(agora.getMinutes())}`;
+  return `${base}_${stamp}`;
+}
+
 async function exportarXlsx() {
   const filtros = getFiltrosTela();
-  const filtrosPossuemValor = Object.values(filtros).some((v) => String(v || "").trim() !== "");
 
-  if (!filtrosPossuemValor) {
-    window.alert("Aplique pelo menos um filtro antes de exportar.");
+  if (!possuiFiltrosAtivos(filtros)) {
+    setStatus("Aplique pelo menos um filtro antes de exportar XLSX.");
+    return;
+  }
+
+  if (!validarPeriodo()) {
     return;
   }
 
@@ -483,8 +506,7 @@ async function exportarXlsx() {
     const registros = await buscarTodosRegistrosParaExportacao(filtros);
 
     if (!registros.length) {
-      window.alert("Nenhum registro encontrado para exportar.");
-      setStatus("Nenhum registro encontrado para exportação.");
+      setStatus("Nenhum registro encontrado para exportação XLSX.");
       return;
     }
 
@@ -493,7 +515,7 @@ async function exportarXlsx() {
     const workbook = window.XLSX.utils.book_new();
 
     window.XLSX.utils.book_append_sheet(workbook, worksheet, "Movimentacoes");
-    window.XLSX.writeFile(workbook, "movimentacoes.xlsx");
+    window.XLSX.writeFile(workbook, `${gerarNomeArquivo("movimentacoes")}.xlsx`);
 
     setStatus(`Exportação XLSX concluída com ${registros.length} registro(s).`);
   } catch (err) {
@@ -505,17 +527,18 @@ async function exportarXlsx() {
       detalhe: err?.message,
       stack: err?.stack
     });
-
-    window.alert("Erro ao exportar XLSX.");
   }
 }
 
 async function exportarPdf() {
   const filtros = getFiltrosTela();
-  const filtrosPossuemValor = Object.values(filtros).some((v) => String(v || "").trim() !== "");
 
-  if (!filtrosPossuemValor) {
-    window.alert("Aplique pelo menos um filtro antes de exportar.");
+  if (!possuiFiltrosAtivos(filtros)) {
+    setStatus("Aplique pelo menos um filtro antes de exportar PDF.");
+    return;
+  }
+
+  if (!validarPeriodo()) {
     return;
   }
 
@@ -525,8 +548,7 @@ async function exportarPdf() {
     const registros = await buscarTodosRegistrosParaExportacao(filtros);
 
     if (!registros.length) {
-      window.alert("Nenhum registro encontrado para exportar.");
-      setStatus("Nenhum registro encontrado para exportação.");
+      setStatus("Nenhum registro encontrado para exportação PDF.");
       return;
     }
 
@@ -578,7 +600,7 @@ async function exportarPdf() {
       }
     });
 
-    doc.save("movimentacoes.pdf");
+    doc.save(`${gerarNomeArquivo("movimentacoes")}.pdf`);
 
     setStatus(`Exportação PDF concluída com ${registros.length} registro(s).`);
   } catch (err) {
@@ -590,8 +612,6 @@ async function exportarPdf() {
       detalhe: err?.message,
       stack: err?.stack
     });
-
-    window.alert("Erro ao exportar PDF.");
   }
 }
 
@@ -704,6 +724,7 @@ function limparFiltros() {
   ultimoFiltroAplicado = {};
   paginaAtual = 1;
   totalPaginasAtual = 0;
+  totalRegistrosAtual = 0;
 
   limparSugestoesProduto();
   renderMensagemTabela("Use os filtros para buscar movimentações.");
@@ -720,7 +741,7 @@ function bindAutocompleteProduto() {
   if (!input || !box) return;
 
   input.addEventListener("input", () => {
-    const termo = input.value.trim();
+    const termo = normalizarTexto(input.value);
 
     if ($("filtroProdutoId")) $("filtroProdutoId").value = "";
 
@@ -734,12 +755,15 @@ function bindAutocompleteProduto() {
 
   input.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter") {
-      const termo = input.value.trim();
+      const termo = normalizarTexto(input.value);
       if (!termo) return;
 
-      const encontrados = produtosCache.filter((p) =>
-        String(p?.nome ?? "").toLowerCase().includes(termo.toLowerCase())
-      );
+      const encontrados = produtosCache.filter((p) => {
+        const nome = String(p?.nome ?? "").toLowerCase();
+        const id = String(p?.id ?? "").toLowerCase();
+        const t = termo.toLowerCase();
+        return nome.includes(t) || id.includes(t);
+      });
 
       if (encontrados.length > 0) {
         ev.preventDefault();
@@ -797,26 +821,30 @@ function bindEventos() {
   });
 
   $("filtroTipo")?.addEventListener("change", () => {
-    if (Object.values(getFiltrosTela()).some((v) => String(v || "").trim() !== "")) {
-      listarMovimentacoes(getFiltrosTela(), 1);
+    const filtros = getFiltrosTela();
+    if (possuiFiltrosAtivos(filtros)) {
+      listarMovimentacoes(filtros, 1);
     }
   });
 
   $("filtroFornecedor")?.addEventListener("change", () => {
-    if (Object.values(getFiltrosTela()).some((v) => String(v || "").trim() !== "")) {
-      listarMovimentacoes(getFiltrosTela(), 1);
+    const filtros = getFiltrosTela();
+    if (possuiFiltrosAtivos(filtros)) {
+      listarMovimentacoes(filtros, 1);
     }
   });
 
   $("filtroDataInicio")?.addEventListener("change", () => {
-    if (Object.values(getFiltrosTela()).some((v) => String(v || "").trim() !== "")) {
-      listarMovimentacoes(getFiltrosTela(), 1);
+    const filtros = getFiltrosTela();
+    if (possuiFiltrosAtivos(filtros)) {
+      listarMovimentacoes(filtros, 1);
     }
   });
 
   $("filtroDataFim")?.addEventListener("change", () => {
-    if (Object.values(getFiltrosTela()).some((v) => String(v || "").trim() !== "")) {
-      listarMovimentacoes(getFiltrosTela(), 1);
+    const filtros = getFiltrosTela();
+    if (possuiFiltrosAtivos(filtros)) {
+      listarMovimentacoes(filtros, 1);
     }
   });
 

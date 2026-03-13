@@ -6,9 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="/estoque/css/base.css?v=20260309-mov4">
-  <link rel="stylesheet" href="/estoque/css/layout.css?v=20260309-mov4">
-  <link rel="stylesheet" href="/estoque/css/movimentacoes.css?v=20260309-mov4">
+  <link rel="stylesheet" href="/estoque/css/base.css?v=20260313-mov8">
+  <link rel="stylesheet" href="/estoque/css/layout.css?v=20260313-mov8">
+  <link rel="stylesheet" href="/estoque/css/movimentacoes.css?v=20260313-mov8">
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
@@ -27,21 +27,31 @@
           <div class="page-icon">🔄</div>
           <div>
             <h1 class="page-title mb-0">Movimentações</h1>
+            <div class="text-muted small">
+              Consulte entradas, saídas e remoções com filtros, paginação e detalhamento por lote.
+            </div>
           </div>
         </div>
       </div>
 
       <section class="card p-3 mb-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+          <div>
+            <h5 class="mb-0">Filtros</h5>
+            <small class="text-muted">Refine a consulta para localizar movimentações específicas.</small>
+          </div>
+        </div>
+
         <div class="row g-3 align-items-end">
           <div class="col-12 col-md-6 col-xl-3">
-            <label class="form-label">Produto</label>
+            <label for="filtroProduto" class="form-label">Produto</label>
 
             <div class="position-relative">
               <input
                 type="text"
                 id="filtroProduto"
                 class="form-control"
-                placeholder="Nome do produto..."
+                placeholder="Nome ou ID do produto..."
                 autocomplete="off"
               >
               <input type="hidden" id="filtroProdutoId" value="">
@@ -49,19 +59,20 @@
               <div
                 id="filtroProdutoSugestoes"
                 class="list-group position-absolute w-100 shadow-sm"
+                style="z-index: 1056; display: none; max-height: 240px; overflow-y: auto;"
               ></div>
             </div>
           </div>
 
           <div class="col-12 col-md-6 col-xl-3">
-            <label class="form-label">Fornecedor</label>
+            <label for="filtroFornecedor" class="form-label">Fornecedor</label>
             <select id="filtroFornecedor" class="form-select">
               <option value="">Todos</option>
             </select>
           </div>
 
           <div class="col-12 col-md-6 col-xl-2">
-            <label class="form-label">Tipo</label>
+            <label for="filtroTipo" class="form-label">Tipo</label>
             <select id="filtroTipo" class="form-select">
               <option value="">Todos</option>
               <option value="entrada">Entrada</option>
@@ -71,12 +82,12 @@
           </div>
 
           <div class="col-12 col-md-6 col-xl-2">
-            <label class="form-label">Data início</label>
+            <label for="filtroDataInicio" class="form-label">Data início</label>
             <input type="date" id="filtroDataInicio" class="form-control">
           </div>
 
           <div class="col-12 col-md-6 col-xl-2">
-            <label class="form-label">Data fim</label>
+            <label for="filtroDataFim" class="form-label">Data fim</label>
             <input type="date" id="filtroDataFim" class="form-control">
           </div>
 
@@ -103,6 +114,7 @@
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
           <div>
             <h5 class="mb-0">Resumo da consulta</h5>
+            <small class="text-muted">Visão rápida dos resultados encontrados.</small>
           </div>
           <small class="text-muted" id="movimentacoesInfoTopo">
             Use os filtros para consultar.
@@ -119,14 +131,14 @@
 
           <div class="col-12 col-md-6 col-xl-3">
             <div class="mov-resumo-card">
-              <div class="mov-resumo-label">Quantidade total</div>
+              <div class="mov-resumo-label">Quantidade total em estoque</div>
               <div class="mov-resumo-value" id="resumoQuantidadeTotal">0</div>
             </div>
           </div>
 
           <div class="col-12 col-md-6 col-xl-3">
             <div class="mov-resumo-card">
-              <div class="mov-resumo-label">Custo total</div>
+              <div class="mov-resumo-label">Custo total de entradas</div>
               <div class="mov-resumo-value" id="resumoCustoTotal">R$ 0,00</div>
             </div>
           </div>
@@ -142,7 +154,10 @@
 
       <section class="card p-3">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-          <h5 class="mb-0">Histórico de movimentações</h5>
+          <div>
+            <h5 class="mb-0">Histórico de movimentações</h5>
+            <small class="text-muted">Resultados da consulta atual.</small>
+          </div>
           <small class="text-muted" id="movimentacoesResumoPagina">
             Nenhuma consulta realizada.
           </small>
@@ -284,8 +299,10 @@
           </div>
 
           <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-            <h6 class="mb-0">Consumo de lotes</h6>
-            <small class="text-muted">Preenchido quando a movimentação for uma saída.</small>
+            <div>
+              <h6 class="mb-0">Consumo de lotes</h6>
+              <small class="text-muted">Preenchido quando a movimentação for uma saída.</small>
+            </div>
           </div>
 
           <div id="detalheLotesBox">
@@ -304,9 +321,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-  <script type="module" src="/estoque/js/api.js?v=20260309-mov4"></script>
-  <script type="module" src="/estoque/js/logout.js?v=20260309-mov4"></script>
-  <script type="module" src="/estoque/js/main.js?v=20260309-mov4"></script>
-  <script type="module" src="/estoque/js/movimentacoes.js?v=20260309-mov4"></script>
+  <script type="module" src="/estoque/js/api.js?v=20260313-mov8"></script>
+  <script type="module" src="/estoque/js/logout.js?v=20260313-mov8"></script>
+  <script type="module" src="/estoque/js/main.js?v=20260313-mov8"></script>
+  <script type="module" src="/estoque/js/movimentacoes.js?v=20260313-mov8"></script>
 </body>
 </html>

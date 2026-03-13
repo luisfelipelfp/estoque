@@ -833,6 +833,30 @@ try {
             require_auth();
 
             $filtros = array_merge($_GET, $body);
+
+            $filtros['produto'] = normalize_spaces((string)($filtros['produto'] ?? ''));
+            $filtros['usuario'] = normalize_spaces((string)($filtros['usuario'] ?? ''));
+
+            $filtros['produto_id'] = isset($filtros['produto_id']) && $filtros['produto_id'] !== ''
+                ? (int)$filtros['produto_id']
+                : 0;
+
+            $filtros['fornecedor_id'] = isset($filtros['fornecedor_id']) && $filtros['fornecedor_id'] !== ''
+                ? (int)$filtros['fornecedor_id']
+                : 0;
+
+            $filtros['usuario_id'] = isset($filtros['usuario_id']) && $filtros['usuario_id'] !== ''
+                ? (int)$filtros['usuario_id']
+                : 0;
+
+            $filtros['pagina'] = isset($filtros['pagina']) && (int)$filtros['pagina'] > 0
+                ? (int)$filtros['pagina']
+                : 1;
+
+            $filtros['limite'] = isset($filtros['limite']) && (int)$filtros['limite'] > 0
+                ? (int)$filtros['limite']
+                : 50;
+
             $res = mov_listar($conn, $filtros);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
         }
@@ -905,6 +929,7 @@ try {
             }
 
             $produtoDados = $produtoResp['dados'];
+
             if ((int)($produtoDados['ativo'] ?? 1) !== 1) {
                 json_response(false, 'Produto inativo não pode receber movimentações.', null, 400);
             }

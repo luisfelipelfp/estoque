@@ -1,22 +1,49 @@
-#tabelaMovimentacoes th {
+/* =========================
+   Tabela de movimentações
+   ========================= */
+#tabelaMovimentacoes table {
+  margin-bottom: 0;
+}
+
+#tabelaMovimentacoes table th {
   background: #f4f6fa;
   font-weight: 700;
   white-space: nowrap;
+  vertical-align: middle;
+  color: #1f2937;
 }
 
-#tabelaMovimentacoes td {
+#tabelaMovimentacoes table td {
   vertical-align: middle;
 }
 
+#tabelaMovimentacoes .btn {
+  min-width: 84px;
+}
+
+#tabelaMovimentacoes tbody tr:hover {
+  background: rgba(15, 23, 42, 0.025);
+}
+
+/* =========================
+   Cards de resumo
+   ========================= */
 .mov-resumo-card {
   border: 1px solid #e9edf3;
-  border-radius: 16px;
-  background: #ffffff;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
   padding: 18px;
-  min-height: 108px;
+  min-height: 112px;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mov-resumo-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
 }
 
 .mov-resumo-label {
@@ -26,15 +53,19 @@
 }
 
 .mov-resumo-value {
-  font-size: 1.65rem;
-  line-height: 1.15;
-  font-weight: 700;
+  font-size: 1.7rem;
+  line-height: 1.1;
+  font-weight: 800;
   color: #111827;
+  word-break: break-word;
 }
 
+/* =========================
+   Blocos de detalhe
+   ========================= */
 .mov-detalhe-box {
   border: 1px solid #e9edf3;
-  border-radius: 14px;
+  border-radius: 16px;
   background: #fafbfd;
   padding: 14px 16px;
   height: 100%;
@@ -51,12 +82,17 @@
   color: #111827;
   font-weight: 600;
   word-break: break-word;
+  white-space: normal;
 }
 
+/* =========================
+   Modal de detalhes
+   ========================= */
 #modalDetalhesMovimentacao .modal-content {
   border: 0;
   border-radius: 20px;
   overflow: hidden;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
 }
 
 #modalDetalhesMovimentacao .modal-header {
@@ -69,6 +105,41 @@
   background: #fbfbfc;
 }
 
+/* =========================
+   Observação
+   ========================= */
+#detalheObservacao {
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 24px;
+}
+
+/* =========================
+   Box de lotes
+   ========================= */
+#detalheLotesBox {
+  min-height: 60px;
+}
+
+#detalheLotesBox .table {
+  margin-bottom: 0;
+  background: #ffffff;
+}
+
+#detalheLotesBox .table th {
+  background: #f8fafc;
+  white-space: nowrap;
+  color: #1f2937;
+}
+
+#detalheLotesBox .table td,
+#detalheLotesBox .table th {
+  vertical-align: middle;
+}
+
+/* =========================
+   Autocomplete de produto
+   ========================= */
 #filtroProdutoSugestoes {
   z-index: 2000;
   display: none;
@@ -98,8 +169,95 @@
   background: #f8fafc;
 }
 
+/* =========================
+   Rodapé e paginação
+   ========================= */
+#movimentacoesInfoTopo,
+#movimentacoesResumoPagina,
+#movimentacoesStatusRodape {
+  min-height: 20px;
+}
+
+#movimentacoesPaginacaoTexto {
+  min-width: 110px;
+  text-align: center;
+}
+
+/* =========================
+   Ajustes de badges
+   ========================= */
+.badge {
+  font-weight: 600;
+}
+
+/* =========================
+   Ajustes gerais de cards
+   ========================= */
+.card h5,
+.card h6 {
+  color: #1f2937;
+}
+
+/* =========================
+   Botões da paginação
+   ========================= */
+#btnPaginaAnterior,
+#btnPaginaProxima {
+  min-width: 96px;
+}
+
+/* =========================
+   Ajustes para área de filtros
+   ========================= */
+.form-label {
+  font-weight: 600;
+}
+
+#filtroProduto,
+#filtroFornecedor,
+#filtroTipo,
+#filtroDataInicio,
+#filtroDataFim {
+  min-height: 42px;
+}
+
+/* =========================
+   Responsivo
+   ========================= */
 @media (max-width: 991.98px) {
   #modalDetalhesMovimentacao .modal-dialog {
     margin: 0.75rem;
+  }
+
+  .mov-resumo-value {
+    font-size: 1.45rem;
+  }
+
+  #tabelaMovimentacoes .btn {
+    min-width: auto;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .mov-resumo-card {
+    min-height: 96px;
+    padding: 16px;
+  }
+
+  .mov-resumo-value {
+    font-size: 1.3rem;
+  }
+
+  .mov-detalhe-box {
+    padding: 12px 14px;
+  }
+
+  #movimentacoesPaginacaoTexto {
+    min-width: auto;
+  }
+
+  #btnPaginaAnterior,
+  #btnPaginaProxima {
+    min-width: auto;
   }
 }
