@@ -83,16 +83,16 @@ function setStatusRelatorio(texto = "", tipo = "muted") {
   el.textContent = texto;
 }
 
-function setBtnLoading(id, loading, textoLoading = "Processando...") {
+function setBtnLoading(id, loading, textoOriginal = "") {
   const btn = $(id);
   if (!btn) return;
 
   if (!btn.dataset.originalText) {
-    btn.dataset.originalText = btn.textContent || "";
+    btn.dataset.originalText = textoOriginal || btn.textContent || "";
   }
 
   btn.disabled = !!loading;
-  btn.textContent = loading ? textoLoading : btn.dataset.originalText;
+  btn.textContent = loading ? "Processando..." : btn.dataset.originalText;
 }
 
 function getModalFiltros() {
@@ -128,31 +128,12 @@ function setDefaultDatesIfEmpty() {
   elIni.value = toYMD(ini);
 }
 
-function normalizarTexto(valor) {
-  return String(valor ?? "").trim().replace(/\s+/g, " ");
-}
-
-function validarPeriodo(dataInicio, dataFim) {
-  if (!dataInicio || !dataFim) {
-    return { ok: true, mensagem: "" };
-  }
-
-  if (dataInicio > dataFim) {
-    return {
-      ok: false,
-      mensagem: "A data final não pode ser menor que a data inicial."
-    };
-  }
-
-  return { ok: true, mensagem: "" };
-}
-
 function getFiltros() {
   return {
     data_inicio: $("dataInicio")?.value || "",
     data_fim: $("dataFim")?.value || "",
     tipo: $("tipo")?.value || "",
-    produto: normalizarTexto($("produto")?.value || ""),
+    produto: ($("produto")?.value || "").trim(),
     fornecedor_id: $("fornecedor")?.value || "",
     pagina: 1,
     limite: DEFAULT_LIMITE_TABELA
@@ -201,6 +182,24 @@ function atualizarResumoFiltros() {
 
   setTexto("resumoFiltrosTexto", `${partes.join(", ")}.`);
   setTexto("badgePeriodoRelatorio", badgePartes.join(" • "));
+}
+
+function limparFiltros() {
+  if ($("dataInicio")) $("dataInicio").value = "";
+  if ($("dataFim")) $("dataFim").value = "";
+  if ($("tipo")) $("tipo").value = "";
+  if ($("produto")) $("produto").value = "";
+  if ($("fornecedor")) $("fornecedor").value = "";
+
+  limparSugestoesProduto();
+  setDefaultDatesIfEmpty();
+  atualizarResumoFiltros();
+  carregarRelatorio();
+
+  logJsInfo({
+    origem: "relatorios.js",
+    mensagem: "Filtros limpos"
+  });
 }
 
 function toNumArray(arr, len) {
@@ -380,12 +379,15 @@ function renderGraficoTemporal(graf) {
   });
 }
 
-function renderTotais(totais) {
+function renderTotais(payload) {
+  const totais = payload?.totais || {};
+  const totalRegistros = Number(payload?.total ?? 0);
   const totalQtd = Number(totais?.total_qtd ?? 0);
   const totalCusto = Number(totais?.total_custo ?? 0);
   const totalValor = Number(totais?.total_valor ?? 0);
   const totalLucro = Number(totais?.total_lucro ?? 0);
 
+  setTexto("totalRegistros", totalRegistros);
   setTexto("totalQtd", totalQtd);
   setTexto("totalCusto", formatBRL(totalCusto));
   setTexto("totalValor", formatBRL(totalValor));
@@ -563,7 +565,7 @@ function renderSugestoesProduto(produtos) {
 }
 
 function buscarProdutosAutocomplete(termo) {
-  const texto = normalizarTexto(termo).toLowerCase();
+  const texto = String(termo || "").trim().toLowerCase();
 
   if (!texto) {
     limparSugestoesProduto();
@@ -593,15 +595,8 @@ function gerarNomeArquivo(base) {
 
 async function exportarXlsx() {
   const filtros = getFiltros();
-  const validacao = validarPeriodo(filtros.data_inicio, filtros.data_fim);
-
-  if (!validacao.ok) {
-    setStatusRelatorio(validacao.mensagem, "erro");
-    return;
-  }
 
   setStatusRelatorio("Preparando exportação XLSX...", "processando");
-  setBtnLoading("btnExportarXlsx", true);
 
   try {
     const resp = await apiRequest("relatorio_movimentacoes", filtros, "GET");
@@ -624,11 +619,11 @@ async function exportarXlsx() {
       Fornecedor: item?.fornecedor_nome ?? "",
       Tipo: item?.tipo ?? "",
       Quantidade: Number(item?.quantidade ?? 0),
-      "Custo Unitário": item?.custo_unitario != null ? Number(item.custo_unitario) : "",
-      "Valor Unitário": item?.valor_unitario != null ? Number(item.valor_unitario) : "",
-      "Custo Total": item?.custo_total != null ? Number(item.custo_total) : "",
-      "Valor Total": item?.valor_total != null ? Number(item.valor_total) : "",
-      Lucro: item?.lucro != null ? Number(item.lucro) : "",
+      "Custo Unitário": Number(item?.custo_unitario ?? 0),
+      "Valor Unitário": Number(item?.valor_unitario ?? 0),
+      "Custo Total": Number(item?.custo_total ?? 0),
+      "Valor Total": Number(item?.valor_total ?? 0),
+      Lucro: Number(item?.lucro ?? 0),
       Usuário: item?.usuario ?? "",
       Observação: item?.observacao ?? ""
     }));
@@ -648,22 +643,13 @@ async function exportarXlsx() {
       detalhe: err?.message,
       stack: err?.stack
     });
-  } finally {
-    setBtnLoading("btnExportarXlsx", false);
   }
 }
 
 async function exportarPDF() {
   const filtros = getFiltros();
-  const validacao = validarPeriodo(filtros.data_inicio, filtros.data_fim);
-
-  if (!validacao.ok) {
-    setStatusRelatorio(validacao.mensagem, "erro");
-    return;
-  }
 
   setStatusRelatorio("Preparando exportação PDF...", "processando");
-  setBtnLoading("btnExportarPdf", true);
 
   try {
     const resp = await apiRequest("relatorio_movimentacoes", filtros, "GET");
@@ -686,23 +672,20 @@ async function exportarPDF() {
     doc.setFontSize(14);
     doc.text("Relatório de Movimentações", 14, 14);
 
-    doc.setFontSize(9);
-    doc.text(`Gerado em: ${new Date().toLocaleString("pt-BR")}`, 14, 20);
-
     const body = registros.map((item) => [
       item?.data ?? "",
       item?.produto_nome ?? "",
       item?.fornecedor_nome ?? "",
       item?.tipo ?? "",
       Number(item?.quantidade ?? 0),
-      item?.custo_total != null ? formatBRLComPrefixo(item.custo_total) : "—",
-      item?.valor_total != null ? formatBRLComPrefixo(item.valor_total) : "—",
-      item?.lucro != null ? formatBRLComPrefixo(item.lucro) : "—",
+      formatBRLComPrefixo(item?.custo_total ?? 0),
+      formatBRLComPrefixo(item?.valor_total ?? 0),
+      formatBRLComPrefixo(item?.lucro ?? 0),
       item?.usuario ?? ""
     ]);
 
     doc.autoTable({
-      startY: 24,
+      startY: 20,
       head: [[
         "Data",
         "Produto",
@@ -714,11 +697,7 @@ async function exportarPDF() {
         "Lucro",
         "Usuário"
       ]],
-      body,
-      styles: {
-        fontSize: 8,
-        cellPadding: 2
-      }
+      body
     });
 
     doc.save(`${gerarNomeArquivo("relatorio_movimentacoes")}.pdf`);
@@ -733,44 +712,11 @@ async function exportarPDF() {
       detalhe: err?.message,
       stack: err?.stack
     });
-  } finally {
-    setBtnLoading("btnExportarPdf", false);
   }
-}
-
-function limparRenderRelatorio() {
-  renderTotais({
-    total_qtd: 0,
-    total_custo: 0,
-    total_valor: 0,
-    total_lucro: 0
-  });
-
-  renderCards({});
-  renderRankingLista("rankingProdutosQtd", [], "produtos_qtd");
-  renderRankingLista("rankingProdutosLucro", [], "produtos_lucro");
-  renderRankingLista("rankingFornecedores", [], "fornecedores");
-
-  ultimoGraficoPayload = {
-    labels: [],
-    quantidade: [],
-    custo_total: [],
-    valor_total: [],
-    lucro: []
-  };
-
-  renderGraficoTemporal(ultimoGraficoPayload);
 }
 
 async function carregarRelatorio() {
   const filtros = getFiltros();
-  const validacao = validarPeriodo(filtros.data_inicio, filtros.data_fim);
-
-  if (!validacao.ok) {
-    limparRenderRelatorio();
-    setStatusRelatorio(validacao.mensagem, "erro");
-    return;
-  }
 
   setStatusRelatorio("Carregando relatório...", "processando");
   setBtnLoading("btnAplicarFiltros", true);
@@ -783,7 +729,30 @@ async function carregarRelatorio() {
     const resp = await apiRequest("relatorio_movimentacoes", filtros, "GET");
 
     if (!resp?.sucesso) {
-      limparRenderRelatorio();
+      renderTotais({
+        total: 0,
+        totais: {
+          total_qtd: 0,
+          total_custo: 0,
+          total_valor: 0,
+          total_lucro: 0
+        }
+      });
+
+      renderCards({});
+      renderRankingLista("rankingProdutosQtd", [], "produtos_qtd");
+      renderRankingLista("rankingProdutosLucro", [], "produtos_lucro");
+      renderRankingLista("rankingFornecedores", [], "fornecedores");
+
+      ultimoGraficoPayload = {
+        labels: [],
+        quantidade: [],
+        custo_total: [],
+        valor_total: [],
+        lucro: []
+      };
+
+      renderGraficoTemporal(ultimoGraficoPayload);
       setStatusRelatorio(resp?.mensagem || "Não foi possível carregar o relatório.", "erro");
       return;
     }
@@ -791,7 +760,7 @@ async function carregarRelatorio() {
     const payload = resp?.dados || {};
     ultimoPayloadRelatorio = payload;
 
-    renderTotais(payload?.totais || {});
+    renderTotais(payload);
     renderCards(payload);
     renderRankingLista("rankingProdutosQtd", payload?.ranking_produtos_qtd || [], "produtos_qtd");
     renderRankingLista("rankingProdutosLucro", payload?.ranking_produtos_lucro || [], "produtos_lucro");
@@ -818,7 +787,30 @@ async function carregarRelatorio() {
       metrica: getMetricaGraficoSelecionada()
     });
   } catch (err) {
-    limparRenderRelatorio();
+    renderTotais({
+      total: 0,
+      totais: {
+        total_qtd: 0,
+        total_custo: 0,
+        total_valor: 0,
+        total_lucro: 0
+      }
+    });
+
+    renderCards({});
+    renderRankingLista("rankingProdutosQtd", [], "produtos_qtd");
+    renderRankingLista("rankingProdutosLucro", [], "produtos_lucro");
+    renderRankingLista("rankingFornecedores", [], "fornecedores");
+
+    ultimoGraficoPayload = {
+      labels: [],
+      quantidade: [],
+      custo_total: [],
+      valor_total: [],
+      lucro: []
+    };
+
+    renderGraficoTemporal(ultimoGraficoPayload);
     setStatusRelatorio("Erro inesperado ao carregar relatório.", "erro");
 
     logJsError({
@@ -892,38 +884,12 @@ function bindAutocompleteProduto() {
   });
 }
 
-function limparFiltros() {
-  if ($("dataInicio")) $("dataInicio").value = "";
-  if ($("dataFim")) $("dataFim").value = "";
-  if ($("tipo")) $("tipo").value = "";
-  if ($("produto")) $("produto").value = "";
-  if ($("fornecedor")) $("fornecedor").value = "";
-
-  limparSugestoesProduto();
-  setDefaultDatesIfEmpty();
-  atualizarResumoFiltros();
-  carregarRelatorio();
-
-  logJsInfo({
-    origem: "relatorios.js",
-    mensagem: "Filtros limpos"
-  });
-}
-
 function bindEventos() {
   $("btnAbrirFiltros")?.addEventListener("click", () => {
     getModalFiltros()?.show();
   });
 
   $("btnAplicarFiltros")?.addEventListener("click", async () => {
-    const filtros = getFiltros();
-    const validacao = validarPeriodo(filtros.data_inicio, filtros.data_fim);
-
-    if (!validacao.ok) {
-      setStatusRelatorio(validacao.mensagem, "erro");
-      return;
-    }
-
     atualizarResumoFiltros();
     await carregarRelatorio();
     getModalFiltros()?.hide();
@@ -963,15 +929,15 @@ function bindEventos() {
     }
   });
 
-  const atualizarResumoDebounced = debounce(() => {
+  const d = debounce(() => {
     atualizarResumoFiltros();
   }, 200);
 
-  $("dataInicio")?.addEventListener("change", atualizarResumoDebounced);
-  $("dataFim")?.addEventListener("change", atualizarResumoDebounced);
-  $("tipo")?.addEventListener("change", atualizarResumoDebounced);
-  $("fornecedor")?.addEventListener("change", atualizarResumoDebounced);
-  $("produto")?.addEventListener("input", atualizarResumoDebounced);
+  $("dataInicio")?.addEventListener("change", d);
+  $("dataFim")?.addEventListener("change", d);
+  $("tipo")?.addEventListener("change", d);
+  $("fornecedor")?.addEventListener("change", d);
+  $("produto")?.addEventListener("input", d);
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -981,5 +947,5 @@ document.addEventListener("DOMContentLoaded", async () => {
   await carregarFornecedores();
   await carregarProdutos();
   atualizarResumoFiltros();
-  await carregarRelatorio();
+  carregarRelatorio();
 });

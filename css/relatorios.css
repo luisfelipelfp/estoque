@@ -1,5 +1,5 @@
 /* =========================
-   Cards de resumo
+   Resumo geral
    ========================= */
 .resumo-card {
   border-radius: 18px;
@@ -40,8 +40,13 @@
   border-color: #d9f0df;
 }
 
+#resumoFiltrosTexto,
+#statusRelatorio {
+  min-height: 20px;
+}
+
 /* =========================
-   Blocos por tipo
+   Resumo por tipo
    ========================= */
 .bloco-tipo {
   border-radius: 18px;
@@ -110,7 +115,7 @@
   border: 1px solid #e9edf3;
   border-radius: 18px;
   background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
-  padding: 14px;
+  padding: 18px;
 }
 
 #graficoTemporal {
@@ -118,13 +123,6 @@
   height: 100% !important;
 }
 
-#statusRelatorio {
-  min-height: 20px;
-}
-
-/* =========================
-   Filtros do gráfico
-   ========================= */
 .grafico-tipo-box,
 .grafico-metrica-box {
   min-width: 180px;
@@ -135,58 +133,6 @@
   font-size: 0.78rem;
   color: #6c757d;
   margin-bottom: 4px;
-}
-
-/* =========================
-   Modal de filtros
-   ========================= */
-#modalFiltrosRelatorio .modal-content {
-  border-radius: 20px;
-  border: 0;
-  overflow: hidden;
-  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
-}
-
-#modalFiltrosRelatorio .modal-header {
-  background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
-  border-bottom: 1px solid #e9ecef;
-}
-
-#modalFiltrosRelatorio .modal-footer {
-  border-top: 1px solid #e9ecef;
-  background: #fbfbfc;
-}
-
-/* =========================
-   Autocomplete de produto
-   ========================= */
-#produtoSugestoes {
-  z-index: 2000;
-  display: none;
-  max-height: 220px;
-  overflow-y: auto;
-  border-radius: 12px;
-  border: 1px solid #dfe6ef;
-  background: #ffffff;
-  margin-top: 4px;
-}
-
-#produtoSugestoes .list-group-item {
-  cursor: pointer;
-  border-left: 0;
-  border-right: 0;
-}
-
-#produtoSugestoes .list-group-item:first-child {
-  border-top: 0;
-}
-
-#produtoSugestoes .list-group-item:last-child {
-  border-bottom: 0;
-}
-
-#produtoSugestoes .list-group-item:hover {
-  background: #f8fafc;
 }
 
 /* =========================
@@ -237,18 +183,68 @@
 .ranking-subtexto {
   color: #6b7280;
   font-size: 0.92rem;
+  word-break: break-word;
 }
 
 /* =========================
-   Badge e textos auxiliares
+   Modal de filtros
    ========================= */
-#badgePeriodoRelatorio {
-  white-space: normal;
-  text-align: center;
+#modalFiltrosRelatorio .modal-content {
+  border-radius: 20px;
+  border: 0;
+  overflow: hidden;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
 }
 
-#resumoFiltrosTexto {
-  word-break: break-word;
+#modalFiltrosRelatorio .modal-header {
+  background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+  border-bottom: 1px solid #e9ecef;
+}
+
+#modalFiltrosRelatorio .modal-footer {
+  border-top: 1px solid #e9ecef;
+  background: #fbfbfc;
+}
+
+/* =========================
+   Sugestões de produto
+   ========================= */
+#produtoSugestoes {
+  border-radius: 12px;
+  border: 1px solid #dfe6ef;
+  background: #ffffff;
+  margin-top: 4px;
+}
+
+#produtoSugestoes .list-group-item {
+  cursor: pointer;
+  border-left: 0;
+  border-right: 0;
+}
+
+#produtoSugestoes .list-group-item:first-child {
+  border-top: 0;
+}
+
+#produtoSugestoes .list-group-item:last-child {
+  border-bottom: 0;
+}
+
+#produtoSugestoes .list-group-item:hover {
+  background: #f8fafc;
+}
+
+/* =========================
+   Tabela auxiliar futura
+   ========================= */
+.table-relatorio th {
+  background: #f4f6fa;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.table-relatorio td {
+  vertical-align: middle;
 }
 
 /* =========================
@@ -257,6 +253,10 @@
 .card h5,
 .card h6 {
   color: #1f2937;
+}
+
+#badgePeriodoRelatorio {
+  font-size: 0.82rem;
 }
 
 /* =========================
@@ -295,6 +295,10 @@
   .chart-box {
     min-height: 260px;
     height: 300px;
-    padding: 10px;
+    padding: 14px;
+  }
+
+  .ranking-item {
+    padding: 10px 12px;
   }
 }

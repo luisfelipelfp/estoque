@@ -10,10 +10,10 @@ initLog('relatorios');
 function removeAcentos(string $s): string
 {
     return str_replace(
-        ['á','à','ã','â','ä','é','ê','ë','í','î','ï','ó','ô','õ','ö','ú','û','ü','ç',
-         'Á','À','Ã','Â','Ä','É','Ê','Ë','Í','Î','Ï','Ó','Ô','Õ','Ö','Ú','Û','Ü','Ç'],
-        ['a','a','a','a','a','e','e','e','i','i','i','o','o','o','o','u','u','u','c',
-         'A','A','A','A','A','E','E','E','I','I','I','O','O','O','O','U','U','U','C'],
+        ['á', 'à', 'ã', 'â', 'ä', 'é', 'ê', 'ë', 'í', 'î', 'ï', 'ó', 'ô', 'õ', 'ö', 'ú', 'û', 'ü', 'ç',
+         'Á', 'À', 'Ã', 'Â', 'Ä', 'É', 'Ê', 'Ë', 'Í', 'Î', 'Ï', 'Ó', 'Ô', 'Õ', 'Ö', 'Ú', 'Û', 'Ü', 'Ç'],
+        ['a', 'a', 'a', 'a', 'a', 'e', 'e', 'e', 'i', 'i', 'i', 'o', 'o', 'o', 'o', 'u', 'u', 'u', 'c',
+         'A', 'A', 'A', 'A', 'A', 'E', 'E', 'E', 'I', 'I', 'I', 'O', 'O', 'O', 'O', 'U', 'U', 'U', 'C'],
         $s
     );
 }
@@ -43,16 +43,37 @@ function normalizaTipoMov(?string $tipo): string
     $t = str_replace(['-', '_', '.', '/', '\\'], ' ', $t);
     $t = preg_replace('/\s+/', ' ', $t) ?: $t;
 
-    if ($t === 'e') return 'entrada';
-    if ($t === 's') return 'saida';
-    if ($t === 'r') return 'remocao';
+    if ($t === 'e') {
+        return 'entrada';
+    }
 
-    if ($t === 'entrada' || $t === 'saida' || $t === 'remocao') return $t;
-    if ($t === 'entradas') return 'entrada';
-    if ($t === 'saidas') return 'saida';
-    if ($t === 'remocoes') return 'remocao';
+    if ($t === 's') {
+        return 'saida';
+    }
 
-    if (str_contains($t, 'entr')) return 'entrada';
+    if ($t === 'r') {
+        return 'remocao';
+    }
+
+    if (in_array($t, ['entrada', 'saida', 'remocao'], true)) {
+        return $t;
+    }
+
+    if ($t === 'entradas') {
+        return 'entrada';
+    }
+
+    if ($t === 'saidas') {
+        return 'saida';
+    }
+
+    if ($t === 'remocoes') {
+        return 'remocao';
+    }
+
+    if (str_contains($t, 'entr')) {
+        return 'entrada';
+    }
 
     if (
         str_contains($t, 'sai') ||
@@ -75,6 +96,17 @@ function normalizaTipoMov(?string $tipo): string
     }
 
     return '';
+}
+
+function rel_bind_execute(mysqli_stmt $stmt, string $types, array $params): void
+{
+    if ($types !== '') {
+        $stmt->bind_param($types, ...$params);
+    }
+
+    if (!$stmt->execute()) {
+        throw new RuntimeException('Falha ao executar consulta preparada.');
+    }
 }
 
 function rel_montar_where(array $filtros): array
@@ -157,15 +189,6 @@ function rel_montar_where(array $filtros): array
         'params'   => $params,
         'types'    => $types,
     ];
-}
-
-function rel_bind_execute(mysqli_stmt $stmt, string $types, array $params): void
-{
-    if ($types !== '') {
-        $stmt->bind_param($types, ...$params);
-    }
-
-    $stmt->execute();
 }
 
 function relatorio_estoque_atual(mysqli $conn): array
@@ -285,6 +308,7 @@ function relatorio(mysqli $conn, array $filtros): array
 
         $stmtTot = $conn->prepare("
             SELECT
+                COUNT(*) AS total_registros,
                 COALESCE(SUM(m.quantidade), 0) AS total_qtd,
                 COALESCE(SUM(m.custo_total), 0) AS total_custo,
                 COALESCE(SUM(m.valor_total), 0) AS total_valor,
@@ -312,22 +336,23 @@ function relatorio(mysqli $conn, array $filtros): array
         $stmtTot->close();
 
         $totais = [
-            'total_qtd'     => (int)($totRow['total_qtd'] ?? 0),
-            'total_custo'   => (float)($totRow['total_custo'] ?? 0),
-            'total_valor'   => (float)($totRow['total_valor'] ?? 0),
-            'total_lucro'   => (float)($totRow['total_lucro'] ?? 0),
+            'total_registros' => (int)($totRow['total_registros'] ?? 0),
+            'total_qtd'       => (int)($totRow['total_qtd'] ?? 0),
+            'total_custo'     => (float)($totRow['total_custo'] ?? 0),
+            'total_valor'     => (float)($totRow['total_valor'] ?? 0),
+            'total_lucro'     => (float)($totRow['total_lucro'] ?? 0),
 
-            'entrada_qtd'   => (int)($totRow['entrada_qtd'] ?? 0),
-            'entrada_custo' => (float)($totRow['entrada_custo'] ?? 0),
-            'entrada_valor' => (float)($totRow['entrada_valor'] ?? 0),
+            'entrada_qtd'     => (int)($totRow['entrada_qtd'] ?? 0),
+            'entrada_custo'   => (float)($totRow['entrada_custo'] ?? 0),
+            'entrada_valor'   => (float)($totRow['entrada_valor'] ?? 0),
 
-            'saida_qtd'     => (int)($totRow['saida_qtd'] ?? 0),
-            'saida_custo'   => (float)($totRow['saida_custo'] ?? 0),
-            'saida_valor'   => (float)($totRow['saida_valor'] ?? 0),
-            'saida_lucro'   => (float)($totRow['saida_lucro'] ?? 0),
+            'saida_qtd'       => (int)($totRow['saida_qtd'] ?? 0),
+            'saida_custo'     => (float)($totRow['saida_custo'] ?? 0),
+            'saida_valor'     => (float)($totRow['saida_valor'] ?? 0),
+            'saida_lucro'     => (float)($totRow['saida_lucro'] ?? 0),
 
-            'remocao_qtd'   => (int)($totRow['remocao_qtd'] ?? 0),
-            'remocao_custo' => (float)($totRow['remocao_custo'] ?? 0),
+            'remocao_qtd'     => (int)($totRow['remocao_qtd'] ?? 0),
+            'remocao_custo'   => (float)($totRow['remocao_custo'] ?? 0),
         ];
 
         $sqlDados = "
@@ -364,7 +389,10 @@ function relatorio(mysqli $conn, array $filtros): array
         $paramsPage[] = $offset;
 
         $stmtDados->bind_param($typesPage, ...$paramsPage);
-        $stmtDados->execute();
+        if (!$stmtDados->execute()) {
+            $stmtDados->close();
+            throw new RuntimeException('Erro ao executar dados do relatório.');
+        }
 
         $resDados = $stmtDados->get_result();
         $dados = [];
@@ -424,7 +452,7 @@ function relatorio(mysqli $conn, array $filtros): array
         }
         $stmtGraf->close();
 
-        $grafico_temporal = [
+        $graficoTemporal = [
             'labels'      => $graficoLabels,
             'quantidade'  => $graficoQuantidade,
             'custo_total' => $graficoCusto,
@@ -457,10 +485,10 @@ function relatorio(mysqli $conn, array $filtros): array
 
         rel_bind_execute($stmtRankProdutosQtd, $types, $params);
         $resRankProdutosQtd = $stmtRankProdutosQtd->get_result();
-        $ranking_produtos_qtd = [];
+        $rankingProdutosQtd = [];
 
         while ($row = $resRankProdutosQtd->fetch_assoc()) {
-            $ranking_produtos_qtd[] = [
+            $rankingProdutosQtd[] = [
                 'produto_nome'     => (string)$row['produto_nome'],
                 'quantidade_total' => (int)($row['quantidade_total'] ?? 0),
                 'valor_total'      => (float)($row['valor_total'] ?? 0),
@@ -492,10 +520,10 @@ function relatorio(mysqli $conn, array $filtros): array
 
         rel_bind_execute($stmtRankLucro, $types, $params);
         $resRankLucro = $stmtRankLucro->get_result();
-        $ranking_produtos_lucro = [];
+        $rankingProdutosLucro = [];
 
         while ($row = $resRankLucro->fetch_assoc()) {
-            $ranking_produtos_lucro[] = [
+            $rankingProdutosLucro[] = [
                 'produto_nome'     => (string)$row['produto_nome'],
                 'lucro_total'      => (float)($row['lucro_total'] ?? 0),
                 'quantidade_total' => (int)($row['quantidade_total'] ?? 0),
@@ -527,10 +555,10 @@ function relatorio(mysqli $conn, array $filtros): array
 
         rel_bind_execute($stmtRankFornecedor, $types, $params);
         $resRankFornecedor = $stmtRankFornecedor->get_result();
-        $ranking_fornecedores = [];
+        $rankingFornecedores = [];
 
         while ($row = $resRankFornecedor->fetch_assoc()) {
-            $ranking_fornecedores[] = [
+            $rankingFornecedores[] = [
                 'fornecedor_nome'     => (string)$row['fornecedor_nome'],
                 'quantidade_total'    => (int)($row['quantidade_total'] ?? 0),
                 'custo_total'         => (float)($row['custo_total'] ?? 0),
@@ -540,32 +568,32 @@ function relatorio(mysqli $conn, array $filtros): array
         $stmtRankFornecedor->close();
 
         logInfo('relatorios', 'Relatório gerado', [
-            'total'  => $total,
-            'pagina' => $pagina,
-            'limite' => $limite,
+            'total'   => $total,
+            'pagina'  => $pagina,
+            'limite'  => $limite,
             'filtros' => [
-                'tipo'         => $filtros['tipo'] ?? '',
-                'produto_id'   => $filtros['produto_id'] ?? '',
-                'produto'      => $filtros['produto'] ?? '',
-                'fornecedor_id'=> $filtros['fornecedor_id'] ?? '',
-                'usuario_id'   => $filtros['usuario_id'] ?? '',
-                'usuario'      => $filtros['usuario'] ?? '',
-                'data_inicio'  => $filtros['data_inicio'] ?? '',
-                'data_fim'     => $filtros['data_fim'] ?? '',
+                'tipo'          => $filtros['tipo'] ?? '',
+                'produto_id'    => $filtros['produto_id'] ?? '',
+                'produto'       => $filtros['produto'] ?? '',
+                'fornecedor_id' => $filtros['fornecedor_id'] ?? '',
+                'usuario_id'    => $filtros['usuario_id'] ?? '',
+                'usuario'       => $filtros['usuario'] ?? '',
+                'data_inicio'   => $filtros['data_inicio'] ?? '',
+                'data_fim'      => $filtros['data_fim'] ?? '',
             ]
         ]);
 
         return resposta(true, 'Relatório gerado com sucesso.', [
-            'total'   => $total,
-            'pagina'  => $pagina,
-            'limite'  => $limite,
-            'paginas' => $limite > 0 ? (int)ceil($total / $limite) : 0,
-            'dados'   => $dados,
-            'totais'  => $totais,
-            'grafico_temporal'       => $grafico_temporal,
-            'ranking_produtos_qtd'   => $ranking_produtos_qtd,
-            'ranking_produtos_lucro' => $ranking_produtos_lucro,
-            'ranking_fornecedores'   => $ranking_fornecedores,
+            'total'    => $total,
+            'pagina'   => $pagina,
+            'limite'   => $limite,
+            'paginas'  => $limite > 0 ? (int)ceil($total / $limite) : 0,
+            'dados'    => $dados,
+            'totais'   => $totais,
+            'grafico_temporal'        => $graficoTemporal,
+            'ranking_produtos_qtd'    => $rankingProdutosQtd,
+            'ranking_produtos_lucro'  => $rankingProdutosLucro,
+            'ranking_fornecedores'    => $rankingFornecedores,
             'cards' => [
                 'entradas' => [
                     'quantidade' => $totais['entrada_qtd'],
@@ -586,7 +614,7 @@ function relatorio(mysqli $conn, array $filtros): array
         ]);
     } catch (InvalidArgumentException $e) {
         logWarning('relatorios', 'Filtro inválido no relatório', [
-            'erro' => $e->getMessage(),
+            'erro'    => $e->getMessage(),
             'filtros' => $filtros
         ]);
 
