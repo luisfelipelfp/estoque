@@ -6,9 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="/estoque/css/base.css?v=20260312a">
-  <link rel="stylesheet" href="/estoque/css/layout.css?v=20260312a">
-  <link rel="stylesheet" href="/estoque/css/estoque.css?v=20260312a">
+  <link rel="stylesheet" href="/estoque/css/base.css?v=20260312b">
+  <link rel="stylesheet" href="/estoque/css/layout.css?v=20260312b">
+  <link rel="stylesheet" href="/estoque/css/estoque.css?v=20260312b">
 </head>
 
 <body>
@@ -126,7 +126,7 @@
                 <th style="width: 150px;">Quantidade</th>
                 <th style="width: 160px;">Estoque mínimo</th>
                 <th style="width: 180px;">Status</th>
-                <th style="width: 150px;">Ações</th>
+                <th style="width: 170px;">Ações</th>
               </tr>
             </thead>
             <tbody id="tabelaEstoque">
@@ -140,11 +140,12 @@
 
       <!-- MODAL ENTRADA -->
       <div class="modal fade" id="modalEntrada" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
           <div class="modal-content">
             <div class="modal-header modal-header-entrada">
               <div>
                 <h5 class="modal-title mb-0">Registrar entrada</h5>
+                <small class="text-muted">Use esta tela para repor estoque e gerar novos lotes.</small>
               </div>
               <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
@@ -196,7 +197,7 @@
                   <div class="card border mt-3">
                     <div class="card-body">
                       <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-                        <div class="fw-bold">Últimas Movimentações</div>
+                        <div class="fw-bold">Últimas movimentações</div>
                         <button id="entradaVerHistorico" class="btn btn-sm btn-outline-primary" type="button" disabled>
                           Ver histórico
                         </button>
@@ -214,6 +215,9 @@
                   <select id="entradaFornecedorId" class="form-select">
                     <option value="">Selecione um fornecedor...</option>
                   </select>
+                  <div class="form-text">
+                    A entrada sempre gera lote vinculado ao fornecedor selecionado.
+                  </div>
                 </div>
 
                 <div class="col-12 col-lg-3">
@@ -262,11 +266,12 @@
 
       <!-- MODAL SAÍDA -->
       <div class="modal fade" id="modalSaida" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
           <div class="modal-content">
             <div class="modal-header modal-header-saida">
               <div>
                 <h5 class="modal-title mb-0">Registrar saída</h5>
+                <small class="text-muted">A saída consome o estoque usando FIFO automaticamente.</small>
               </div>
               <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
@@ -318,7 +323,7 @@
                   <div class="card border mt-3">
                     <div class="card-body">
                       <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-                        <div class="fw-bold">Últimas Movimentações</div>
+                        <div class="fw-bold">Últimas movimentações</div>
                         <button id="saidaVerHistorico" class="btn btn-sm btn-outline-primary" type="button" disabled>
                           Ver histórico
                         </button>
@@ -337,6 +342,9 @@
                     <button class="btn btn-outline-secondary" type="button" id="saidaQtdMenos">−</button>
                     <input id="saidaQuantidade" type="number" class="form-control text-center" value="1" min="1" step="1">
                     <button class="btn btn-outline-secondary" type="button" id="saidaQtdMais">+</button>
+                  </div>
+                  <div class="form-text">
+                    O sistema fará a baixa automática dos lotes mais antigos primeiro.
                   </div>
                 </div>
 
@@ -379,9 +387,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-  <script type="module" src="/estoque/js/api.js?v=20260312a"></script>
-  <script type="module" src="/estoque/js/logout.js?v=20260312a"></script>
-  <script type="module" src="/estoque/js/main.js?v=20260312a"></script>
-  <script type="module" src="/estoque/js/estoque.js?v=20260312a"></script>
+  <script type="module" src="/estoque/js/api.js?v=20260312b"></script>
+  <script type="module" src="/estoque/js/logout.js?v=20260312b"></script>
+  <script type="module" src="/estoque/js/main.js?v=20260312b"></script>
+  <script type="module" src="/estoque/js/estoque.js?v=20260312b"></script>
 </body>
 </html>

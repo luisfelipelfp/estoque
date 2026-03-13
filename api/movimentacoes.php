@@ -49,19 +49,32 @@ function coluna_existe_mov(mysqli $conn, string $tabela, string $coluna): bool
     return $ok;
 }
 
+function mov_normalizar_observacao(?string $observacao): ?string
+{
+    $valor = trim((string)$observacao);
+    $valor = preg_replace('/\s+/u', ' ', $valor) ?? $valor;
+
+    return $valor !== '' ? $valor : null;
+}
+
 function mov_obter_produto_for_update(mysqli $conn, int $produto_id): ?array
 {
-    $stmt = $conn->prepare("
+    $hasAtivo = coluna_existe_mov($conn, 'produtos', 'ativo');
+
+    $sql = "
         SELECT
             id,
             nome,
             quantidade,
             COALESCE(preco_custo, 0) AS preco_custo,
             COALESCE(preco_venda, 0) AS preco_venda
+            " . ($hasAtivo ? ", COALESCE(ativo, 1) AS ativo" : ", 1 AS ativo") . "
         FROM produtos
         WHERE id = ?
         FOR UPDATE
-    ");
+    ";
+
+    $stmt = $conn->prepare($sql);
     if (!$stmt) {
         throw new RuntimeException('Erro ao bloquear produto para movimentação.');
     }
@@ -76,17 +89,22 @@ function mov_obter_produto_for_update(mysqli $conn, int $produto_id): ?array
 
 function mov_produto_snapshot(mysqli $conn, int $produto_id): ?array
 {
-    $stmt = $conn->prepare("
+    $hasAtivo = coluna_existe_mov($conn, 'produtos', 'ativo');
+
+    $sql = "
         SELECT
             id,
             nome,
             quantidade,
             COALESCE(preco_custo, 0) AS preco_custo,
             COALESCE(preco_venda, 0) AS preco_venda
+            " . ($hasAtivo ? ", COALESCE(ativo, 1) AS ativo" : ", 1 AS ativo") . "
         FROM produtos
         WHERE id = ?
         LIMIT 1
-    ");
+    ";
+
+    $stmt = $conn->prepare($sql);
     if (!$stmt) {
         throw new RuntimeException('Erro ao preparar snapshot do produto na movimentação.');
     }
@@ -106,7 +124,32 @@ function mov_produto_snapshot(mysqli $conn, int $produto_id): ?array
         'quantidade'  => (int)$row['quantidade'],
         'preco_custo' => (float)$row['preco_custo'],
         'preco_venda' => (float)$row['preco_venda'],
+        'ativo'       => (int)($row['ativo'] ?? 1),
     ];
+}
+
+function mov_fornecedor_obter_para_entrada(mysqli $conn, int $fornecedor_id): ?array
+{
+    $stmt = $conn->prepare("
+        SELECT
+            id,
+            nome,
+            COALESCE(ativo, 1) AS ativo
+        FROM fornecedores
+        WHERE id = ?
+        LIMIT 1
+    ");
+
+    if (!$stmt) {
+        throw new RuntimeException('Erro ao validar fornecedor da entrada.');
+    }
+
+    $stmt->bind_param('i', $fornecedor_id);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return $row ?: null;
 }
 
 function mov_auditoria_snapshot(mysqli $conn, int $movimentacaoId): ?array
@@ -308,7 +351,12 @@ function mov_inserir_registro(
     }
 
     $stmt->bind_param($types, ...$bind);
-    $stmt->execute();
+
+    if (!$stmt->execute()) {
+        $stmt->close();
+        throw new RuntimeException('Erro ao inserir movimentação.');
+    }
+
     $id = (int)$stmt->insert_id;
     $stmt->close();
 
@@ -343,7 +391,12 @@ function mov_criar_lote_entrada(
         $quantidade,
         $custo_unitario
     );
-    $stmt->execute();
+
+    if (!$stmt->execute()) {
+        $stmt->close();
+        throw new RuntimeException('Erro ao salvar lote de entrada.');
+    }
+
     $stmt->close();
 }
 
@@ -384,6 +437,29 @@ function mov_buscar_lotes_fifo(mysqli $conn, int $produto_id): array
 
     $stmt->close();
     return $lotes;
+}
+
+function mov_obter_custo_referencia_atual(mysqli $conn, int $produto_id): float
+{
+    $stmt = $conn->prepare("
+        SELECT COALESCE(custo_unitario, 0) AS custo_unitario
+        FROM estoque_lotes
+        WHERE produto_id = ?
+          AND quantidade_restante > 0
+        ORDER BY criado_em ASC, id ASC
+        LIMIT 1
+    ");
+
+    if (!$stmt) {
+        throw new RuntimeException('Erro ao obter custo de referência do produto.');
+    }
+
+    $stmt->bind_param('i', $produto_id);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return (float)($row['custo_unitario'] ?? 0);
 }
 
 function mov_planejar_consumo_fifo(mysqli $conn, int $produto_id, int $quantidade): array
@@ -497,7 +573,10 @@ function mov_aplicar_consumo_fifo(
             $custoUnit,
             $custoTotal
         );
-        $stmtIns->execute();
+
+        if (!$stmtIns->execute()) {
+            throw new RuntimeException('Falha ao registrar consumo do lote ' . $loteId . '.');
+        }
     }
 
     $stmtUpd->close();
@@ -515,6 +594,8 @@ function mov_registrar(
     ?string $observacao = null,
     ?int $fornecedor_id = null
 ): array {
+    $observacao = mov_normalizar_observacao($observacao);
+
     if ($produto_id <= 0 || $quantidade <= 0) {
         logWarning('movimentacoes', 'Dados inválidos para movimentação', [
             'produto_id' => $produto_id,
@@ -549,6 +630,11 @@ function mov_registrar(
             return resposta(false, 'Produto não encontrado.');
         }
 
+        if ((int)($produto['ativo'] ?? 1) !== 1) {
+            $conn->rollback();
+            return resposta(false, 'Este produto está inativo e não pode receber movimentações.');
+        }
+
         $nomeProduto = (string)$produto['nome'];
         $estoqueAtual = (int)$produto['quantidade'];
         $precoVendaPadrao = (float)($produto['preco_venda'] ?? 0);
@@ -561,6 +647,22 @@ function mov_registrar(
         $consumosFIFO = [];
 
         if ($tipo === 'entrada') {
+            if ($fornecedor_id === null || $fornecedor_id <= 0) {
+                $conn->rollback();
+                return resposta(false, 'Na entrada é obrigatório informar o fornecedor.');
+            }
+
+            $fornecedor = mov_fornecedor_obter_para_entrada($conn, $fornecedor_id);
+            if (!$fornecedor) {
+                $conn->rollback();
+                return resposta(false, 'Fornecedor informado não foi encontrado.');
+            }
+
+            if ((int)($fornecedor['ativo'] ?? 1) !== 1) {
+                $conn->rollback();
+                return resposta(false, 'Fornecedor informado está inativo e não pode ser utilizado na entrada.');
+            }
+
             if ($preco_custo === null || $preco_custo <= 0) {
                 $conn->rollback();
                 return resposta(false, 'Na entrada é obrigatório informar um preço de custo válido.');
@@ -578,7 +680,12 @@ function mov_registrar(
             }
 
             $stmtUpd->bind_param('idi', $quantidade, $custoUnitarioMov, $produto_id);
-            $stmtUpd->execute();
+
+            if (!$stmtUpd->execute()) {
+                $stmtUpd->close();
+                throw new RuntimeException('Falha ao atualizar estoque do produto na entrada.');
+            }
+
             $stmtUpd->close();
         } else {
             if ($estoqueAtual < $quantidade) {
@@ -618,13 +725,21 @@ function mov_registrar(
                 $lucroMov = null;
             }
 
-            $stmtUpd = $conn->prepare('UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?');
+            $novoSaldo = $estoqueAtual - $quantidade;
+            $novoPrecoCustoReferencia = 0.0;
+
+            $stmtUpd = $conn->prepare('UPDATE produtos SET quantidade = ? WHERE id = ?');
             if (!$stmtUpd) {
                 throw new RuntimeException('Erro ao atualizar estoque do produto na saída/remoção.');
             }
 
-            $stmtUpd->bind_param('ii', $quantidade, $produto_id);
-            $stmtUpd->execute();
+            $stmtUpd->bind_param('ii', $novoSaldo, $produto_id);
+
+            if (!$stmtUpd->execute()) {
+                $stmtUpd->close();
+                throw new RuntimeException('Falha ao atualizar estoque do produto na saída/remoção.');
+            }
+
             $stmtUpd->close();
         }
 
@@ -655,6 +770,22 @@ function mov_registrar(
             );
         } else {
             mov_aplicar_consumo_fifo($conn, $movimentacaoId, $consumosFIFO);
+
+            $novoPrecoCustoReferencia = mov_obter_custo_referencia_atual($conn, $produto_id);
+
+            $stmtRef = $conn->prepare('UPDATE produtos SET preco_custo = ? WHERE id = ?');
+            if (!$stmtRef) {
+                throw new RuntimeException('Erro ao atualizar custo de referência do produto após saída/remoção.');
+            }
+
+            $stmtRef->bind_param('di', $novoPrecoCustoReferencia, $produto_id);
+
+            if (!$stmtRef->execute()) {
+                $stmtRef->close();
+                throw new RuntimeException('Falha ao atualizar custo de referência do produto após saída/remoção.');
+            }
+
+            $stmtRef->close();
         }
 
         $produtoDepois = mov_produto_snapshot($conn, $produto_id);

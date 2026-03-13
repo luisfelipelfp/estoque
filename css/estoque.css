@@ -15,6 +15,10 @@
   min-width: 82px;
 }
 
+#tabelaEstoque .badge {
+  font-weight: 600;
+}
+
 /* =========================
    Cards de resumo
    ========================= */
@@ -25,6 +29,16 @@
   padding: 18px 18px 16px;
   height: 100%;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+}
+
+.estoque-kpi-alerta {
+  border-color: #ffe6a7;
+  background: linear-gradient(180deg, #fffdfa 0%, #fffaf0 100%);
+}
+
+.estoque-kpi-zerado {
+  border-color: #f2c7c7;
+  background: linear-gradient(180deg, #fffafa 0%, #fff5f5 100%);
 }
 
 .estoque-kpi-label {
@@ -47,8 +61,21 @@
 }
 
 /* =========================
-   Cabeçalhos dos modais
+   Modais
    ========================= */
+#modalEntrada .modal-content,
+#modalSaida .modal-content {
+  border: 0;
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+#modalEntrada .modal-footer,
+#modalSaida .modal-footer {
+  border-top: 1px solid #e9ecef;
+  background: #fbfbfc;
+}
+
 .modal-header-entrada {
   background: linear-gradient(180deg, #eefaf2 0%, #ffffff 100%);
   border-bottom: 1px solid #e6efe8;
@@ -70,23 +97,70 @@
 }
 
 .estoque-alerta-modal {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
   border-radius: 14px;
-  border: 1px solid #ffe08a;
-  background: #fff8e1;
-  color: #7a5a00;
   padding: 12px 14px;
 }
 
-.estoque-alerta-modal strong {
+.estoque-alerta-modal-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+  margin-top: 1px;
+}
+
+.estoque-alerta-modal-content {
+  min-width: 0;
+}
+
+.estoque-alerta-modal-title {
   font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.estoque-alerta-modal-text {
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.estoque-alerta-modal-warning {
+  border: 1px solid #ffe08a;
+  background: #fff8e1;
+  color: #7a5a00;
+}
+
+.estoque-alerta-modal-danger {
+  border: 1px solid #f3b6b6;
+  background: #fff2f2;
+  color: #8b1e1e;
 }
 
 /* =========================
    Lista de sugestões
    ========================= */
+#entradaSugestoes,
+#saidaSugestoes {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e9ecef;
+}
+
 #entradaSugestoes .list-group-item,
 #saidaSugestoes .list-group-item {
   cursor: pointer;
+  border-left: 0;
+  border-right: 0;
+}
+
+#entradaSugestoes .list-group-item:first-child,
+#saidaSugestoes .list-group-item:first-child {
+  border-top: 0;
+}
+
+#entradaSugestoes .list-group-item:last-child,
+#saidaSugestoes .list-group-item:last-child {
+  border-bottom: 0;
 }
 
 /* =========================
@@ -121,6 +195,19 @@
 }
 
 /* =========================
+   Botões e estados
+   ========================= */
+#entradaSalvar:disabled,
+#saidaSalvar:disabled {
+  opacity: 0.85;
+}
+
+#entradaFornecedorId optgroup {
+  font-style: normal;
+  font-weight: 600;
+}
+
+/* =========================
    Responsivo
    ========================= */
 @media (max-width: 991.98px) {
@@ -135,5 +222,32 @@
 
   .estoque-kpi-value {
     font-size: 1.6rem;
+  }
+
+  .estoque-alerta-modal {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .estoque-kpi-card {
+    padding: 16px 16px 14px;
+  }
+
+  .estoque-kpi-value {
+    font-size: 1.45rem;
+  }
+
+  .estoque-alerta-modal {
+    padding: 10px 12px;
+  }
+
+  .estoque-alerta-modal-title {
+    font-size: 0.95rem;
+  }
+
+  .estoque-alerta-modal-text {
+    font-size: 0.88rem;
   }
 }

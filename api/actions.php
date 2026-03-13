@@ -856,6 +856,7 @@ try {
 
         case 'registrar_movimentacao': {
             require_once __DIR__ . '/movimentacoes.php';
+            require_once __DIR__ . '/produtos.php';
             $usuario = require_auth();
 
             $produtoId = (int)($body['produto_id'] ?? 0);
@@ -874,12 +875,16 @@ try {
                 ? (float)$body['valor_unitario']
                 : null;
 
-            $observacao = isset($body['observacao']) && trim((string)$body['observacao']) !== ''
-                ? trim((string)$body['observacao'])
+            $observacao = isset($body['observacao'])
+                ? normalize_spaces((string)$body['observacao'])
                 : null;
 
-            if ($produtoId <= 0 || $quantidade <= 0) {
-                json_response(false, 'Dados inválidos.', null, 400);
+            if ($produtoId <= 0) {
+                json_response(false, 'Produto inválido.', null, 400);
+            }
+
+            if ($quantidade <= 0) {
+                json_response(false, 'Informe uma quantidade maior que zero.', null, 400);
             }
 
             if (!in_array($tipo, ['entrada', 'saida', 'remocao'], true)) {
@@ -894,6 +899,16 @@ try {
                 json_response(false, 'Valor unitário inválido.', null, 400);
             }
 
+            $produtoResp = produto_obter($conn, $produtoId);
+            if (!($produtoResp['sucesso'] ?? false) || empty($produtoResp['dados'])) {
+                json_response(false, 'Produto não encontrado.', null, 404);
+            }
+
+            $produtoDados = $produtoResp['dados'];
+            if ((int)($produtoDados['ativo'] ?? 1) !== 1) {
+                json_response(false, 'Produto inativo não pode receber movimentações.', null, 400);
+            }
+
             if ($tipo === 'entrada') {
                 if ($fornecedorId === null || $fornecedorId <= 0) {
                     json_response(false, 'Na entrada é obrigatório informar o fornecedor.', null, 400);
@@ -901,6 +916,22 @@ try {
 
                 if ($precoCusto === null || $precoCusto <= 0) {
                     json_response(false, 'Na entrada é obrigatório informar um preço de custo válido.', null, 400);
+                }
+            }
+
+            if ($tipo === 'saida') {
+                if ($valorUnitario !== null && $valorUnitario <= 0) {
+                    json_response(false, 'Na saída, o valor unitário deve ser maior que zero.', null, 400);
+                }
+
+                if ((int)($produtoDados['quantidade'] ?? 0) <= 0) {
+                    json_response(false, 'Este produto está sem estoque para saída.', null, 400);
+                }
+            }
+
+            if ($tipo === 'remocao') {
+                if ((int)($produtoDados['quantidade'] ?? 0) <= 0) {
+                    json_response(false, 'Este produto está sem estoque para remoção.', null, 400);
                 }
             }
 

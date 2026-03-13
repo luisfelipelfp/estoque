@@ -33,6 +33,11 @@ function normalizarTexto(valor) {
   return String(valor ?? "").trim().replace(/\s+/g, " ");
 }
 
+function parseNumeroPositivo(valor) {
+  const n = Number(valor);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 function obterStatusEstoque(produto) {
   const quantidade = Number(produto?.quantidade ?? 0);
   const estoqueMinimo = Number(produto?.estoque_minimo ?? 0);
@@ -103,6 +108,12 @@ function getProdutoCache(produtoId) {
   return produtosCache.find((p) => Number(p?.id ?? 0) === Number(produtoId)) || null;
 }
 
+function getProdutoAtivoCache(produtoId) {
+  const produto = getProdutoCache(produtoId);
+  if (!produto) return null;
+  return Number(produto?.ativo ?? 1) === 1 ? produto : null;
+}
+
 function setTexto(id, valor) {
   const el = $(id);
   if (el) {
@@ -115,6 +126,7 @@ function setStatus(id, texto = "", tipo = "muted") {
   if (!el) return;
 
   el.className = "small";
+
   if (!texto) {
     el.textContent = "";
     return;
@@ -149,14 +161,8 @@ function atualizarKPIs(lista) {
   const produtos = Array.isArray(lista) ? lista : [];
 
   const total = produtos.length;
-  const baixo = produtos.filter((p) => {
-    const status = obterStatusEstoque(p);
-    return status.chave === "baixo";
-  }).length;
-  const zerado = produtos.filter((p) => {
-    const status = obterStatusEstoque(p);
-    return status.chave === "zerado";
-  }).length;
+  const baixo = produtos.filter((p) => obterStatusEstoque(p).chave === "baixo").length;
+  const zerado = produtos.filter((p) => obterStatusEstoque(p).chave === "zerado").length;
 
   setTexto("kpiTotalProdutos", total);
   setTexto("kpiProdutosBaixo", baixo);
@@ -167,10 +173,11 @@ function atualizarResumoFiltro(listaFiltrada) {
   const el = $("estoqueResumoFiltro");
   if (!el) return;
 
-  const total = Array.isArray(produtosCache) ? produtosCache.length : 0;
+  const ativos = produtosCache.filter((p) => Number(p?.ativo ?? 1) === 1);
+  const total = ativos.length;
   const exibidos = Array.isArray(listaFiltrada) ? listaFiltrada.length : 0;
   const filtroStatus = $("filtroStatusEstoque")?.value ?? "todos";
-  const busca = ($("buscaProduto")?.value ?? "").trim();
+  const busca = normalizarTexto($("buscaProduto")?.value ?? "");
 
   let descricaoStatus = "todos os produtos";
   if (filtroStatus === "baixo") descricaoStatus = "somente produtos com estoque baixo";
@@ -299,9 +306,11 @@ function filtrarProdutos() {
 }
 
 function aplicarFiltro() {
+  const ativos = produtosCache.filter((p) => Number(p?.ativo ?? 1) === 1);
   const filtrados = filtrarProdutos();
+
   renderTabela(filtrados);
-  atualizarKPIs(produtosCache.filter((p) => Number(p?.ativo ?? 1) === 1));
+  atualizarKPIs(ativos);
   atualizarResumoFiltro(filtrados);
   atualizarStatusTopo(filtrados);
 }
@@ -802,7 +811,9 @@ function limparModalEntrada() {
   if ($("entradaQuantidade")) $("entradaQuantidade").value = "1";
   if ($("entradaPrecoCusto")) $("entradaPrecoCusto").value = "";
   if ($("entradaObservacao")) $("entradaObservacao").value = "";
-  if ($("entradaFornecedorId")) $("entradaFornecedorId").innerHTML = `<option value="">Selecione um fornecedor...</option>`;
+  if ($("entradaFornecedorId")) {
+    $("entradaFornecedorId").innerHTML = `<option value="">Selecione um fornecedor...</option>`;
+  }
   setStatus("entradaStatus", "");
   resetResumo("entrada");
   limparSugestoes("entrada");
@@ -826,8 +837,14 @@ async function abrirModalEntrada({ id = "", nome = "" } = {}) {
   if (!modal) return;
 
   if (id) {
+    const produto = getProdutoAtivoCache(id);
+    if (!produto) {
+      setStatus("entradaStatus", "Produto inválido ou inativo para entrada.", "erro");
+      return;
+    }
+
     if ($("entradaProdutoId")) $("entradaProdutoId").value = String(id);
-    if ($("entradaProdutoNome")) $("entradaProdutoNome").value = nome || "";
+    if ($("entradaProdutoNome")) $("entradaProdutoNome").value = nome || produto.nome || "";
     await carregarResumoProduto("entrada", Number(id));
   } else {
     preencherSelectFornecedores([]);
@@ -842,8 +859,14 @@ async function abrirModalSaida({ id = "", nome = "" } = {}) {
   if (!modal) return;
 
   if (id) {
+    const produto = getProdutoAtivoCache(id);
+    if (!produto) {
+      setStatus("saidaStatus", "Produto inválido ou inativo para saída.", "erro");
+      return;
+    }
+
     if ($("saidaProdutoId")) $("saidaProdutoId").value = String(id);
-    if ($("saidaProdutoNome")) $("saidaProdutoNome").value = nome || "";
+    if ($("saidaProdutoNome")) $("saidaProdutoNome").value = nome || produto.nome || "";
     await carregarResumoProduto("saida", Number(id));
   }
 
@@ -895,15 +918,17 @@ function bindAcoesTopo() {
 
 async function salvarEntrada() {
   const produtoId = Number($("entradaProdutoId")?.value ?? 0);
-  const produtoNome = ($("entradaProdutoNome")?.value ?? "").trim();
+  const produtoNome = normalizarTexto($("entradaProdutoNome")?.value ?? "");
   const fornecedorId = Number($("entradaFornecedorId")?.value ?? 0);
   const quantidade = Number($("entradaQuantidade")?.value ?? 0);
   const precoCusto = Number($("entradaPrecoCusto")?.value ?? 0);
-  const observacao = ($("entradaObservacao")?.value ?? "").trim();
+  const observacao = normalizarTexto($("entradaObservacao")?.value ?? "");
 
   setStatus("entradaStatus", "");
 
-  if (!produtoId || !produtoNome) {
+  const produto = getProdutoAtivoCache(produtoId);
+
+  if (!produtoId || !produtoNome || !produto) {
     setStatus("entradaStatus", "Selecione um produto válido.", "erro");
     return;
   }
@@ -977,14 +1002,16 @@ async function salvarEntrada() {
 
 async function salvarSaida() {
   const produtoId = Number($("saidaProdutoId")?.value ?? 0);
-  const produtoNome = ($("saidaProdutoNome")?.value ?? "").trim();
+  const produtoNome = normalizarTexto($("saidaProdutoNome")?.value ?? "");
   const quantidade = Number($("saidaQuantidade")?.value ?? 0);
   const valorUnitario = Number($("saidaValorUnitario")?.value ?? 0);
-  const observacao = ($("saidaObservacao")?.value ?? "").trim();
+  const observacao = normalizarTexto($("saidaObservacao")?.value ?? "");
 
   setStatus("saidaStatus", "");
 
-  if (!produtoId || !produtoNome) {
+  const produto = getProdutoAtivoCache(produtoId);
+
+  if (!produtoId || !produtoNome || !produto) {
     setStatus("saidaStatus", "Selecione um produto válido.", "erro");
     return;
   }
@@ -996,6 +1023,12 @@ async function salvarSaida() {
 
   if (!Number.isFinite(valorUnitario) || valorUnitario <= 0) {
     setStatus("saidaStatus", "Informe um valor de venda unitário válido.", "erro");
+    return;
+  }
+
+  const estoqueAtual = Number(produto?.quantidade ?? 0);
+  if (estoqueAtual <= 0) {
+    setStatus("saidaStatus", "Este produto está sem estoque para saída.", "erro");
     return;
   }
 
