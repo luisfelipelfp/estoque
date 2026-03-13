@@ -6,9 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="/estoque/css/base.css?v=20260308">
-  <link rel="stylesheet" href="/estoque/css/layout.css?v=20260308">
-  <link rel="stylesheet" href="/estoque/css/fornecedores.css?v=20260308c">
+  <link rel="stylesheet" href="/estoque/css/base.css?v=20260312a">
+  <link rel="stylesheet" href="/estoque/css/layout.css?v=20260312a">
+  <link rel="stylesheet" href="/estoque/css/fornecedores.css?v=20260312a">
 </head>
 
 <body>
@@ -35,13 +35,13 @@
 
       <section class="card p-3 mb-4">
         <div class="row g-2 align-items-center">
-          <div class="col-12 col-lg-6">
+          <div class="col-12 col-lg-5">
             <div class="input-group">
               <span class="input-group-text">🔎</span>
               <input
                 id="buscaFornecedor"
                 class="form-control"
-                placeholder="Buscar fornecedor pelo nome..."
+                placeholder="Buscar fornecedor pelo nome, e-mail ou CNPJ..."
                 autocomplete="off"
               >
               <button id="btnLimparBuscaFornecedor" class="btn btn-outline-secondary" type="button">
@@ -50,17 +50,32 @@
             </div>
           </div>
 
-          <div class="col-12 col-lg-6 d-flex justify-content-lg-end gap-2 flex-wrap">
+          <div class="col-12 col-lg-3">
+            <select id="filtroStatusFornecedor" class="form-select">
+              <option value="todos">Todos os status</option>
+              <option value="ativos">Somente ativos</option>
+              <option value="inativos">Somente inativos</option>
+            </select>
+          </div>
+
+          <div class="col-12 col-lg-4 d-flex justify-content-lg-end gap-2 flex-wrap">
             <button id="btnAtualizarFornecedores" class="btn btn-outline-primary" type="button">
               🔄 Atualizar
             </button>
           </div>
         </div>
+
+        <div class="mt-3 small text-muted" id="fornecedoresResumoListagem">
+          Carregando fornecedores...
+        </div>
       </section>
 
       <section class="card p-3">
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-          <h5 class="mb-0">Fornecedores cadastrados</h5>
+          <div>
+            <h5 class="mb-0">Fornecedores cadastrados</h5>
+            <div class="small text-muted" id="fornecedoresStatusTopo"></div>
+          </div>
         </div>
 
         <div class="table-responsive">
@@ -69,14 +84,15 @@
               <tr>
                 <th style="width: 90px;">ID</th>
                 <th>Fornecedor</th>
-                <th style="width: 130px;" class="text-center">Produtos</th>
+                <th style="width: 180px;">Contato</th>
+                <th style="width: 140px;" class="text-center">Produtos</th>
                 <th style="width: 120px;">Status</th>
                 <th style="width: 140px;">Ações</th>
               </tr>
             </thead>
             <tbody id="tabelaFornecedores">
               <tr>
-                <td colspan="5" class="text-center text-muted">Carregando...</td>
+                <td colspan="6" class="text-center text-muted">Carregando...</td>
               </tr>
             </tbody>
           </table>
@@ -89,7 +105,7 @@
             <div class="modal-header">
               <div>
                 <h5 class="modal-title mb-0" id="tituloModalFornecedor">Novo Fornecedor</h5>
-                <small class="text-muted">Cadastre, revise e consulte vínculos com produtos.</small>
+                <small class="text-muted">Cadastre, revise e consulte vínculos com produtos e histórico básico.</small>
               </div>
               <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
@@ -126,29 +142,59 @@
                   </select>
                 </div>
 
+                <div class="col-12 col-lg-3">
+                  <label class="form-label">ID do fornecedor</label>
+                  <input id="fornecedorIdVisual" class="form-control" value="Novo cadastro" disabled>
+                </div>
+
                 <div class="col-12">
                   <label class="form-label">Observação</label>
                   <textarea id="fornecedorObservacao" class="form-control" rows="3" placeholder="Informações adicionais sobre o fornecedor..."></textarea>
                 </div>
               </div>
 
-              <div class="fornecedor-resumo-box mb-4">
-                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                  <div>
+              <div class="row g-3 mb-4">
+                <div class="col-12 col-lg-4">
+                  <div class="fornecedor-resumo-box h-100">
                     <div class="fornecedor-resumo-titulo">Produtos vinculados</div>
                     <div class="fornecedor-resumo-texto">
-                      Acompanhe quais produtos utilizam este fornecedor.
+                      Acompanhe quantos produtos já utilizam este fornecedor.
+                    </div>
+                    <div class="mt-2">
+                      <span class="badge text-bg-light border" id="fornecedorResumoProdutos">0 produto(s) vinculado(s)</span>
                     </div>
                   </div>
-                  <span class="badge text-bg-light border" id="fornecedorResumoProdutos">0 produto(s) vinculado(s)</span>
+                </div>
+
+                <div class="col-12 col-lg-4">
+                  <div class="fornecedor-resumo-box h-100">
+                    <div class="fornecedor-resumo-titulo">Movimentações</div>
+                    <div class="fornecedor-resumo-texto">
+                      Visão rápida do uso operacional deste fornecedor.
+                    </div>
+                    <div class="mt-2">
+                      <span class="badge text-bg-light border" id="fornecedorResumoMovimentacoes">0 movimentação(ões)</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-12 col-lg-4">
+                  <div class="fornecedor-resumo-box h-100" id="fornecedorInfoStatusBox">
+                    <div class="fornecedor-resumo-titulo">Situação atual</div>
+                    <div class="fornecedor-resumo-texto" id="fornecedorResumoSituacao">
+                      Preencha os dados do fornecedor para continuar.
+                    </div>
+                  </div>
                 </div>
               </div>
 
               <div class="card border-0 bg-light-subtle">
                 <div class="card-body">
                   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                    <h6 class="mb-0">Produtos vinculados</h6>
-                    <small class="text-muted">Você pode abrir o produto diretamente desta tela.</small>
+                    <div>
+                      <h6 class="mb-0">Produtos vinculados</h6>
+                      <small class="text-muted">Você pode abrir o produto diretamente desta tela.</small>
+                    </div>
                   </div>
 
                   <div id="fornecedorProdutosVinculados">
@@ -164,13 +210,17 @@
               </div>
             </div>
 
-            <div class="modal-footer">
-              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
-                Cancelar
-              </button>
-              <button type="button" class="btn btn-primary" id="btnSalvarFornecedor">
-                Salvar
-              </button>
+            <div class="modal-footer d-flex justify-content-between flex-wrap gap-2">
+              <div class="small text-muted" id="fornecedorRodapeInfo"></div>
+
+              <div class="d-flex gap-2 flex-wrap">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                  Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" id="btnSalvarFornecedor">
+                  Salvar
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -180,9 +230,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-  <script type="module" src="/estoque/js/api.js?v=20260308"></script>
-  <script type="module" src="/estoque/js/logout.js?v=20260308"></script>
-  <script type="module" src="/estoque/js/main.js?v=20260308"></script>
-  <script type="module" src="/estoque/js/fornecedores.js?v=20260308b"></script>
+  <script type="module" src="/estoque/js/api.js?v=20260312a"></script>
+  <script type="module" src="/estoque/js/logout.js?v=20260312a"></script>
+  <script type="module" src="/estoque/js/main.js?v=20260312a"></script>
+  <script type="module" src="/estoque/js/fornecedores.js?v=20260312a"></script>
 </body>
 </html>

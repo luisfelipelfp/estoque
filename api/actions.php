@@ -81,6 +81,11 @@ function normalize_spaces(string $value): string
     return $value;
 }
 
+function only_digits(?string $value): string
+{
+    return preg_replace('/\D+/', '', (string)$value) ?? '';
+}
+
 function read_body(): array
 {
     static $cache = null;
@@ -598,8 +603,13 @@ try {
             require_once __DIR__ . '/fornecedores.php';
             $usuario = require_auth();
 
-            $nome = trim((string)($body['nome'] ?? ''));
+            $fornecedorId = (int)($body['fornecedor_id'] ?? 0);
+            $nome = normalize_spaces((string)($body['nome'] ?? ''));
+            $cnpj = only_digits((string)($body['cnpj'] ?? ''));
+            $telefone = normalize_spaces((string)($body['telefone'] ?? ''));
+            $email = normalize_spaces((string)($body['email'] ?? ''));
             $ativo = (int)($body['ativo'] ?? 1);
+            $observacao = normalize_spaces((string)($body['observacao'] ?? ''));
 
             if ($nome === '') {
                 json_response(false, 'Nome do fornecedor obrigatório.', null, 400);
@@ -609,15 +619,19 @@ try {
                 json_response(false, 'Status inválido.', null, 400);
             }
 
+            if ($cnpj !== '' && strlen($cnpj) !== 14) {
+                json_response(false, 'O CNPJ deve conter 14 dígitos.', null, 400);
+            }
+
             $res = fornecedor_salvar(
                 $conn,
-                (int)($body['fornecedor_id'] ?? 0),
+                $fornecedorId,
                 $nome,
-                trim((string)($body['cnpj'] ?? '')),
-                trim((string)($body['telefone'] ?? '')),
-                trim((string)($body['email'] ?? '')),
+                $cnpj,
+                $telefone,
+                $email,
                 $ativo,
-                trim((string)($body['observacao'] ?? '')),
+                $observacao,
                 (int)$usuario['id']
             );
 

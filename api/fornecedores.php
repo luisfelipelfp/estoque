@@ -47,6 +47,25 @@ function fornecedor_total_produtos(mysqli $conn, int $fornecedorId): int
     return (int)($row['total'] ?? 0);
 }
 
+function fornecedor_total_movimentacoes(mysqli $conn, int $fornecedorId): int
+{
+    $stmt = $conn->prepare("
+        SELECT COUNT(*) AS total
+        FROM movimentacoes
+        WHERE fornecedor_id = ?
+    ");
+    if (!$stmt) {
+        throw new RuntimeException('Erro ao contar movimentações do fornecedor.');
+    }
+
+    $stmt->bind_param('i', $fornecedorId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return (int)($row['total'] ?? 0);
+}
+
 function fornecedor_produtos_listar(mysqli $conn, int $fornecedorId): array
 {
     $hasAtivoProduto = false;
@@ -141,16 +160,17 @@ function fornecedor_snapshot(mysqli $conn, int $fornecedorId): ?array
     }
 
     return [
-        'id'             => (int)$row['id'],
-        'nome'           => (string)$row['nome'],
-        'cnpj'           => (string)$row['cnpj'],
-        'telefone'       => (string)$row['telefone'],
-        'email'          => (string)$row['email'],
-        'ativo'          => (int)$row['ativo'],
-        'observacao'     => (string)$row['observacao'],
-        'criado_em'      => (string)$row['criado_em'],
-        'total_produtos' => fornecedor_total_produtos($conn, $fornecedorId),
-        'produtos'       => fornecedor_produtos_listar($conn, $fornecedorId),
+        'id'                  => (int)$row['id'],
+        'nome'                => (string)$row['nome'],
+        'cnpj'                => (string)$row['cnpj'],
+        'telefone'            => (string)$row['telefone'],
+        'email'               => (string)$row['email'],
+        'ativo'               => (int)$row['ativo'],
+        'observacao'          => (string)$row['observacao'],
+        'criado_em'           => (string)$row['criado_em'],
+        'total_produtos'      => fornecedor_total_produtos($conn, $fornecedorId),
+        'total_movimentacoes' => fornecedor_total_movimentacoes($conn, $fornecedorId),
+        'produtos'            => fornecedor_produtos_listar($conn, $fornecedorId),
     ];
 }
 
@@ -183,7 +203,7 @@ function fornecedores_registrar_auditoria_segura(
     }
 }
 
-function fornecedor_esta_vinculado(mysqli $conn, int $fornecedorId): bool
+function fornecedor_esta_vinculado_produtos(mysqli $conn, int $fornecedorId): bool
 {
     $stmt = $conn->prepare("
         SELECT 1
@@ -192,7 +212,7 @@ function fornecedor_esta_vinculado(mysqli $conn, int $fornecedorId): bool
         LIMIT 1
     ");
     if (!$stmt) {
-        throw new RuntimeException('Erro ao validar vínculo do fornecedor.');
+        throw new RuntimeException('Erro ao validar vínculo do fornecedor com produtos.');
     }
 
     $stmt->bind_param('i', $fornecedorId);
@@ -201,6 +221,32 @@ function fornecedor_esta_vinculado(mysqli $conn, int $fornecedorId): bool
     $stmt->close();
 
     return $existe;
+}
+
+function fornecedor_esta_vinculado_movimentacoes(mysqli $conn, int $fornecedorId): bool
+{
+    $stmt = $conn->prepare("
+        SELECT 1
+        FROM movimentacoes
+        WHERE fornecedor_id = ?
+        LIMIT 1
+    ");
+    if (!$stmt) {
+        throw new RuntimeException('Erro ao validar vínculo do fornecedor com movimentações.');
+    }
+
+    $stmt->bind_param('i', $fornecedorId);
+    $stmt->execute();
+    $existe = (bool)$stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return $existe;
+}
+
+function fornecedor_esta_vinculado(mysqli $conn, int $fornecedorId): bool
+{
+    return fornecedor_esta_vinculado_produtos($conn, $fornecedorId)
+        || fornecedor_esta_vinculado_movimentacoes($conn, $fornecedorId);
 }
 
 function fornecedores_listar(mysqli $conn): array
@@ -234,15 +280,18 @@ function fornecedores_listar(mysqli $conn): array
         $dados = [];
 
         while ($row = $res->fetch_assoc()) {
+            $fornecedorId = (int)$row['id'];
+
             $dados[] = [
-                'id'             => (int)$row['id'],
-                'nome'           => (string)$row['nome'],
-                'cnpj'           => (string)$row['cnpj'],
-                'telefone'       => (string)$row['telefone'],
-                'email'          => (string)$row['email'],
-                'ativo'          => (int)$row['ativo'],
-                'observacao'     => (string)$row['observacao'],
-                'total_produtos' => (int)$row['total_produtos'],
+                'id'                  => $fornecedorId,
+                'nome'                => (string)$row['nome'],
+                'cnpj'                => (string)$row['cnpj'],
+                'telefone'            => (string)$row['telefone'],
+                'email'               => (string)$row['email'],
+                'ativo'               => (int)$row['ativo'],
+                'observacao'          => (string)$row['observacao'],
+                'total_produtos'      => (int)$row['total_produtos'],
+                'total_movimentacoes' => fornecedor_total_movimentacoes($conn, $fornecedorId),
             ];
         }
 
@@ -293,16 +342,17 @@ function fornecedor_obter(mysqli $conn, int $fornecedorId): array
         $produtos = fornecedor_produtos_listar($conn, $fornecedorId);
 
         return resposta(true, 'OK', [
-            'id'             => (int)$row['id'],
-            'nome'           => (string)$row['nome'],
-            'cnpj'           => (string)$row['cnpj'],
-            'telefone'       => (string)$row['telefone'],
-            'email'          => (string)$row['email'],
-            'ativo'          => (int)$row['ativo'],
-            'observacao'     => (string)$row['observacao'],
-            'criado_em'      => (string)$row['criado_em'],
-            'total_produtos' => count($produtos),
-            'produtos'       => $produtos,
+            'id'                  => (int)$row['id'],
+            'nome'                => (string)$row['nome'],
+            'cnpj'                => (string)$row['cnpj'],
+            'telefone'            => (string)$row['telefone'],
+            'email'               => (string)$row['email'],
+            'ativo'               => (int)$row['ativo'],
+            'observacao'          => (string)$row['observacao'],
+            'criado_em'           => (string)$row['criado_em'],
+            'total_produtos'      => count($produtos),
+            'total_movimentacoes' => fornecedor_total_movimentacoes($conn, $fornecedorId),
+            'produtos'            => $produtos,
         ]);
     } catch (Throwable $e) {
         logError('fornecedores', 'Erro ao obter fornecedor', [
@@ -404,7 +454,7 @@ function fornecedor_salvar(
 
             if ((int)($antes['ativo'] ?? 1) === 1 && $ativo === 0 && fornecedor_esta_vinculado($conn, $fornecedorId)) {
                 $conn->rollback();
-                return resposta(false, 'Este fornecedor está vinculado a produtos e não pode ser inativado no momento.', null);
+                return resposta(false, 'Este fornecedor possui vínculos com produtos ou movimentações e não pode ser inativado no momento.', null);
             }
 
             $stmt = $conn->prepare("
@@ -433,7 +483,13 @@ function fornecedor_salvar(
                 $observacao,
                 $fornecedorId
             );
-            $stmt->execute();
+
+            if (!$stmt->execute()) {
+                $stmt->close();
+                $conn->rollback();
+                return resposta(false, 'Erro ao atualizar fornecedor.', null);
+            }
+
             $stmt->close();
 
             $depois = fornecedor_snapshot($conn, $fornecedorId);
@@ -441,7 +497,7 @@ function fornecedor_salvar(
             fornecedores_registrar_auditoria_segura(
                 $conn,
                 $usuarioId,
-                'editar_fornecedor',
+                $ativo === 0 && (int)($antes['ativo'] ?? 1) === 1 ? 'inativar_fornecedor' : 'editar_fornecedor',
                 'fornecedor',
                 $fornecedorId,
                 $antes,
@@ -450,7 +506,7 @@ function fornecedor_salvar(
 
             $conn->commit();
 
-            return resposta(true, 'Fornecedor atualizado com sucesso.', ['id' => $fornecedorId]);
+            return resposta(true, $ativo === 0 ? 'Fornecedor inativado com sucesso.' : 'Fornecedor atualizado com sucesso.', ['id' => $fornecedorId]);
         }
 
         $stmt = $conn->prepare("
@@ -473,7 +529,13 @@ function fornecedor_salvar(
             $ativo,
             $observacao
         );
-        $stmt->execute();
+
+        if (!$stmt->execute()) {
+            $stmt->close();
+            $conn->rollback();
+            return resposta(false, 'Erro ao cadastrar fornecedor.', null);
+        }
+
         $novoId = (int)$stmt->insert_id;
         $stmt->close();
 

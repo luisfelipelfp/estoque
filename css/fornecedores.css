@@ -1,7 +1,27 @@
+#tabelaFornecedores {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+#tabelaFornecedores th {
+  background-color: #e9ecef;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+#tabelaFornecedores td {
+  vertical-align: middle;
+}
+
+#tabelaFornecedores .table-light td {
+  opacity: 0.92;
+}
+
 #modalFornecedor .modal-content {
   border: 0;
   border-radius: 18px;
   overflow: hidden;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
 }
 
 #modalFornecedor .modal-header {
@@ -19,19 +39,109 @@
   border-radius: 14px;
   padding: 14px 16px;
   background: #fafbfd;
+  height: 100%;
 }
 
 .fornecedor-resumo-titulo {
   font-size: 0.95rem;
   font-weight: 700;
   color: #212529;
+  margin-bottom: 4px;
 }
 
 .fornecedor-resumo-texto {
   font-size: 0.9rem;
   color: #6c757d;
+  line-height: 1.45;
+}
+
+#fornecedorProdutosVinculados .table {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+#fornecedorProdutosVinculados .table th {
+  background-color: #eef2f6;
+  white-space: nowrap;
 }
 
 #fornecedorStatus {
   min-height: 20px;
-} 
+}
+
+#fornecedorRodapeInfo {
+  min-height: 20px;
+}
+
+#fornecedoresResumoListagem,
+#fornecedoresStatusTopo {
+  line-height: 1.4;
+}
+
+#fornecedorIdVisual:disabled {
+  background-color: #f8f9fa;
+  color: #6c757d;
+  opacity: 1;
+}
+
+#fornecedorObservacao {
+  resize: vertical;
+  min-height: 96px;
+}
+
+#buscaFornecedor,
+#fornecedorNome,
+#fornecedorCnpj,
+#fornecedorTelefone,
+#fornecedorEmail,
+#fornecedorObservacao,
+#fornecedorAtivo,
+#filtroStatusFornecedor {
+  box-shadow: none;
+}
+
+#buscaFornecedor:focus,
+#fornecedorNome:focus,
+#fornecedorCnpj:focus,
+#fornecedorTelefone:focus,
+#fornecedorEmail:focus,
+#fornecedorObservacao:focus,
+#fornecedorAtivo:focus,
+#filtroStatusFornecedor:focus {
+  border-color: #86b7fe;
+  box-shadow: 0 0 0 0.18rem rgba(13, 110, 253, 0.15);
+}
+
+#tabelaFornecedores .fw-semibold {
+  line-height: 1.2;
+}
+
+#tabelaFornecedores .small {
+  line-height: 1.35;
+}
+
+#tabelaFornecedores .badge {
+  font-weight: 600;
+}
+
+.card.bg-light-subtle {
+  border-radius: 16px;
+}
+
+.card.bg-light-subtle .card-body {
+  padding: 1rem 1rem 1.1rem;
+}
+
+.input-group .input-group-text {
+  font-weight: 600;
+}
+
+@media (max-width: 991px) {
+  #modalFornecedor .modal-dialog {
+    margin: 0.75rem;
+  }
+
+  .fornecedor-resumo-box {
+    padding: 12px 14px;
+  }
+}
