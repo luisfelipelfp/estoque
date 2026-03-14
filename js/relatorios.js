@@ -381,7 +381,7 @@ function renderGraficoTemporal(graf) {
 
 function renderTotais(payload) {
   const totais = payload?.totais || {};
-  const totalRegistros = Number(payload?.total ?? 0);
+  const totalRegistros = Number(totais?.total_registros ?? payload?.total ?? 0);
   const totalQtd = Number(totais?.total_qtd ?? 0);
   const totalCusto = Number(totais?.total_custo ?? 0);
   const totalValor = Number(totais?.total_valor ?? 0);
@@ -732,6 +732,7 @@ async function carregarRelatorio() {
       renderTotais({
         total: 0,
         totais: {
+          total_registros: 0,
           total_qtd: 0,
           total_custo: 0,
           total_valor: 0,
@@ -790,6 +791,7 @@ async function carregarRelatorio() {
     renderTotais({
       total: 0,
       totais: {
+        total_registros: 0,
         total_qtd: 0,
         total_custo: 0,
         total_valor: 0,
