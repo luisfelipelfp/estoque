@@ -364,8 +364,6 @@ function criarFornecedorVazio() {
     fornecedor_id: "",
     nome: "",
     codigo: "",
-    preco_custo: "",
-    preco_venda: "",
     observacao: "",
     principal: 0
   };
@@ -453,11 +451,7 @@ function atualizarFornecedor(index, campo, valor) {
     return;
   }
 
-  if (campo === "preco_custo" || campo === "preco_venda") {
-    fornecedoresTemp[index][campo] = String(valor ?? "").replace(",", ".");
-  } else {
-    fornecedoresTemp[index][campo] = valor;
-  }
+  fornecedoresTemp[index][campo] = valor;
 
   if (campo === "principal" && Number(valor) === 1) {
     fornecedoresTemp = fornecedoresTemp.map((f, i) => ({
@@ -558,7 +552,7 @@ function criarFornecedorCard(fornecedor, index) {
 
         ${principal ? `
           <div class="alert alert-primary py-2 mb-3">
-            Este é o fornecedor principal usado como referência do produto.
+            Este é o fornecedor principal de vínculo do produto.
           </div>
         ` : ""}
 
@@ -583,32 +577,6 @@ function criarFornecedorCard(fornecedor, index) {
               data-campo="codigo"
               data-index="${index}"
               placeholder="Ex.: 83921"
-              ${!produtoAtivo ? "disabled" : ""}
-            >
-          </div>
-
-          <div class="col-12 col-lg-6">
-            <label class="form-label">Preço de custo</label>
-            <input
-              class="form-control"
-              value="${escapeHtml(fornecedor?.preco_custo ?? "")}"
-              data-campo="preco_custo"
-              data-index="${index}"
-              inputmode="decimal"
-              placeholder="0.00"
-              ${!produtoAtivo ? "disabled" : ""}
-            >
-          </div>
-
-          <div class="col-12 col-lg-6">
-            <label class="form-label">Preço de venda</label>
-            <input
-              class="form-control"
-              value="${escapeHtml(fornecedor?.preco_venda ?? "")}"
-              data-campo="preco_venda"
-              data-index="${index}"
-              inputmode="decimal"
-              placeholder="0.00"
               ${!produtoAtivo ? "disabled" : ""}
             >
           </div>
@@ -733,8 +701,6 @@ async function abrirModalProdutoExistente(produtoId) {
       fornecedor_id: String(f?.fornecedor_id ?? ""),
       nome: f?.nome ?? "",
       codigo: f?.codigo ?? "",
-      preco_custo: f?.preco_custo ?? "",
-      preco_venda: f?.preco_venda ?? "",
       observacao: f?.observacao ?? "",
       principal: Number(f?.principal ?? 0) === 1 ? 1 : 0
     }));
@@ -760,18 +726,10 @@ function fornecedoresValidosParaEnvio() {
         ? obterNomeFornecedorPorId(fornecedorId) || String(f?.nome ?? "").trim()
         : "";
 
-      const precoCustoRaw = String(f?.preco_custo ?? "").trim().replace(",", ".");
-      const precoVendaRaw = String(f?.preco_venda ?? "").trim().replace(",", ".");
-
-      const precoCusto = precoCustoRaw === "" ? 0 : Number(precoCustoRaw);
-      const precoVenda = precoVendaRaw === "" ? 0 : Number(precoVendaRaw);
-
       return {
         fornecedor_id: fornecedorId,
         nome: String(nome ?? "").trim(),
         codigo: String(f?.codigo ?? "").trim(),
-        preco_custo: Number.isFinite(precoCusto) ? precoCusto : 0,
-        preco_venda: Number.isFinite(precoVenda) ? precoVenda : 0,
         observacao: String(f?.observacao ?? "").trim(),
         principal: Number(f?.principal ?? 0) === 1 ? 1 : 0
       };
@@ -815,15 +773,6 @@ async function salvarProduto() {
 
   if (fornecedorDuplicado) {
     setStatusMensagem("O mesmo fornecedor não pode ser adicionado mais de uma vez para o mesmo produto.", "erro");
-    return;
-  }
-
-  const fornecedorPrecoInvalido = fornecedores.find(
-    (f) => Number(f.preco_custo) < 0 || Number(f.preco_venda) < 0
-  );
-
-  if (fornecedorPrecoInvalido) {
-    setStatusMensagem("Os preços dos fornecedores devem ser maiores ou iguais a zero.", "erro");
     return;
   }
 
