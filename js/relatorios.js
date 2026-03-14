@@ -784,6 +784,11 @@ async function carregarRelatorio() {
       mensagem: "Relatório carregado",
       filtros,
       total: payload?.total ?? 0,
+      total_registros: payload?.totais?.total_registros ?? 0,
+      quantidade_estoque: payload?.totais?.total_qtd ?? 0,
+      custo_total_entradas: payload?.totais?.total_custo ?? 0,
+      valor_total_saidas: payload?.totais?.total_valor ?? 0,
+      lucro_total_saidas: payload?.totais?.total_lucro ?? 0,
       tipo_grafico: getTipoGraficoSelecionado(),
       metrica: getMetricaGraficoSelecionada()
     });
