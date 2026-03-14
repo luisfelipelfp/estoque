@@ -191,20 +191,15 @@ function rel_montar_where(array $filtros): array
     ];
 }
 
-function rel_obter_totais_estoque_filtrado(mysqli $conn, string $whereSql, string $types, array $params): array
+function rel_obter_quantidade_estoque_filtrado(mysqli $conn, string $whereSql, string $types, array $params): int
 {
     $sql = "
         SELECT
-            COUNT(*) AS total_produtos,
-            COALESCE(SUM(produtos_filtrados.quantidade), 0) AS quantidade_atual,
-            COALESCE(SUM(produtos_filtrados.quantidade * produtos_filtrados.preco_custo), 0) AS custo_estoque_atual,
-            COALESCE(SUM(produtos_filtrados.quantidade * produtos_filtrados.preco_venda), 0) AS valor_estoque_atual
+            COALESCE(SUM(produtos_filtrados.quantidade_atual), 0) AS quantidade_atual
         FROM (
             SELECT DISTINCT
                 p.id,
-                COALESCE(p.quantidade, 0) AS quantidade,
-                COALESCE(p.preco_custo, 0) AS preco_custo,
-                COALESCE(p.preco_venda, 0) AS preco_venda
+                COALESCE(p.quantidade, 0) AS quantidade_atual
             FROM movimentacoes m
             INNER JOIN produtos p ON p.id = m.produto_id
             LEFT JOIN fornecedores f ON f.id = m.fornecedor_id
@@ -215,23 +210,14 @@ function rel_obter_totais_estoque_filtrado(mysqli $conn, string $whereSql, strin
 
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
-        throw new RuntimeException('Erro ao preparar totais de estoque filtrado.');
+        throw new RuntimeException('Erro ao preparar quantidade atual em estoque.');
     }
 
     rel_bind_execute($stmt, $types, $params);
     $row = $stmt->get_result()->fetch_assoc() ?: [];
     $stmt->close();
 
-    $custoEstoque = (float)($row['custo_estoque_atual'] ?? 0);
-    $valorEstoque = (float)($row['valor_estoque_atual'] ?? 0);
-
-    return [
-        'total_produtos'       => (int)($row['total_produtos'] ?? 0),
-        'quantidade_atual'     => (int)($row['quantidade_atual'] ?? 0),
-        'custo_estoque_atual'  => $custoEstoque,
-        'valor_estoque_atual'  => $valorEstoque,
-        'lucro_estoque_atual'  => $valorEstoque - $custoEstoque,
-    ];
+    return (int)($row['quantidade_atual'] ?? 0);
 }
 
 function relatorio_estoque_atual(mysqli $conn): array
@@ -353,6 +339,7 @@ function relatorio(mysqli $conn, array $filtros): array
         $stmtMov = $conn->prepare("
             SELECT
                 COUNT(*) AS total_registros,
+
                 COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN m.quantidade ELSE 0 END), 0) AS entrada_qtd,
                 COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN COALESCE(m.custo_total, 0) ELSE 0 END), 0) AS entrada_custo,
                 COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN COALESCE(m.valor_total, 0) ELSE 0 END), 0) AS entrada_valor,
@@ -374,18 +361,18 @@ function relatorio(mysqli $conn, array $filtros): array
         $movRow = $stmtMov->get_result()->fetch_assoc() ?: [];
         $stmtMov->close();
 
-        $estoqueAtual = rel_obter_totais_estoque_filtrado($conn, $whereSql, $types, $params);
+        $quantidadeAtual = rel_obter_quantidade_estoque_filtrado($conn, $whereSql, $types, $params);
 
         $totais = [
             'total_registros' => (int)($movRow['total_registros'] ?? 0),
 
-            // Cards do topo: posição atual do estoque dos produtos filtrados
-            'total_qtd'       => (int)($estoqueAtual['quantidade_atual'] ?? 0),
-            'total_custo'     => (float)($estoqueAtual['custo_estoque_atual'] ?? 0),
-            'total_valor'     => (float)($estoqueAtual['valor_estoque_atual'] ?? 0),
-            'total_lucro'     => (float)($estoqueAtual['lucro_estoque_atual'] ?? 0),
+            // topo: alinhado com a lógica da tela de movimentações
+            'total_qtd'       => $quantidadeAtual,
+            'total_custo'     => (float)($movRow['entrada_custo'] ?? 0),
+            'total_valor'     => (float)($movRow['saida_valor'] ?? 0),
+            'total_lucro'     => (float)($movRow['saida_lucro'] ?? 0),
 
-            // Resumo por tipo: movimentações do período/filtro
+            // resumo por tipo
             'entrada_qtd'     => (int)($movRow['entrada_qtd'] ?? 0),
             'entrada_custo'   => (float)($movRow['entrada_custo'] ?? 0),
             'entrada_valor'   => (float)($movRow['entrada_valor'] ?? 0),
@@ -627,10 +614,10 @@ function relatorio(mysqli $conn, array $filtros): array
             ],
             'totais_topo' => [
                 'total_registros' => $totais['total_registros'],
-                'quantidade_atual' => $totais['total_qtd'],
-                'custo_estoque_atual' => $totais['total_custo'],
-                'valor_estoque_atual' => $totais['total_valor'],
-                'lucro_estoque_atual' => $totais['total_lucro'],
+                'quantidade_estoque' => $totais['total_qtd'],
+                'custo_total_entradas' => $totais['total_custo'],
+                'valor_total_saidas' => $totais['total_valor'],
+                'lucro_total_saidas' => $totais['total_lucro'],
             ]
         ]);
 
