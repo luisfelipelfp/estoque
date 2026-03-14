@@ -1,72 +1,215 @@
 const APP_BASE = "/estoque";
 const API_URL = `${APP_BASE}/api/actions.php`;
+const DEFAULT_TIMEOUT_MS = 30000;
 
-export async function apiRequest(acao, dados = null, metodo = "GET") {
-  const method = String(metodo || "GET").toUpperCase();
-  let url = `${API_URL}?acao=${encodeURIComponent(acao)}`;
+function isPlainObject(value) {
+  return Object.prototype.toString.call(value) === "[object Object]";
+}
+
+function isNil(value) {
+  return value === undefined || value === null;
+}
+
+function normalizarMetodo(metodo) {
+  return String(metodo || "GET").trim().toUpperCase();
+}
+
+function serializarValorQuery(valor) {
+  if (isNil(valor)) return null;
+
+  if (typeof valor === "string") {
+    const v = valor.trim();
+    return v === "" ? null : v;
+  }
+
+  if (typeof valor === "number" || typeof valor === "boolean") {
+    return String(valor);
+  }
+
+  if (Array.isArray(valor)) {
+    if (valor.length === 0) return null;
+    return JSON.stringify(valor);
+  }
+
+  if (isPlainObject(valor)) {
+    const keys = Object.keys(valor);
+    if (keys.length === 0) return null;
+    return JSON.stringify(valor);
+  }
+
+  return String(valor);
+}
+
+function montarQueryString(dados) {
+  const query = new URLSearchParams();
+
+  if (!isPlainObject(dados)) {
+    return query.toString();
+  }
+
+  for (const [chave, valor] of Object.entries(dados)) {
+    const valorSerializado = serializarValorQuery(valor);
+    if (valorSerializado === null) continue;
+    query.append(chave, valorSerializado);
+  }
+
+  return query.toString();
+}
+
+function montarMensagemHttp(status) {
+  const mapa = {
+    400: "Requisição inválida.",
+    401: "Sessão expirada ou usuário não autenticado.",
+    403: "Acesso negado.",
+    404: "Recurso não encontrado.",
+    405: "Método não permitido.",
+    408: "Tempo de requisição esgotado.",
+    409: "Conflito ao processar a requisição.",
+    422: "Dados inválidos enviados ao servidor.",
+    429: "Muitas requisições. Tente novamente em instantes.",
+    500: "Erro interno no servidor.",
+    502: "Falha de comunicação com o servidor.",
+    503: "Serviço temporariamente indisponível.",
+    504: "Tempo de resposta do servidor esgotado."
+  };
+
+  return mapa[status] || `Erro HTTP ${status}.`;
+}
+
+async function parseResposta(resp) {
+  const contentType = (resp.headers.get("content-type") || "").toLowerCase();
+
+  if (contentType.includes("application/json")) {
+    try {
+      return await resp.json();
+    } catch {
+      return {
+        sucesso: false,
+        mensagem: "O servidor retornou um JSON inválido."
+      };
+    }
+  }
+
+  try {
+    const texto = await resp.text();
+    return {
+      sucesso: false,
+      mensagem: texto?.trim() || montarMensagemHttp(resp.status)
+    };
+  } catch {
+    return {
+      sucesso: false,
+      mensagem: montarMensagemHttp(resp.status)
+    };
+  }
+}
+
+function normalizarPayload(payload, resp = null) {
+  if (!isPlainObject(payload)) {
+    return {
+      sucesso: false,
+      mensagem: resp ? montarMensagemHttp(resp.status) : "Resposta inválida do servidor.",
+      dados: null
+    };
+  }
+
+  const normalizado = {
+    sucesso: Boolean(payload.sucesso),
+    mensagem: typeof payload.mensagem === "string" ? payload.mensagem : "",
+    dados: Object.prototype.hasOwnProperty.call(payload, "dados") ? payload.dados : null
+  };
+
+  if (resp && !resp.ok && !normalizado.mensagem) {
+    normalizado.mensagem = montarMensagemHttp(resp.status);
+  }
+
+  if (!resp && !normalizado.mensagem) {
+    normalizado.mensagem = normalizado.sucesso
+      ? "OK"
+      : "Erro de comunicação com o servidor.";
+  }
+
+  return normalizado;
+}
+
+export async function apiRequest(acao, dados = null, metodo = "GET", config = {}) {
+  const action = String(acao || "").trim();
+  const method = normalizarMetodo(metodo);
+
+  if (!action) {
+    return {
+      sucesso: false,
+      mensagem: "Ação da API não informada.",
+      dados: null
+    };
+  }
+
+  if (!["GET", "POST"].includes(method)) {
+    return {
+      sucesso: false,
+      mensagem: `Método HTTP não suportado: ${method}.`,
+      dados: null
+    };
+  }
+
+  const timeoutMs = Number(config?.timeout ?? DEFAULT_TIMEOUT_MS);
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => {
+    controller.abort();
+  }, Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS);
+
+  let url = `${API_URL}?acao=${encodeURIComponent(action)}`;
 
   const options = {
     method,
     credentials: "include",
+    signal: controller.signal,
     headers: {
       Accept: "application/json"
     }
   };
 
-  if (method === "GET" && dados && typeof dados === "object") {
-    const query = new URLSearchParams();
-
-    for (const [chave, valor] of Object.entries(dados)) {
-      if (valor === undefined || valor === null || valor === "") continue;
-      query.append(chave, String(valor));
-    }
-
-    const qs = query.toString();
+  if (method === "GET") {
+    const qs = montarQueryString(dados);
     if (qs) {
       url += `&${qs}`;
     }
-  }
-
-  if (method === "POST") {
-    options.headers["Content-Type"] = "application/json";
-    options.body = JSON.stringify(dados || {});
+  } else if (method === "POST") {
+    options.headers["Content-Type"] = "application/json; charset=utf-8";
+    options.body = JSON.stringify(isPlainObject(dados) ? dados : {});
   }
 
   try {
     const resp = await fetch(url, options);
-    const contentType = (resp.headers.get("content-type") || "").toLowerCase();
+    const payloadBruto = await parseResposta(resp);
+    const payload = normalizarPayload(payloadBruto, resp);
 
-    let payload;
-    if (contentType.includes("application/json")) {
-      payload = await resp.json();
-    } else {
-      const texto = await resp.text();
-      payload = {
-        sucesso: false,
-        mensagem: texto || `Erro HTTP ${resp.status}`
-      };
-    }
+    if (!resp.ok) {
+      payload.sucesso = false;
 
-    if (typeof payload !== "object" || payload === null) {
-      payload = {
-        sucesso: false,
-        mensagem: "Resposta inválida do servidor."
-      };
-    }
-
-    if (!("sucesso" in payload)) {
-      payload.sucesso = resp.ok;
-    }
-
-    if (!resp.ok && (!payload.mensagem || payload.mensagem === "OK")) {
-      payload.mensagem = `Erro HTTP ${resp.status}`;
+      if (!payload.mensagem || payload.mensagem === "OK") {
+        payload.mensagem = montarMensagemHttp(resp.status);
+      }
     }
 
     return payload;
   } catch (err) {
+    if (err?.name === "AbortError") {
+      return {
+        sucesso: false,
+        mensagem: "Tempo de comunicação com o servidor esgotado.",
+        dados: null
+      };
+    }
+
     return {
       sucesso: false,
-      mensagem: err?.message || "Erro de comunicação com o servidor."
+      mensagem: err?.message || "Erro de comunicação com o servidor.",
+      dados: null
     };
+  } finally {
+    window.clearTimeout(timeoutId);
   }
-} 
+}
+
+export { APP_BASE, API_URL };

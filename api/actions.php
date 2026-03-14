@@ -417,6 +417,45 @@ function home_obter_conteudo(mysqli $conn): array
     ];
 }
 
+function parse_positive_int($value, int $default = 0): int
+{
+    if ($value === null || $value === '') {
+        return $default;
+    }
+
+    $n = (int)$value;
+    return $n > 0 ? $n : $default;
+}
+
+function parse_nullable_positive_int($value): ?int
+{
+    if ($value === null || $value === '') {
+        return null;
+    }
+
+    $n = (int)$value;
+    return $n > 0 ? $n : null;
+}
+
+function parse_nullable_float($value): ?float
+{
+    if ($value === null || $value === '') {
+        return null;
+    }
+
+    return (float)$value;
+}
+
+function normalize_optional_text($value): ?string
+{
+    if ($value === null) {
+        return null;
+    }
+
+    $texto = normalize_spaces((string)$value);
+    return $texto !== '' ? $texto : null;
+}
+
 try {
     $conn = db();
     $body = read_body();
@@ -521,7 +560,7 @@ try {
             $usuario = require_auth();
             usuarios_require_admin($usuario);
 
-            $usuarioId = (int)($_GET['usuario_id'] ?? $body['usuario_id'] ?? 0);
+            $usuarioId = parse_positive_int($_GET['usuario_id'] ?? $body['usuario_id'] ?? null, 0);
             if ($usuarioId <= 0) {
                 json_response(false, 'Usuário inválido.', null, 400);
             }
@@ -590,7 +629,7 @@ try {
             require_once __DIR__ . '/fornecedores.php';
             require_auth();
 
-            $fornecedorId = (int)($_GET['fornecedor_id'] ?? $body['fornecedor_id'] ?? 0);
+            $fornecedorId = parse_positive_int($_GET['fornecedor_id'] ?? $body['fornecedor_id'] ?? null, 0);
             if ($fornecedorId <= 0) {
                 json_response(false, 'Fornecedor inválido.', null, 400);
             }
@@ -650,7 +689,7 @@ try {
             require_once __DIR__ . '/produtos.php';
             require_auth();
 
-            $produtoId = (int)($_GET['produto_id'] ?? $body['produto_id'] ?? 0);
+            $produtoId = parse_positive_int($_GET['produto_id'] ?? $body['produto_id'] ?? null, 0);
             if ($produtoId <= 0) {
                 json_response(false, 'Produto inválido.', null, 400);
             }
@@ -819,7 +858,7 @@ try {
             require_once __DIR__ . '/produtos.php';
             require_auth();
 
-            $produtoId = (int)($_GET['produto_id'] ?? $body['produto_id'] ?? 0);
+            $produtoId = parse_positive_int($_GET['produto_id'] ?? $body['produto_id'] ?? null, 0);
             if ($produtoId <= 0) {
                 json_response(false, 'Produto inválido.', null, 400);
             }
@@ -836,26 +875,15 @@ try {
 
             $filtros['produto'] = normalize_spaces((string)($filtros['produto'] ?? ''));
             $filtros['usuario'] = normalize_spaces((string)($filtros['usuario'] ?? ''));
+            $filtros['tipo'] = trim((string)($filtros['tipo'] ?? ''));
+            $filtros['data_inicio'] = trim((string)($filtros['data_inicio'] ?? ''));
+            $filtros['data_fim'] = trim((string)($filtros['data_fim'] ?? ''));
 
-            $filtros['produto_id'] = isset($filtros['produto_id']) && $filtros['produto_id'] !== ''
-                ? (int)$filtros['produto_id']
-                : 0;
-
-            $filtros['fornecedor_id'] = isset($filtros['fornecedor_id']) && $filtros['fornecedor_id'] !== ''
-                ? (int)$filtros['fornecedor_id']
-                : 0;
-
-            $filtros['usuario_id'] = isset($filtros['usuario_id']) && $filtros['usuario_id'] !== ''
-                ? (int)$filtros['usuario_id']
-                : 0;
-
-            $filtros['pagina'] = isset($filtros['pagina']) && (int)$filtros['pagina'] > 0
-                ? (int)$filtros['pagina']
-                : 1;
-
-            $filtros['limite'] = isset($filtros['limite']) && (int)$filtros['limite'] > 0
-                ? (int)$filtros['limite']
-                : 50;
+            $filtros['produto_id'] = parse_positive_int($filtros['produto_id'] ?? null, 0);
+            $filtros['fornecedor_id'] = parse_positive_int($filtros['fornecedor_id'] ?? null, 0);
+            $filtros['usuario_id'] = parse_positive_int($filtros['usuario_id'] ?? null, 0);
+            $filtros['pagina'] = parse_positive_int($filtros['pagina'] ?? null, 1);
+            $filtros['limite'] = parse_positive_int($filtros['limite'] ?? null, 50);
 
             $res = mov_listar($conn, $filtros);
             json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
@@ -869,7 +897,7 @@ try {
                 json_response(false, 'Função mov_obter não está disponível no arquivo api/movimentacoes.php.', null, 500);
             }
 
-            $movimentacaoId = (int)($_GET['movimentacao_id'] ?? $body['movimentacao_id'] ?? 0);
+            $movimentacaoId = parse_positive_int($_GET['movimentacao_id'] ?? $body['movimentacao_id'] ?? null, 0);
             if ($movimentacaoId <= 0) {
                 json_response(false, 'Movimentação inválida.', null, 400);
             }
@@ -883,25 +911,14 @@ try {
             require_once __DIR__ . '/produtos.php';
             $usuario = require_auth();
 
-            $produtoId = (int)($body['produto_id'] ?? 0);
+            $produtoId = parse_positive_int($body['produto_id'] ?? null, 0);
             $tipo = trim((string)($body['tipo'] ?? ''));
-            $quantidade = (int)($body['quantidade'] ?? 0);
+            $quantidade = parse_positive_int($body['quantidade'] ?? null, 0);
 
-            $fornecedorId = isset($body['fornecedor_id']) && $body['fornecedor_id'] !== ''
-                ? (int)$body['fornecedor_id']
-                : null;
-
-            $precoCusto = isset($body['preco_custo']) && $body['preco_custo'] !== ''
-                ? (float)$body['preco_custo']
-                : null;
-
-            $valorUnitario = isset($body['valor_unitario']) && $body['valor_unitario'] !== ''
-                ? (float)$body['valor_unitario']
-                : null;
-
-            $observacao = isset($body['observacao'])
-                ? normalize_spaces((string)$body['observacao'])
-                : null;
+            $fornecedorId = parse_nullable_positive_int($body['fornecedor_id'] ?? null);
+            $precoCusto = parse_nullable_float($body['preco_custo'] ?? null);
+            $valorUnitario = parse_nullable_float($body['valor_unitario'] ?? null);
+            $observacao = normalize_optional_text($body['observacao'] ?? null);
 
             if ($produtoId <= 0) {
                 json_response(false, 'Produto inválido.', null, 400);
@@ -996,8 +1013,21 @@ try {
             require_auth();
 
             $filtros = array_merge($_GET, $body);
+
+            $filtros['produto'] = normalize_spaces((string)($filtros['produto'] ?? ''));
+            $filtros['usuario'] = normalize_spaces((string)($filtros['usuario'] ?? ''));
+            $filtros['tipo'] = trim((string)($filtros['tipo'] ?? ''));
+            $filtros['data_inicio'] = trim((string)($filtros['data_inicio'] ?? ''));
+            $filtros['data_fim'] = trim((string)($filtros['data_fim'] ?? ''));
+
+            $filtros['produto_id'] = parse_positive_int($filtros['produto_id'] ?? null, 0);
+            $filtros['fornecedor_id'] = parse_positive_int($filtros['fornecedor_id'] ?? null, 0);
+            $filtros['usuario_id'] = parse_positive_int($filtros['usuario_id'] ?? null, 0);
+            $filtros['pagina'] = parse_positive_int($filtros['pagina'] ?? null, 1);
+            $filtros['limite'] = parse_positive_int($filtros['limite'] ?? null, 50);
+
             $res = relatorio($conn, $filtros);
-            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? null);
+            json_response($res['sucesso'] ?? false, $res['mensagem'] ?? '', $res['dados'] ?? []);
         }
 
         default:

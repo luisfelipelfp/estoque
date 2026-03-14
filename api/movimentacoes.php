@@ -1,3 +1,5 @@
+Vou te mandar o meu api/movimentacoes.php atual para que você possa analisar fazer todos os ajustes necessários e já me devolver de forma completa. Manda da mesma forma que mandou o ultimo, não travou.
+api/movimentacoes.php
 <?php
 declare(strict_types=1);
 
@@ -1257,3 +1259,4 @@ function mov_obter(mysqli $conn, int $movimentacaoId): array
         return resposta(false, 'Erro ao obter movimentação.');
     }
 }   
+

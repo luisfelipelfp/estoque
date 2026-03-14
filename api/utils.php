@@ -16,6 +16,57 @@ function resposta(bool $sucesso, string $mensagem = '', mixed $dados = null): ar
 }
 
 /**
+ * Faz limpeza segura dos buffers antes de responder JSON
+ */
+function limpar_output_buffers(): void
+{
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
+}
+
+/**
+ * Gera JSON com tratamento de erro
+ */
+function json_encode_safe(array $payload): string
+{
+    $json = json_encode(
+        $payload,
+        JSON_UNESCAPED_UNICODE
+        | JSON_UNESCAPED_SLASHES
+        | JSON_INVALID_UTF8_SUBSTITUTE
+    );
+
+    if ($json !== false) {
+        return $json;
+    }
+
+    logError('utils', 'Erro ao gerar JSON', [
+        'erro'    => json_last_error_msg(),
+        'payload' => $payload
+    ]);
+
+    $fallback = [
+        'sucesso'  => false,
+        'mensagem' => 'Erro interno',
+        'dados'    => null
+    ];
+
+    $jsonFallback = json_encode(
+        $fallback,
+        JSON_UNESCAPED_UNICODE
+        | JSON_UNESCAPED_SLASHES
+        | JSON_INVALID_UTF8_SUBSTITUTE
+    );
+
+    if ($jsonFallback === false) {
+        return '{"sucesso":false,"mensagem":"Erro interno","dados":null}';
+    }
+
+    return $jsonFallback;
+}
+
+/**
  * Envia resposta JSON padronizada e encerra execução
  */
 function json_response(
@@ -24,32 +75,13 @@ function json_response(
     mixed $dados = null,
     int $httpCode = 200
 ): never {
-    while (ob_get_level() > 0) {
-        @ob_end_clean();
-    }
+    limpar_output_buffers();
 
     if (!headers_sent()) {
         http_response_code($httpCode);
         header('Content-Type: application/json; charset=utf-8');
     }
 
-    $payload = resposta($sucesso, $mensagem, $dados);
-
-    $json = json_encode(
-        $payload,
-        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-    );
-
-    if ($json === false) {
-        logError('utils', 'Erro ao gerar JSON', [
-            'erro'    => json_last_error_msg(),
-            'payload' => $payload
-        ]);
-
-        echo '{"sucesso":false,"mensagem":"Erro interno","dados":null}';
-        exit;
-    }
-
-    echo $json;
+    echo json_encode_safe(resposta($sucesso, $mensagem, $dados));
     exit;
 }

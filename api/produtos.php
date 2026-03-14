@@ -72,6 +72,15 @@ function produto_nome_para_comparacao(string $nome): string
     return strtolower($nome);
 }
 
+function produto_bind_execute(mysqli_stmt $stmt, string $types, array $params): void
+{
+    if ($types !== '') {
+        $stmt->bind_param($types, ...$params);
+    }
+
+    $stmt->execute();
+}
+
 function produto_nome_duplicado(mysqli $conn, string $nome, int $ignorarProdutoId = 0): bool
 {
     $nomeComparacao = produto_nome_para_comparacao($nome);
@@ -132,9 +141,9 @@ function normalizar_fornecedores(array $fornecedores): array
         }
 
         $fornecedorId = (int)($f['fornecedor_id'] ?? 0);
-        $nome = trim((string)($f['nome'] ?? ''));
-        $codigo = trim((string)($f['codigo'] ?? ''));
-        $observacao = trim((string)($f['observacao'] ?? ''));
+        $nome = produto_colapsar_espacos((string)($f['nome'] ?? ''));
+        $codigo = produto_colapsar_espacos((string)($f['codigo'] ?? ''));
+        $observacao = produto_colapsar_espacos((string)($f['observacao'] ?? ''));
         $precoCusto = isset($f['preco_custo']) && $f['preco_custo'] !== ''
             ? (float)$f['preco_custo']
             : 0.0;
@@ -869,8 +878,8 @@ function produtos_adicionar(
         $precos = !empty($fornecedoresNormalizados)
             ? fornecedor_principal_preco($fornecedoresNormalizados)
             : [
-                'preco_custo' => 0.0,
-                'preco_venda' => 0.0,
+                'preco_custo' => $preco_custo !== null && $preco_custo >= 0 ? $preco_custo : 0.0,
+                'preco_venda' => $preco_venda !== null && $preco_venda >= 0 ? $preco_venda : 0.0,
             ];
 
         $pc = (float)$precos['preco_custo'];
@@ -1015,8 +1024,8 @@ function produtos_atualizar(
         $precos = !empty($fornecedoresNormalizados)
             ? fornecedor_principal_preco($fornecedoresNormalizados)
             : [
-                'preco_custo' => 0.0,
-                'preco_venda' => 0.0,
+                'preco_custo' => $preco_custo,
+                'preco_venda' => $preco_venda,
             ];
 
         $pc = (float)$precos['preco_custo'];
