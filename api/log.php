@@ -1,5 +1,3 @@
-Vou te mandar o meu api/log.php atual para que você possa analisar fazer todos os ajustes necessários e já me devolver de forma completa. Manda da mesma forma que mandou o ultimo, não travou.
-api/log.php
 <?php
 declare(strict_types=1);
 
@@ -11,9 +9,6 @@ declare(strict_types=1);
 
 const LOG_DIR = __DIR__ . '/../logs_api';
 
-/**
- * Controle interno de contextos já inicializados
- */
 $GLOBALS['LOG_INITIALIZED'] = $GLOBALS['LOG_INITIALIZED'] ?? [];
 
 /**
@@ -27,14 +22,10 @@ function ensureLogDir(): void
 }
 
 /**
- * Inicializa o log de um contexto
+ * Garante que o arquivo do contexto exista
  */
-function initLog(string $contexto): void
+function ensureLogFile(string $contexto): string
 {
-    if (isset($GLOBALS['LOG_INITIALIZED'][$contexto])) {
-        return;
-    }
-
     ensureLogDir();
 
     $arquivo = LOG_DIR . "/{$contexto}.log";
@@ -43,6 +34,20 @@ function initLog(string $contexto): void
         @touch($arquivo);
         @chmod($arquivo, 0664);
     }
+
+    return $arquivo;
+}
+
+/**
+ * Inicializa o log de um contexto
+ */
+function initLog(string $contexto): void
+{
+    if (isset($GLOBALS['LOG_INITIALIZED'][$contexto])) {
+        return;
+    }
+
+    ensureLogFile($contexto);
 
     set_exception_handler(function (Throwable $e) use ($contexto): void {
         logError($contexto, 'EXCEPTION', [
@@ -69,11 +74,14 @@ function initLog(string $contexto): void
     register_shutdown_function(function () use ($contexto): void {
         $error = error_get_last();
 
-        if ($error && in_array(
-            $error['type'],
-            [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR],
-            true
-        )) {
+        if (
+            $error
+            && in_array(
+                $error['type'],
+                [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR],
+                true
+            )
+        ) {
             logError($contexto, 'FATAL ERROR', $error);
         }
     });
@@ -86,9 +94,7 @@ function initLog(string $contexto): void
  */
 function writeLog(string $contexto, string $nivel, string $mensagem): void
 {
-    ensureLogDir();
-
-    $arquivo = LOG_DIR . "/{$contexto}.log";
+    $arquivo = ensureLogFile($contexto);
     $data = date('Y-m-d H:i:s');
     $linha = "[$data] [$contexto] $nivel: $mensagem" . PHP_EOL;
 
