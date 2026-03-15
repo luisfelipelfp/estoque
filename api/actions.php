@@ -61,7 +61,6 @@ function set_cors_origin(): void
         return;
     }
 
-    // Não refletir origem não permitida
     $defaultOrigin = is_https_request()
         ? 'https://192.168.15.100'
         : 'http://192.168.15.100';
@@ -604,8 +603,6 @@ try {
 
     validate_origin_for_state_change();
     apply_session_timeout($acao);
-
-    // Garante token em sessão para uso futuro
     ensure_csrf_token();
 
     logInfo('actions', 'Requisição recebida', [
@@ -684,6 +681,7 @@ try {
                 'ativo' => (int)$user['ativo'],
             ];
             $_SESSION['LAST_ACTIVITY'] = time();
+
             rotate_csrf_token();
             send_csrf_header();
 
@@ -799,7 +797,9 @@ try {
 
         case 'salvar_fornecedor': {
             require_once __DIR__ . '/fornecedores.php';
+            require_once __DIR__ . '/usuarios.php';
             $usuario = require_auth();
+            usuarios_require_admin($usuario);
 
             $fornecedorId = (int)($body['fornecedor_id'] ?? 0);
             $nome = normalize_spaces((string)($body['nome'] ?? ''));
@@ -859,7 +859,9 @@ try {
 
         case 'adicionar_produto': {
             require_once __DIR__ . '/produtos.php';
+            require_once __DIR__ . '/usuarios.php';
             $usuario = require_auth();
+            usuarios_require_admin($usuario);
 
             $nome = normalize_spaces((string)($body['nome'] ?? ''));
             $qtd  = (int)($body['quantidade'] ?? 0);
@@ -900,7 +902,9 @@ try {
 
         case 'criar_produto': {
             require_once __DIR__ . '/produtos.php';
+            require_once __DIR__ . '/usuarios.php';
             $usuario = require_auth();
+            usuarios_require_admin($usuario);
 
             $nome = normalize_spaces((string)($body['nome'] ?? ''));
             $ncm = isset($body['ncm']) ? normalizar_ncm_payload((string)$body['ncm']) : null;
@@ -942,7 +946,9 @@ try {
 
         case 'atualizar_produto': {
             require_once __DIR__ . '/produtos.php';
+            require_once __DIR__ . '/usuarios.php';
             $usuario = require_auth();
+            usuarios_require_admin($usuario);
 
             $produtoId = (int)($body['produto_id'] ?? 0);
             $nome = normalize_spaces((string)($body['nome'] ?? ''));
@@ -990,7 +996,9 @@ try {
 
         case 'remover_produto': {
             require_once __DIR__ . '/produtos.php';
+            require_once __DIR__ . '/usuarios.php';
             $usuario = require_auth();
+            usuarios_require_admin($usuario);
 
             $produtoId = (int)($body['produto_id'] ?? 0);
             if ($produtoId <= 0) {
@@ -1192,7 +1200,6 @@ try {
         default:
             json_response(false, 'Ação inválida.', null, 400);
     }
-
 } catch (Throwable $e) {
     logError('actions', 'Erro fatal', [
         'arquivo' => $e->getFile(),
