@@ -2,6 +2,9 @@ const APP_BASE = "/estoque";
 const API_URL = `${APP_BASE}/api/actions.php`;
 const DEFAULT_TIMEOUT_MS = 30000;
 
+let csrfTokenCache = null;
+let csrfTokenPromise = null;
+
 function isPlainObject(value) {
   return Object.prototype.toString.call(value) === "[object Object]";
 }
@@ -65,6 +68,7 @@ function montarMensagemHttp(status) {
     405: "Método não permitido.",
     408: "Tempo de requisição esgotado.",
     409: "Conflito ao processar a requisição.",
+    419: "Falha de validação de segurança da sessão.",
     422: "Dados inválidos enviados ao servidor.",
     429: "Muitas requisições. Tente novamente em instantes.",
     500: "Erro interno no servidor.",
@@ -132,6 +136,79 @@ function normalizarPayload(payload, resp = null) {
   return normalizado;
 }
 
+function limparCsrfToken() {
+  csrfTokenCache = null;
+  csrfTokenPromise = null;
+}
+
+function atualizarCsrfTokenDeHeaders(resp) {
+  if (!resp || typeof resp.headers?.get !== "function") return;
+
+  const tokenHeader = resp.headers.get("x-csrf-token");
+  if (tokenHeader && tokenHeader.trim() !== "") {
+    csrfTokenCache = tokenHeader.trim();
+  }
+}
+
+function deveIgnorarCsrf(acao) {
+  const action = String(acao || "").trim().toLowerCase();
+
+  return [
+    "login",
+    "logout",
+    "csrf_token",
+    "csrf",
+    "usuario_atual"
+  ].includes(action);
+}
+
+async function buscarCsrfToken(timeoutMs = DEFAULT_TIMEOUT_MS) {
+  if (csrfTokenCache) {
+    return csrfTokenCache;
+  }
+
+  if (csrfTokenPromise) {
+    return csrfTokenPromise;
+  }
+
+  csrfTokenPromise = (async () => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      controller.abort();
+    }, Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS);
+
+    try {
+      const resp = await fetch(`${API_URL}?acao=csrf_token`, {
+        method: "GET",
+        credentials: "include",
+        signal: controller.signal,
+        headers: {
+          Accept: "application/json"
+        }
+      });
+
+      const payloadBruto = await parseResposta(resp);
+      const payload = normalizarPayload(payloadBruto, resp);
+
+      atualizarCsrfTokenDeHeaders(resp);
+
+      const tokenPayload = payload?.dados?.csrf_token;
+      if (typeof tokenPayload === "string" && tokenPayload.trim() !== "") {
+        csrfTokenCache = tokenPayload.trim();
+      }
+
+      return csrfTokenCache;
+    } catch {
+      return null;
+    } finally {
+      window.clearTimeout(timeoutId);
+      csrfTokenPromise = null;
+    }
+  })();
+
+  return csrfTokenPromise;
+}
+
 export async function apiRequest(acao, dados = null, metodo = "GET", config = {}) {
   const action = String(acao || "").trim();
   const method = normalizarMetodo(metodo);
@@ -169,6 +246,23 @@ export async function apiRequest(acao, dados = null, metodo = "GET", config = {}
     }
   };
 
+  const precisaCsrf = method === "POST" && !deveIgnorarCsrf(action);
+
+  if (precisaCsrf) {
+    const token = await buscarCsrfToken(timeoutMs);
+
+    if (!token) {
+      window.clearTimeout(timeoutId);
+      return {
+        sucesso: false,
+        mensagem: "Não foi possível validar a segurança da sessão. Atualize a página e tente novamente.",
+        dados: null
+      };
+    }
+
+    options.headers["X-CSRF-Token"] = token;
+  }
+
   if (method === "GET") {
     const qs = montarQueryString(dados);
     if (qs) {
@@ -181,6 +275,8 @@ export async function apiRequest(acao, dados = null, metodo = "GET", config = {}
 
   try {
     const resp = await fetch(url, options);
+    atualizarCsrfTokenDeHeaders(resp);
+
     const payloadBruto = await parseResposta(resp);
     const payload = normalizarPayload(payloadBruto, resp);
 
@@ -190,6 +286,10 @@ export async function apiRequest(acao, dados = null, metodo = "GET", config = {}
       if (!payload.mensagem || payload.mensagem === "OK") {
         payload.mensagem = montarMensagemHttp(resp.status);
       }
+    }
+
+    if (resp.status === 401 || resp.status === 419) {
+      limparCsrfToken();
     }
 
     return payload;
@@ -210,6 +310,10 @@ export async function apiRequest(acao, dados = null, metodo = "GET", config = {}
   } finally {
     window.clearTimeout(timeoutId);
   }
+}
+
+export function resetApiSecurityCache() {
+  limparCsrfToken();
 }
 
 export { APP_BASE, API_URL };

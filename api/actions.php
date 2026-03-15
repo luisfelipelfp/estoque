@@ -6,12 +6,78 @@ ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 
 const SESSION_TIMEOUT_SECONDS = 7200; // 2 horas
+const CSRF_TOKEN_BYTES = 32;
 
-if (session_status() === PHP_SESSION_NONE) {
-    $isHttps = (
+function is_https_request(): bool
+{
+    return (
         (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
         || (($_SERVER['SERVER_PORT'] ?? '') === '443')
+        || (strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https')
     );
+}
+
+function allowed_origins(): array
+{
+    return [
+        'http://192.168.15.100',
+        'https://192.168.15.100',
+        'http://localhost',
+        'http://127.0.0.1',
+    ];
+}
+
+function get_request_origin(): string
+{
+    return trim((string)($_SERVER['HTTP_ORIGIN'] ?? ''));
+}
+
+function origin_is_allowed(string $origin): bool
+{
+    return $origin !== '' && in_array($origin, allowed_origins(), true);
+}
+
+function set_security_headers(): void
+{
+    header('Content-Type: application/json; charset=utf-8');
+    header('Access-Control-Allow-Credentials: true');
+    header('Access-Control-Allow-Headers: Content-Type, X-Requested-With, X-CSRF-Token');
+    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: SAMEORIGIN');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+}
+
+function set_cors_origin(): void
+{
+    $origin = get_request_origin();
+
+    if (origin_is_allowed($origin)) {
+        header("Access-Control-Allow-Origin: {$origin}");
+        header('Vary: Origin');
+        return;
+    }
+
+    // Não refletir origem não permitida
+    $defaultOrigin = is_https_request()
+        ? 'https://192.168.15.100'
+        : 'http://192.168.15.100';
+
+    header("Access-Control-Allow-Origin: {$defaultOrigin}");
+    header('Vary: Origin');
+}
+
+if (session_status() === PHP_SESSION_NONE) {
+    $isHttps = is_https_request();
+
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
+    ini_set('session.cookie_httponly', '1');
+    ini_set('session.cookie_secure', $isHttps ? '1' : '0');
+    ini_set('session.cookie_samesite', 'Lax');
 
     session_set_cookie_params([
         'lifetime' => 0,
@@ -30,32 +96,7 @@ require_once __DIR__ . '/db.php';
 
 initLog('actions');
 
-header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Credentials: true');
-header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Pragma: no-cache');
-header('Expires: 0');
-
-function set_cors_origin(): void
-{
-    $origin = trim((string)($_SERVER['HTTP_ORIGIN'] ?? ''));
-
-    $allowed = [
-        'http://192.168.15.100',
-        'https://192.168.15.100',
-        'http://localhost',
-        'http://127.0.0.1',
-    ];
-
-    if ($origin !== '' && in_array($origin, $allowed, true)) {
-        header("Access-Control-Allow-Origin: {$origin}");
-        return;
-    }
-
-    header('Access-Control-Allow-Origin: https://192.168.15.100');
-}
+set_security_headers();
 set_cors_origin();
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
@@ -141,7 +182,8 @@ function sanitize_for_log(array $data): array
         'password',
         'token',
         'access_token',
-        'refresh_token'
+        'refresh_token',
+        'csrf_token'
     ];
 
     $sanitized = $data;
@@ -175,14 +217,99 @@ function destroy_user_session(): void
     session_destroy();
 }
 
-function apply_session_timeout(string $acao): void
+function ensure_csrf_token(): string
 {
-    $publicActions = [
+    $token = (string)($_SESSION['csrf_token'] ?? '');
+
+    if ($token === '') {
+        $token = bin2hex(random_bytes(CSRF_TOKEN_BYTES));
+        $_SESSION['csrf_token'] = $token;
+    }
+
+    return $token;
+}
+
+function rotate_csrf_token(): string
+{
+    $token = bin2hex(random_bytes(CSRF_TOKEN_BYTES));
+    $_SESSION['csrf_token'] = $token;
+    return $token;
+}
+
+function send_csrf_header(): void
+{
+    if (!headers_sent()) {
+        header('X-CSRF-Token: ' . ensure_csrf_token());
+    }
+}
+
+function is_public_action(string $acao): bool
+{
+    return in_array($acao, [
         'login',
         'logout',
-    ];
+        'csrf_token',
+    ], true);
+}
 
-    if (in_array($acao, $publicActions, true)) {
+function csrf_exempt_actions(): array
+{
+    return [
+        'login',
+        'logout',
+        'csrf_token',
+    ];
+}
+
+function should_validate_csrf(string $acao, string $method): bool
+{
+    if ($method !== 'POST') {
+        return false;
+    }
+
+    return !in_array($acao, csrf_exempt_actions(), true);
+}
+
+function validate_origin_for_state_change(): void
+{
+    $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+    if ($method !== 'POST') {
+        return;
+    }
+
+    $origin = get_request_origin();
+    if ($origin === '') {
+        return;
+    }
+
+    if (!origin_is_allowed($origin)) {
+        json_response(false, 'Origem não permitida.', null, 403);
+    }
+}
+
+function validate_csrf_or_fail(string $acao): void
+{
+    $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+
+    if (!should_validate_csrf($acao, $method)) {
+        return;
+    }
+
+    $sessionToken = (string)($_SESSION['csrf_token'] ?? '');
+    $headerToken = trim((string)($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ''));
+
+    if ($sessionToken === '' || $headerToken === '') {
+        json_response(false, 'Falha de validação de segurança da sessão.', null, 419);
+    }
+
+    if (!hash_equals($sessionToken, $headerToken)) {
+        json_response(false, 'Falha de validação de segurança da sessão.', null, 419);
+    }
+}
+
+function apply_session_timeout(string $acao): void
+{
+    if (is_public_action($acao)) {
         return;
     }
 
@@ -207,6 +334,7 @@ function require_auth(): array
     }
 
     $_SESSION['LAST_ACTIVITY'] = time();
+    send_csrf_header();
 
     return $_SESSION['usuario'];
 }
@@ -423,6 +551,10 @@ function parse_positive_int($value, int $default = 0): int
         return $default;
     }
 
+    if (is_string($value) && !preg_match('/^-?\d+$/', trim($value))) {
+        return $default;
+    }
+
     $n = (int)$value;
     return $n > 0 ? $n : $default;
 }
@@ -430,6 +562,10 @@ function parse_positive_int($value, int $default = 0): int
 function parse_nullable_positive_int($value): ?int
 {
     if ($value === null || $value === '') {
+        return null;
+    }
+
+    if (is_string($value) && !preg_match('/^-?\d+$/', trim($value))) {
         return null;
     }
 
@@ -443,7 +579,12 @@ function parse_nullable_float($value): ?float
         return null;
     }
 
-    return (float)$value;
+    $normalizado = str_replace(',', '.', trim((string)$value));
+    if (!is_numeric($normalizado)) {
+        return null;
+    }
+
+    return (float)$normalizado;
 }
 
 function normalize_optional_text($value): ?string
@@ -461,7 +602,11 @@ try {
     $body = read_body();
     $acao = get_action($body);
 
+    validate_origin_for_state_change();
     apply_session_timeout($acao);
+
+    // Garante token em sessão para uso futuro
+    ensure_csrf_token();
 
     logInfo('actions', 'Requisição recebida', [
         'acao'   => $acao,
@@ -471,7 +616,18 @@ try {
         'body'   => sanitize_for_log($body)
     ]);
 
+    if (should_validate_csrf($acao, strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')))) {
+        validate_csrf_or_fail($acao);
+    }
+
     switch ($acao) {
+        case 'csrf_token': {
+            send_csrf_header();
+            json_response(true, 'OK', [
+                'csrf_token' => (string)($_SESSION['csrf_token'] ?? '')
+            ]);
+        }
+
         case 'login': {
             $loginOriginal = trim((string)($body['login'] ?? $body['email'] ?? $body['usuario'] ?? ''));
             $senha = (string)($body['senha'] ?? $body['password'] ?? '');
@@ -528,11 +684,14 @@ try {
                 'ativo' => (int)$user['ativo'],
             ];
             $_SESSION['LAST_ACTIVITY'] = time();
+            rotate_csrf_token();
+            send_csrf_header();
 
             json_response(true, 'OK', ['usuario' => $_SESSION['usuario']]);
         }
 
         case 'usuario_atual': {
+            send_csrf_header();
             json_response(true, 'OK', ['usuario' => require_auth()]);
         }
 

@@ -32,6 +32,77 @@ function usuarios_strlen(string $valor): int
         : strlen($valor);
 }
 
+function usuarios_normalizar_nome(string $nome): string
+{
+    $nome = trim($nome);
+    $nome = preg_replace('/\s+/u', ' ', $nome) ?? $nome;
+    return $nome;
+}
+
+function usuarios_normalizar_email(string $email): string
+{
+    return strtolower(trim($email));
+}
+
+function usuarios_nome_valido(string $nome): bool
+{
+    return $nome !== '' && usuarios_strlen($nome) >= 3 && usuarios_strlen($nome) <= 150;
+}
+
+function usuarios_email_valido(string $email): bool
+{
+    if ($email === '' || usuarios_strlen($email) > 190) {
+        return false;
+    }
+
+    return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+}
+
+function usuarios_senha_forte(?string $senha): array
+{
+    $senha = (string)$senha;
+
+    if ($senha === '') {
+        return [
+            'ok' => false,
+            'mensagem' => 'A senha é obrigatória.'
+        ];
+    }
+
+    if (usuarios_strlen($senha) < 8) {
+        return [
+            'ok' => false,
+            'mensagem' => 'A senha deve ter pelo menos 8 caracteres.'
+        ];
+    }
+
+    if (!preg_match('/[A-Z]/', $senha)) {
+        return [
+            'ok' => false,
+            'mensagem' => 'A senha deve conter pelo menos 1 letra maiúscula.'
+        ];
+    }
+
+    if (!preg_match('/[a-z]/', $senha)) {
+        return [
+            'ok' => false,
+            'mensagem' => 'A senha deve conter pelo menos 1 letra minúscula.'
+        ];
+    }
+
+    if (!preg_match('/[0-9]/', $senha)) {
+        return [
+            'ok' => false,
+            'mensagem' => 'A senha deve conter pelo menos 1 número.'
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'mensagem' => ''
+    ];
+}
+
 function usuarios_tabela_existe(mysqli $conn, string $nomeTabela): bool
 {
     static $cache = [];
@@ -325,33 +396,36 @@ function usuario_salvar(
     int $ativo,
     int $usuarioLogadoId
 ): array {
-    $nome = trim($nome);
-    $email = trim($email);
+    $nome = usuarios_normalizar_nome($nome);
+    $email = usuarios_normalizar_email($email);
     $nivel = usuarios_normalizar_nivel($nivel);
     $senha = $senha !== null ? trim($senha) : null;
 
-    if ($nome === '') {
-        return resposta(false, 'Nome do usuário é obrigatório.');
+    if (!usuarios_nome_valido($nome)) {
+        return resposta(false, 'O nome do usuário deve ter entre 3 e 150 caracteres.', null);
     }
 
-    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        return resposta(false, 'Informe um e-mail válido.');
+    if (!usuarios_email_valido($email)) {
+        return resposta(false, 'Informe um e-mail válido.', null);
     }
 
     if (!in_array($nivel, ['admin', 'operador'], true)) {
-        return resposta(false, 'Nível de usuário inválido.');
+        return resposta(false, 'Nível de usuário inválido.', null);
     }
 
     if (!in_array($ativo, [0, 1], true)) {
-        return resposta(false, 'Status do usuário inválido.');
+        return resposta(false, 'Status do usuário inválido.', null);
     }
 
     if ($usuarioId <= 0 && ($senha === null || $senha === '')) {
-        return resposta(false, 'A senha é obrigatória para novo usuário.');
+        return resposta(false, 'A senha é obrigatória para novo usuário.', null);
     }
 
-    if ($senha !== null && $senha !== '' && usuarios_strlen($senha) < 6) {
-        return resposta(false, 'A senha deve ter pelo menos 6 caracteres.');
+    if ($senha !== null && $senha !== '') {
+        $senhaCheck = usuarios_senha_forte($senha);
+        if (!($senhaCheck['ok'] ?? false)) {
+            return resposta(false, (string)($senhaCheck['mensagem'] ?? 'Senha inválida.'), null);
+        }
     }
 
     try {
