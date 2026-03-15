@@ -7,6 +7,14 @@ require_once __DIR__ . '/auditoria.php';
 
 initLog('produtos');
 
+const PRODUTO_NOME_MAX_LEN = 120;
+const PRODUTO_CODIGO_FORNECEDOR_MAX_LEN = 80;
+const PRODUTO_OBSERVACAO_MAX_LEN = 255;
+const PRODUTO_QTD_MAX = 1000000;
+const PRODUTO_ESTOQUE_MINIMO_MAX = 1000000;
+const PRODUTO_PRECO_MAX = 10000000.00;
+const PRODUTO_FORNECEDORES_MAX = 50;
+
 function coluna_existe(mysqli $conn, string $tabela, string $coluna): bool
 {
     static $cache = [];
@@ -49,6 +57,13 @@ function coluna_existe(mysqli $conn, string $tabela, string $coluna): bool
     return $ok;
 }
 
+function produto_strlen(string $valor): int
+{
+    return function_exists('mb_strlen')
+        ? mb_strlen($valor, 'UTF-8')
+        : strlen($valor);
+}
+
 function produto_colapsar_espacos(string $valor): string
 {
     $valor = trim($valor);
@@ -70,6 +85,27 @@ function produto_nome_para_comparacao(string $nome): string
     }
 
     return strtolower($nome);
+}
+
+function produto_validar_tamanho_campo(string $valor, int $max, string $campo): void
+{
+    if (produto_strlen($valor) > $max) {
+        throw new InvalidArgumentException("O campo {$campo} excede o limite permitido.");
+    }
+}
+
+function produto_validar_int_range(int $valor, int $min, int $max, string $campo): void
+{
+    if ($valor < $min || $valor > $max) {
+        throw new InvalidArgumentException("Valor inválido para {$campo}.");
+    }
+}
+
+function produto_validar_float_range(float $valor, float $min, float $max, string $campo): void
+{
+    if (!is_finite($valor) || $valor < $min || $valor > $max) {
+        throw new InvalidArgumentException("Valor inválido para {$campo}.");
+    }
 }
 
 function produto_bind_execute(mysqli_stmt $stmt, string $types, array $params): void
@@ -132,6 +168,10 @@ function normalizar_ncm(?string $ncm): ?string
 
 function normalizar_fornecedores(array $fornecedores): array
 {
+    if (count($fornecedores) > PRODUTO_FORNECEDORES_MAX) {
+        throw new InvalidArgumentException('Quantidade de fornecedores acima do permitido para o produto.');
+    }
+
     $out = [];
     $idsUsados = [];
 
@@ -160,9 +200,12 @@ function normalizar_fornecedores(array $fornecedores): array
             throw new InvalidArgumentException('O mesmo fornecedor não pode ser adicionado mais de uma vez para o mesmo produto.');
         }
 
-        if ($precoCusto < 0 || $precoVenda < 0) {
-            throw new InvalidArgumentException('Os preços dos fornecedores devem ser maiores ou iguais a zero.');
-        }
+        produto_validar_tamanho_campo($nome, PRODUTO_NOME_MAX_LEN, 'nome do fornecedor');
+        produto_validar_tamanho_campo($codigo, PRODUTO_CODIGO_FORNECEDOR_MAX_LEN, 'código do produto no fornecedor');
+        produto_validar_tamanho_campo($observacao, PRODUTO_OBSERVACAO_MAX_LEN, 'observação do fornecedor');
+
+        produto_validar_float_range($precoCusto, 0, PRODUTO_PRECO_MAX, 'preço de custo do fornecedor');
+        produto_validar_float_range($precoVenda, 0, PRODUTO_PRECO_MAX, 'preço de venda do fornecedor');
 
         $out[] = [
             'fornecedor_id' => $fornecedorId,
@@ -610,6 +653,8 @@ function produtos_buscar(mysqli $conn, string $q, int $limit = 10): array
 {
     try {
         $q = produto_colapsar_espacos($q);
+        produto_validar_tamanho_campo($q, PRODUTO_NOME_MAX_LEN, 'busca do produto');
+
         $limit = max(1, min(25, $limit));
 
         $hasCusto = coluna_existe($conn, 'produtos', 'preco_custo');
@@ -862,8 +907,16 @@ function produtos_adicionar(
             return resposta(false, 'Nome do produto obrigatório.', null);
         }
 
-        if ($quantidade < 0 || $estoque_minimo < 0) {
-            return resposta(false, 'Dados inválidos para o produto.', null);
+        produto_validar_tamanho_campo($nome, PRODUTO_NOME_MAX_LEN, 'nome do produto');
+        produto_validar_int_range($quantidade, 0, PRODUTO_QTD_MAX, 'quantidade');
+        produto_validar_int_range($estoque_minimo, 0, PRODUTO_ESTOQUE_MINIMO_MAX, 'estoque mínimo');
+
+        if ($preco_custo !== null) {
+            produto_validar_float_range($preco_custo, 0, PRODUTO_PRECO_MAX, 'preço de custo');
+        }
+
+        if ($preco_venda !== null) {
+            produto_validar_float_range($preco_venda, 0, PRODUTO_PRECO_MAX, 'preço de venda');
         }
 
         if (produto_nome_duplicado($conn, $nome, 0)) {
@@ -884,6 +937,10 @@ function produtos_adicionar(
 
         $pc = (float)$precos['preco_custo'];
         $pv = (float)$precos['preco_venda'];
+
+        produto_validar_float_range($pc, 0, PRODUTO_PRECO_MAX, 'preço de custo');
+        produto_validar_float_range($pv, 0, PRODUTO_PRECO_MAX, 'preço de venda');
+
         $hasNcm = coluna_existe($conn, 'produtos', 'ncm');
         $hasAtivo = coluna_existe($conn, 'produtos', 'ativo');
 
@@ -1001,9 +1058,19 @@ function produtos_atualizar(
         $nome = produto_normalizar_nome($nome);
         $ncmNormalizado = normalizar_ncm($ncm);
 
-        if ($produto_id <= 0 || $nome === '' || $quantidade < 0 || $estoque_minimo < 0 || $preco_custo < 0 || $preco_venda < 0) {
-            return resposta(false, 'Dados inválidos para atualização do produto.', null);
+        if ($produto_id <= 0) {
+            return resposta(false, 'Produto inválido.', null);
         }
+
+        if ($nome === '') {
+            return resposta(false, 'Nome do produto obrigatório.', null);
+        }
+
+        produto_validar_tamanho_campo($nome, PRODUTO_NOME_MAX_LEN, 'nome do produto');
+        produto_validar_int_range($quantidade, 0, PRODUTO_QTD_MAX, 'quantidade');
+        produto_validar_int_range($estoque_minimo, 0, PRODUTO_ESTOQUE_MINIMO_MAX, 'estoque mínimo');
+        produto_validar_float_range($preco_custo, 0, PRODUTO_PRECO_MAX, 'preço de custo');
+        produto_validar_float_range($preco_venda, 0, PRODUTO_PRECO_MAX, 'preço de venda');
 
         if (produto_nome_duplicado($conn, $nome, $produto_id)) {
             return resposta(false, 'Já existe um produto com esse nome.', null);
@@ -1030,6 +1097,10 @@ function produtos_atualizar(
 
         $pc = (float)$precos['preco_custo'];
         $pv = (float)$precos['preco_venda'];
+
+        produto_validar_float_range($pc, 0, PRODUTO_PRECO_MAX, 'preço de custo');
+        produto_validar_float_range($pv, 0, PRODUTO_PRECO_MAX, 'preço de venda');
+
         $hasNcm = coluna_existe($conn, 'produtos', 'ncm');
 
         if ($hasNcm) {

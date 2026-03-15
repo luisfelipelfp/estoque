@@ -7,6 +7,10 @@ require_once __DIR__ . '/auditoria.php';
 
 initLog('usuarios');
 
+const USUARIOS_MAX_NOME = 150;
+const USUARIOS_MAX_EMAIL = 190;
+const USUARIOS_MAX_SENHA = 200;
+
 function usuarios_eh_admin(array $usuario): bool
 {
     $nivel = strtolower(trim((string)($usuario['nivel'] ?? '')));
@@ -46,12 +50,12 @@ function usuarios_normalizar_email(string $email): string
 
 function usuarios_nome_valido(string $nome): bool
 {
-    return $nome !== '' && usuarios_strlen($nome) >= 3 && usuarios_strlen($nome) <= 150;
+    return $nome !== '' && usuarios_strlen($nome) >= 3 && usuarios_strlen($nome) <= USUARIOS_MAX_NOME;
 }
 
 function usuarios_email_valido(string $email): bool
 {
-    if ($email === '' || usuarios_strlen($email) > 190) {
+    if ($email === '' || usuarios_strlen($email) > USUARIOS_MAX_EMAIL) {
         return false;
     }
 
@@ -66,6 +70,13 @@ function usuarios_senha_forte(?string $senha): array
         return [
             'ok' => false,
             'mensagem' => 'A senha é obrigatória.'
+        ];
+    }
+
+    if (usuarios_strlen($senha) > USUARIOS_MAX_SENHA) {
+        return [
+            'ok' => false,
+            'mensagem' => 'A senha excede o limite permitido.'
         ];
     }
 
@@ -489,6 +500,10 @@ function usuario_salvar(
 
             if ($senha !== null && $senha !== '') {
                 $hash = password_hash($senha, PASSWORD_DEFAULT);
+                if ($hash === false) {
+                    $conn->rollback();
+                    return resposta(false, 'Erro ao processar a senha do usuário.', null);
+                }
 
                 $stmt = $conn->prepare("
                     UPDATE usuarios
@@ -501,7 +516,13 @@ function usuario_salvar(
                 }
 
                 $stmt->bind_param('sssisi', $nome, $email, $nivel, $ativo, $hash, $usuarioId);
-                $stmt->execute();
+
+                if (!$stmt->execute()) {
+                    $stmt->close();
+                    $conn->rollback();
+                    return resposta(false, 'Erro ao atualizar usuário.', null);
+                }
+
                 $stmt->close();
             } else {
                 $stmt = $conn->prepare("
@@ -515,7 +536,13 @@ function usuario_salvar(
                 }
 
                 $stmt->bind_param('sssii', $nome, $email, $nivel, $ativo, $usuarioId);
-                $stmt->execute();
+
+                if (!$stmt->execute()) {
+                    $stmt->close();
+                    $conn->rollback();
+                    return resposta(false, 'Erro ao atualizar usuário.', null);
+                }
+
                 $stmt->close();
             }
 
@@ -548,6 +575,9 @@ function usuario_salvar(
         }
 
         $hash = password_hash((string)$senha, PASSWORD_DEFAULT);
+        if ($hash === false) {
+            return resposta(false, 'Erro ao processar a senha do usuário.', null);
+        }
 
         $stmt = $conn->prepare("
             INSERT INTO usuarios (nome, email, senha, nivel, ativo)
@@ -558,7 +588,13 @@ function usuario_salvar(
         }
 
         $stmt->bind_param('ssssi', $nome, $email, $hash, $nivel, $ativo);
-        $stmt->execute();
+
+        if (!$stmt->execute()) {
+            $stmt->close();
+            $conn->rollback();
+            return resposta(false, 'Erro ao cadastrar usuário.', null);
+        }
+
         $novoId = (int)$stmt->insert_id;
         $stmt->close();
 
@@ -661,7 +697,13 @@ function usuario_alterar_status(
         }
 
         $stmt->bind_param('ii', $ativo, $usuarioId);
-        $stmt->execute();
+
+        if (!$stmt->execute()) {
+            $stmt->close();
+            $conn->rollback();
+            return resposta(false, 'Erro ao alterar status do usuário.', null);
+        }
+
         $afetadas = $stmt->affected_rows;
         $stmt->close();
 
@@ -767,7 +809,13 @@ function usuario_excluir(
         }
 
         $stmt->bind_param('i', $usuarioId);
-        $stmt->execute();
+
+        if (!$stmt->execute()) {
+            $stmt->close();
+            $conn->rollback();
+            return resposta(false, 'Erro ao excluir usuário.', null);
+        }
+
         $afetadas = $stmt->affected_rows;
         $stmt->close();
 

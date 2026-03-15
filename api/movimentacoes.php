@@ -7,6 +7,12 @@ require_once __DIR__ . '/auditoria.php';
 
 initLog('movimentacoes');
 
+const MOV_MAX_QUANTIDADE = 1000000;
+const MOV_MAX_OBSERVACAO_LEN = 500;
+const MOV_MAX_TEXTO_FILTRO_LEN = 150;
+const MOV_MAX_VALOR_MONETARIO = 999999999.99;
+const MOV_MAX_LIMITE_LISTAGEM = 5000;
+
 function coluna_existe_mov(mysqli $conn, string $tabela, string $coluna): bool
 {
     static $cache = [];
@@ -49,17 +55,73 @@ function coluna_existe_mov(mysqli $conn, string $tabela, string $coluna): bool
     return $ok;
 }
 
+function mov_strlen(string $valor): int
+{
+    return function_exists('mb_strlen')
+        ? mb_strlen($valor, 'UTF-8')
+        : strlen($valor);
+}
+
+function mov_validar_tamanho_texto(?string $valor, int $max, string $campo): void
+{
+    $texto = trim((string)$valor);
+    if (mov_strlen($texto) > $max) {
+        throw new InvalidArgumentException("O campo {$campo} excede o limite permitido.");
+    }
+}
+
+function mov_validar_quantidade(int $quantidade): void
+{
+    if ($quantidade <= 0) {
+        throw new InvalidArgumentException('A quantidade deve ser maior que zero.');
+    }
+
+    if ($quantidade > MOV_MAX_QUANTIDADE) {
+        throw new InvalidArgumentException('A quantidade informada excede o limite permitido.');
+    }
+}
+
+function mov_validar_valor_monetario(?float $valor, string $campo): void
+{
+    if ($valor === null) {
+        return;
+    }
+
+    if (!is_finite($valor)) {
+        throw new InvalidArgumentException("Valor inválido para {$campo}.");
+    }
+
+    if ($valor < 0) {
+        throw new InvalidArgumentException("Valor inválido para {$campo}.");
+    }
+
+    if ($valor > MOV_MAX_VALOR_MONETARIO) {
+        throw new InvalidArgumentException("O valor de {$campo} excede o limite permitido.");
+    }
+}
+
 function mov_normalizar_observacao(?string $observacao): ?string
 {
     $valor = trim((string)$observacao);
     $valor = preg_replace('/\s+/u', ' ', $valor) ?? $valor;
-    return $valor !== '' ? $valor : null;
+
+    if ($valor === '') {
+        return null;
+    }
+
+    mov_validar_tamanho_texto($valor, MOV_MAX_OBSERVACAO_LEN, 'observação');
+    return $valor;
 }
 
 function mov_normalizar_texto(?string $valor): string
 {
     $texto = trim((string)$valor);
     $texto = preg_replace('/\s+/u', ' ', $texto) ?? $texto;
+
+    if ($texto !== '') {
+        mov_validar_tamanho_texto($texto, MOV_MAX_TEXTO_FILTRO_LEN, 'filtro');
+    }
+
     return $texto;
 }
 
@@ -377,6 +439,10 @@ function mov_inserir_registro(
     $id = (int)$stmt->insert_id;
     $stmt->close();
 
+    if ($id <= 0) {
+        throw new RuntimeException('Falha ao obter ID da movimentação inserida.');
+    }
+
     return $id;
 }
 
@@ -388,6 +454,9 @@ function mov_criar_lote_entrada(
     int $quantidade,
     float $custo_unitario
 ): void {
+    mov_validar_quantidade($quantidade);
+    mov_validar_valor_monetario($custo_unitario, 'custo unitário');
+
     $stmt = $conn->prepare("
         INSERT INTO estoque_lotes
             (produto_id, fornecedor_id, movimentacao_entrada_id, quantidade_entrada, quantidade_restante, custo_unitario)
@@ -443,11 +512,21 @@ function mov_buscar_lotes_fifo(mysqli $conn, int $produto_id): array
 
     $lotes = [];
     while ($row = $res->fetch_assoc()) {
+        $quantidadeEntrada = (int)$row['quantidade_entrada'];
+        $quantidadeRestante = (int)$row['quantidade_restante'];
+        $custoUnitario = (float)$row['custo_unitario'];
+
+        if ($quantidadeEntrada < 0 || $quantidadeRestante < 0 || $quantidadeRestante > $quantidadeEntrada) {
+            throw new RuntimeException('Lote com saldo inconsistente encontrado.');
+        }
+
+        mov_validar_valor_monetario($custoUnitario, 'custo unitário do lote');
+
         $lotes[] = [
             'id'                  => (int)$row['id'],
-            'quantidade_entrada'  => (int)$row['quantidade_entrada'],
-            'quantidade_restante' => (int)$row['quantidade_restante'],
-            'custo_unitario'      => (float)$row['custo_unitario'],
+            'quantidade_entrada'  => $quantidadeEntrada,
+            'quantidade_restante' => $quantidadeRestante,
+            'custo_unitario'      => $custoUnitario,
             'criado_em'           => (string)$row['criado_em'],
         ];
     }
@@ -476,11 +555,16 @@ function mov_obter_custo_referencia_atual(mysqli $conn, int $produto_id): float
     $row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 
-    return (float)($row['custo_unitario'] ?? 0);
+    $valor = (float)($row['custo_unitario'] ?? 0);
+    mov_validar_valor_monetario($valor, 'custo de referência');
+
+    return $valor;
 }
 
 function mov_planejar_consumo_fifo(mysqli $conn, int $produto_id, int $quantidade): array
 {
+    mov_validar_quantidade($quantidade);
+
     $lotes = mov_buscar_lotes_fifo($conn, $produto_id);
 
     if (empty($lotes)) {
@@ -520,6 +604,8 @@ function mov_planejar_consumo_fifo(mysqli $conn, int $produto_id, int $quantidad
         $custoUnitario = (float)$lote['custo_unitario'];
         $custoLinha = $qtdConsumida * $custoUnitario;
 
+        mov_validar_valor_monetario($custoLinha, 'custo total da linha FIFO');
+
         $consumos[] = [
             'lote_id'              => (int)$lote['id'],
             'quantidade_consumida' => $qtdConsumida,
@@ -538,6 +624,8 @@ function mov_planejar_consumo_fifo(mysqli $conn, int $produto_id, int $quantidad
         ];
     }
 
+    mov_validar_valor_monetario($custoTotal, 'custo total');
+
     return [
         'ok'             => true,
         'consumos'       => $consumos,
@@ -551,6 +639,14 @@ function mov_aplicar_consumo_fifo(
     int $movimentacao_saida_id,
     array $consumos
 ): void {
+    if ($movimentacao_saida_id <= 0) {
+        throw new RuntimeException('Movimentação de saída inválida para aplicar FIFO.');
+    }
+
+    if (empty($consumos)) {
+        throw new RuntimeException('Nenhum consumo FIFO foi informado.');
+    }
+
     $stmtUpd = $conn->prepare("
         UPDATE estoque_lotes
         SET quantidade_restante = quantidade_restante - ?
@@ -570,10 +666,18 @@ function mov_aplicar_consumo_fifo(
     }
 
     foreach ($consumos as $item) {
-        $qtd = (int)$item['quantidade_consumida'];
-        $loteId = (int)$item['lote_id'];
-        $custoUnit = (float)$item['custo_unitario'];
-        $custoTotal = (float)$item['custo_total'];
+        $qtd = (int)($item['quantidade_consumida'] ?? 0);
+        $loteId = (int)($item['lote_id'] ?? 0);
+        $custoUnit = isset($item['custo_unitario']) ? (float)$item['custo_unitario'] : 0.0;
+        $custoTotal = isset($item['custo_total']) ? (float)$item['custo_total'] : 0.0;
+
+        mov_validar_quantidade($qtd);
+        mov_validar_valor_monetario($custoUnit, 'custo unitário FIFO');
+        mov_validar_valor_monetario($custoTotal, 'custo total FIFO');
+
+        if ($loteId <= 0) {
+            throw new RuntimeException('Lote inválido no consumo FIFO.');
+        }
 
         $stmtUpd->bind_param('iii', $qtd, $loteId, $qtd);
 
@@ -614,33 +718,39 @@ function mov_registrar(
     ?string $observacao = null,
     ?int $fornecedor_id = null
 ): array {
-    $observacao = mov_normalizar_observacao($observacao);
-
-    if ($produto_id <= 0 || $quantidade <= 0) {
-        logWarning('movimentacoes', 'Dados inválidos para movimentação', [
-            'produto_id' => $produto_id,
-            'quantidade' => $quantidade,
-            'tipo'       => $tipo
-        ]);
-        return resposta(false, 'Dados inválidos.');
-    }
-
-    if (!in_array($tipo, ['entrada', 'saida', 'remocao'], true)) {
-        logWarning('movimentacoes', 'Tipo de movimentação inválido', ['tipo' => $tipo]);
-        return resposta(false, 'Tipo de movimentação inválido.');
-    }
-
-    if ($preco_custo !== null && $preco_custo < 0) {
-        $preco_custo = null;
-    }
-
-    if ($valor_unitario !== null && $valor_unitario < 0) {
-        $valor_unitario = null;
-    }
-
-    $conn->begin_transaction();
-
     try {
+        $observacao = mov_normalizar_observacao($observacao);
+        $tipo = trim($tipo);
+
+        if ($produto_id <= 0) {
+            return resposta(false, 'Produto inválido.');
+        }
+
+        mov_validar_quantidade($quantidade);
+
+        if (!in_array($tipo, ['entrada', 'saida', 'remocao'], true)) {
+            logWarning('movimentacoes', 'Tipo de movimentação inválido', ['tipo' => $tipo]);
+            return resposta(false, 'Tipo de movimentação inválido.');
+        }
+
+        if ($preco_custo !== null) {
+            mov_validar_valor_monetario($preco_custo, 'preço de custo');
+        }
+
+        if ($valor_unitario !== null) {
+            mov_validar_valor_monetario($valor_unitario, 'valor unitário');
+        }
+
+        if ($usuario_id !== null && $usuario_id <= 0) {
+            return resposta(false, 'Usuário inválido para registrar movimentação.');
+        }
+
+        if ($fornecedor_id !== null && $fornecedor_id <= 0) {
+            $fornecedor_id = null;
+        }
+
+        $conn->begin_transaction();
+
         $produtoAntes = mov_produto_snapshot($conn, $produto_id);
         $produto = mov_obter_produto_for_update($conn, $produto_id);
 
@@ -658,6 +768,11 @@ function mov_registrar(
         $nomeProduto = (string)$produto['nome'];
         $estoqueAtual = (int)$produto['quantidade'];
         $precoVendaPadrao = (float)($produto['preco_venda'] ?? 0);
+
+        if ($estoqueAtual < 0) {
+            $conn->rollback();
+            throw new RuntimeException('Produto com saldo negativo inconsistente.');
+        }
 
         $custoUnitarioMov = null;
         $custoTotalMov = null;
@@ -693,6 +808,9 @@ function mov_registrar(
             $valorUnitarioMov = $custoUnitarioMov;
             $valorTotalMov = $quantidade * $valorUnitarioMov;
             $lucroMov = null;
+
+            mov_validar_valor_monetario($custoTotalMov, 'custo total');
+            mov_validar_valor_monetario($valorTotalMov, 'valor total');
 
             $stmtUpd = $conn->prepare('UPDATE produtos SET quantidade = quantidade + ?, preco_custo = ? WHERE id = ?');
             if (!$stmtUpd) {
@@ -739,6 +857,12 @@ function mov_registrar(
 
                 $valorTotalMov = $valorUnitarioMov !== null ? ($quantidade * $valorUnitarioMov) : null;
                 $lucroMov = $valorTotalMov !== null ? ($valorTotalMov - $custoTotalMov) : null;
+
+                mov_validar_valor_monetario($valorTotalMov, 'valor total');
+
+                if ($lucroMov !== null && abs($lucroMov) > MOV_MAX_VALOR_MONETARIO) {
+                    throw new RuntimeException('Lucro calculado fora do limite permitido.');
+                }
             } else {
                 $valorUnitarioMov = null;
                 $valorTotalMov = null;
@@ -746,6 +870,10 @@ function mov_registrar(
             }
 
             $novoSaldo = $estoqueAtual - $quantidade;
+            if ($novoSaldo < 0) {
+                $conn->rollback();
+                return resposta(false, 'Quantidade insuficiente em estoque.');
+            }
 
             $stmtUpd = $conn->prepare('UPDATE produtos SET quantidade = ? WHERE id = ?');
             if (!$stmtUpd) {
@@ -850,6 +978,24 @@ function mov_registrar(
             'valor_total'     => $valorTotalMov,
             'lucro'           => $lucroMov
         ]);
+    } catch (InvalidArgumentException $e) {
+        try {
+            if ($conn->errno === 0) {
+                $conn->rollback();
+            }
+        } catch (Throwable $rollbackError) {
+        }
+
+        logWarning('movimentacoes', 'Validação inválida ao registrar movimentação', [
+            'produto_id'    => $produto_id,
+            'fornecedor_id' => $fornecedor_id,
+            'tipo'          => $tipo,
+            'quantidade'    => $quantidade,
+            'usuario_id'    => $usuario_id,
+            'erro'          => $e->getMessage(),
+        ]);
+
+        return resposta(false, $e->getMessage(), null);
     } catch (Throwable $e) {
         try {
             $conn->rollback();
@@ -948,92 +1094,103 @@ function mov_resumo_filtrado(mysqli $conn, string $whereSql, string $types, arra
 
     $resumo['quantidade_total'] = (int)($rowQtd['quantidade_total'] ?? 0);
 
+    if ($resumo['quantidade_total'] < 0) {
+        throw new RuntimeException('Resumo retornou quantidade total negativa.');
+    }
+
     return $resumo;
 }
 
 function mov_listar(mysqli $conn, array $f): array
 {
-    $pagina = max(1, (int)($f['pagina'] ?? 1));
-    $limite = max(1, min(5000, (int)($f['limite'] ?? 50)));
-    $offset = ($pagina - 1) * $limite;
-
-    $where  = [];
-    $params = [];
-    $types  = '';
-
-    $produtoId  = (int)($f['produto_id'] ?? 0);
-    $produto    = mov_normalizar_texto((string)($f['produto'] ?? ''));
-    $tipo       = mov_normalizar_texto((string)($f['tipo'] ?? ''));
-    $dataInicio = mov_normalizar_texto((string)($f['data_inicio'] ?? ''));
-    $dataFim    = mov_normalizar_texto((string)($f['data_fim'] ?? ''));
-    $usuarioId  = (int)($f['usuario_id'] ?? 0);
-    $usuario    = mov_normalizar_texto((string)($f['usuario'] ?? ''));
-
-    if ($produtoId > 0) {
-        $where[]  = 'm.produto_id = ?';
-        $params[] = $produtoId;
-        $types   .= 'i';
-    }
-
-    if ($produto !== '') {
-        $termo = '%' . $produto . '%';
-        $where[] = '(COALESCE(m.produto_nome, p.nome, "") LIKE ?)';
-        $params[] = $termo;
-        $types .= 's';
-    }
-
-    if (!empty($f['fornecedor_id'])) {
-        $where[]  = 'm.fornecedor_id = ?';
-        $params[] = (int)$f['fornecedor_id'];
-        $types   .= 'i';
-    }
-
-    if ($tipo !== '' && in_array($tipo, ['entrada', 'saida', 'remocao'], true)) {
-        $where[]  = 'm.tipo = ?';
-        $params[] = $tipo;
-        $types   .= 's';
-    }
-
-    if ($usuarioId > 0) {
-        $where[]  = 'm.usuario_id = ?';
-        $params[] = $usuarioId;
-        $types   .= 'i';
-    }
-
-    if ($usuario !== '') {
-        $termoUsuario = '%' . $usuario . '%';
-        $where[]  = 'COALESCE(u.nome, "Sistema") LIKE ?';
-        $params[] = $termoUsuario;
-        $types   .= 's';
-    }
-
-    if ($dataInicio !== '') {
-        if (!mov_data_valida($dataInicio)) {
-            return resposta(false, 'Data inicial inválida.', []);
-        }
-
-        $where[]  = 'm.data >= ?';
-        $params[] = $dataInicio . ' 00:00:00';
-        $types   .= 's';
-    }
-
-    if ($dataFim !== '') {
-        if (!mov_data_valida($dataFim)) {
-            return resposta(false, 'Data final inválida.', []);
-        }
-
-        $where[]  = 'm.data <= ?';
-        $params[] = $dataFim . ' 23:59:59';
-        $types   .= 's';
-    }
-
-    if ($dataInicio !== '' && $dataFim !== '' && strcmp($dataInicio, $dataFim) > 0) {
-        return resposta(false, 'A data inicial não pode ser maior que a data final.', []);
-    }
-
-    $whereSql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
-
     try {
+        $pagina = max(1, (int)($f['pagina'] ?? 1));
+        $limite = max(1, min(MOV_MAX_LIMITE_LISTAGEM, (int)($f['limite'] ?? 50)));
+        $offset = ($pagina - 1) * $limite;
+
+        $where  = [];
+        $params = [];
+        $types  = '';
+
+        $produtoId  = (int)($f['produto_id'] ?? 0);
+        $produto    = mov_normalizar_texto((string)($f['produto'] ?? ''));
+        $tipo       = mov_normalizar_texto((string)($f['tipo'] ?? ''));
+        $dataInicio = mov_normalizar_texto((string)($f['data_inicio'] ?? ''));
+        $dataFim    = mov_normalizar_texto((string)($f['data_fim'] ?? ''));
+        $usuarioId  = (int)($f['usuario_id'] ?? 0);
+        $usuario    = mov_normalizar_texto((string)($f['usuario'] ?? ''));
+
+        if ($produtoId > 0) {
+            $where[]  = 'm.produto_id = ?';
+            $params[] = $produtoId;
+            $types   .= 'i';
+        }
+
+        if ($produto !== '') {
+            $termo = '%' . $produto . '%';
+            $where[] = '(COALESCE(m.produto_nome, p.nome, "") LIKE ?)';
+            $params[] = $termo;
+            $types .= 's';
+        }
+
+        if (!empty($f['fornecedor_id'])) {
+            $fornecedorId = (int)$f['fornecedor_id'];
+            if ($fornecedorId > 0) {
+                $where[]  = 'm.fornecedor_id = ?';
+                $params[] = $fornecedorId;
+                $types   .= 'i';
+            }
+        }
+
+        if ($tipo !== '') {
+            if (!in_array($tipo, ['entrada', 'saida', 'remocao'], true)) {
+                return resposta(false, 'Tipo de filtro inválido.', []);
+            }
+
+            $where[]  = 'm.tipo = ?';
+            $params[] = $tipo;
+            $types   .= 's';
+        }
+
+        if ($usuarioId > 0) {
+            $where[]  = 'm.usuario_id = ?';
+            $params[] = $usuarioId;
+            $types   .= 'i';
+        }
+
+        if ($usuario !== '') {
+            $termoUsuario = '%' . $usuario . '%';
+            $where[]  = 'COALESCE(u.nome, "Sistema") LIKE ?';
+            $params[] = $termoUsuario;
+            $types   .= 's';
+        }
+
+        if ($dataInicio !== '') {
+            if (!mov_data_valida($dataInicio)) {
+                return resposta(false, 'Data inicial inválida.', []);
+            }
+
+            $where[]  = 'm.data >= ?';
+            $params[] = $dataInicio . ' 00:00:00';
+            $types   .= 's';
+        }
+
+        if ($dataFim !== '') {
+            if (!mov_data_valida($dataFim)) {
+                return resposta(false, 'Data final inválida.', []);
+            }
+
+            $where[]  = 'm.data <= ?';
+            $params[] = $dataFim . ' 23:59:59';
+            $types   .= 's';
+        }
+
+        if ($dataInicio !== '' && $dataFim !== '' && strcmp($dataInicio, $dataFim) > 0) {
+            return resposta(false, 'A data inicial não pode ser maior que a data final.', []);
+        }
+
+        $whereSql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
+
         $sqlCount = "
             SELECT COUNT(*) AS total
             FROM movimentacoes m
@@ -1131,6 +1288,8 @@ function mov_listar(mysqli $conn, array $f): array
             'resumo'  => $resumo,
             'dados'   => $dados
         ]);
+    } catch (InvalidArgumentException $e) {
+        return resposta(false, $e->getMessage(), []);
     } catch (Throwable $e) {
         logError('movimentacoes', 'Erro ao listar movimentações', [
             'arquivo' => $e->getFile(),

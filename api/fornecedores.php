@@ -7,6 +7,20 @@ require_once __DIR__ . '/auditoria.php';
 
 initLog('fornecedores');
 
+const FORNECEDOR_NOME_MAX_LEN = 150;
+const FORNECEDOR_TELEFONE_MAX_LEN = 30;
+const FORNECEDOR_EMAIL_MAX_LEN = 150;
+const FORNECEDOR_OBSERVACAO_MAX_LEN = 500;
+const FORNECEDOR_TOTAL_PRODUTOS_MAX = 100000;
+const FORNECEDOR_TOTAL_MOVIMENTACOES_MAX = 1000000;
+
+function fornecedor_strlen(string $valor): int
+{
+    return function_exists('mb_strlen')
+        ? mb_strlen($valor, 'UTF-8')
+        : strlen($valor);
+}
+
 function fornecedor_normalizar_texto(?string $valor): string
 {
     $valor = trim((string)$valor);
@@ -19,10 +33,28 @@ function fornecedor_normalizar_cnpj(string $cnpj): string
     return preg_replace('/\D+/', '', $cnpj) ?? '';
 }
 
+function fornecedor_validar_tamanho(string $valor, int $max, string $campo): void
+{
+    if (fornecedor_strlen($valor) > $max) {
+        throw new InvalidArgumentException("O campo {$campo} excede o limite permitido.");
+    }
+}
+
+function fornecedor_validar_int_range(int $valor, int $min, int $max, string $campo): void
+{
+    if ($valor < $min || $valor > $max) {
+        throw new InvalidArgumentException("Valor inválido para {$campo}.");
+    }
+}
+
 function fornecedor_email_valido(string $email): bool
 {
     if ($email === '') {
         return true;
+    }
+
+    if (fornecedor_strlen($email) > FORNECEDOR_EMAIL_MAX_LEN) {
+        return false;
     }
 
     return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
@@ -44,7 +76,12 @@ function fornecedor_total_produtos(mysqli $conn, int $fornecedorId): int
     $row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 
-    return (int)($row['total'] ?? 0);
+    $total = (int)($row['total'] ?? 0);
+    if ($total < 0 || $total > FORNECEDOR_TOTAL_PRODUTOS_MAX) {
+        throw new RuntimeException('Total de produtos do fornecedor fora do limite esperado.');
+    }
+
+    return $total;
 }
 
 function fornecedor_total_movimentacoes(mysqli $conn, int $fornecedorId): int
@@ -63,7 +100,12 @@ function fornecedor_total_movimentacoes(mysqli $conn, int $fornecedorId): int
     $row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 
-    return (int)($row['total'] ?? 0);
+    $total = (int)($row['total'] ?? 0);
+    if ($total < 0 || $total > FORNECEDOR_TOTAL_MOVIMENTACOES_MAX) {
+        throw new RuntimeException('Total de movimentações do fornecedor fora do limite esperado.');
+    }
+
+    return $total;
 }
 
 function fornecedor_produtos_listar(mysqli $conn, int $fornecedorId): array
@@ -312,6 +354,10 @@ function fornecedores_listar(mysqli $conn): array
 function fornecedor_obter(mysqli $conn, int $fornecedorId): array
 {
     try {
+        if ($fornecedorId <= 0) {
+            return resposta(false, 'Fornecedor inválido.', null);
+        }
+
         $stmt = $conn->prepare("
             SELECT
                 id,
@@ -387,6 +433,11 @@ function fornecedor_salvar(
         if ($nome === '') {
             return resposta(false, 'Nome do fornecedor obrigatório.', null);
         }
+
+        fornecedor_validar_tamanho($nome, FORNECEDOR_NOME_MAX_LEN, 'nome');
+        fornecedor_validar_tamanho($telefone, FORNECEDOR_TELEFONE_MAX_LEN, 'telefone');
+        fornecedor_validar_tamanho($email, FORNECEDOR_EMAIL_MAX_LEN, 'e-mail');
+        fornecedor_validar_tamanho($observacao, FORNECEDOR_OBSERVACAO_MAX_LEN, 'observação');
 
         if (!in_array($ativo, [0, 1], true)) {
             return resposta(false, 'Status inválido.', null);
@@ -506,7 +557,11 @@ function fornecedor_salvar(
 
             $conn->commit();
 
-            return resposta(true, $ativo === 0 ? 'Fornecedor inativado com sucesso.' : 'Fornecedor atualizado com sucesso.', ['id' => $fornecedorId]);
+            return resposta(
+                true,
+                $ativo === 0 ? 'Fornecedor inativado com sucesso.' : 'Fornecedor atualizado com sucesso.',
+                ['id' => $fornecedorId]
+            );
         }
 
         $stmt = $conn->prepare("

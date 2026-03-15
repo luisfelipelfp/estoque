@@ -4,6 +4,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/log.php';
 require_once __DIR__ . '/utils.php';
 
+const DB_CONNECT_TIMEOUT_SECONDS = 5;
+
 function db_env(string $key, ?string $default = null): ?string
 {
     $value = getenv($key);
@@ -39,6 +41,7 @@ function db_env_int(string $key, int $default): int
     }
 
     $intValue = (int)$value;
+
     return $intValue > 0 ? $intValue : $default;
 }
 
@@ -68,6 +71,7 @@ function db_validate_config(array $config): void
     }
 
     $port = (int)($config['port'] ?? 0);
+
     if ($port <= 0 || $port > 65535) {
         throw new RuntimeException('Configuração do banco inválida: porta inválida.');
     }
@@ -88,11 +92,26 @@ function db(): mysqli
 
     mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
+    $config = [];
+
     try {
         $config = db_config();
+
         db_validate_config($config);
 
-        $conn = new mysqli(
+        $conn = mysqli_init();
+
+        if (!$conn) {
+            throw new RuntimeException('Não foi possível inicializar a conexão MySQLi.');
+        }
+
+        mysqli_options(
+            $conn,
+            MYSQLI_OPT_CONNECT_TIMEOUT,
+            DB_CONNECT_TIMEOUT_SECONDS
+        );
+
+        $conn->real_connect(
             (string)$config['host'],
             (string)$config['user'],
             (string)$config['pass'],
@@ -102,19 +121,27 @@ function db(): mysqli
 
         $conn->set_charset('utf8mb4');
 
-        logInfo('db', 'Conexão com banco estabelecida', db_safe_log_context($config));
+        logInfo(
+            'db',
+            'Conexão com banco estabelecida',
+            db_safe_log_context($config)
+        );
 
         return $conn;
     } catch (Throwable $e) {
-        $config = db_config();
 
-        logError('db', 'Erro ao conectar no banco', [
-            'arquivo' => $e->getFile(),
-            'linha'   => $e->getLine(),
-            'erro'    => $e->getMessage(),
-            'contexto' => db_safe_log_context($config)
-        ]);
+        logError(
+            'db',
+            'Erro ao conectar no banco',
+            [
+                'arquivo'  => $e->getFile(),
+                'linha'    => $e->getLine(),
+                'erro'     => $e->getMessage(),
+                'contexto' => db_safe_log_context($config)
+            ]
+        );
 
         json_response(false, 'Erro ao conectar ao banco.', null, 500);
+        exit;
     }
 }

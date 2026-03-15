@@ -7,6 +7,11 @@ require_once __DIR__ . '/utils.php';
 date_default_timezone_set('America/Sao_Paulo');
 initLog('relatorios');
 
+const REL_MAX_TEXTO_FILTRO = 150;
+const REL_MAX_LIMITE = 5000;
+const REL_MAX_INTERVALO_DIAS = 3660; // ~10 anos
+const REL_MAX_RANKING = 10;
+
 function removeAcentos(string $s): string
 {
     return str_replace(
@@ -18,10 +23,30 @@ function removeAcentos(string $s): string
     );
 }
 
+function rel_strlen(string $valor): int
+{
+    return function_exists('mb_strlen')
+        ? mb_strlen($valor, 'UTF-8')
+        : strlen($valor);
+}
+
+function rel_validar_tamanho_texto(?string $valor, int $max, string $campo): void
+{
+    $texto = trim((string)$valor);
+    if (rel_strlen($texto) > $max) {
+        throw new InvalidArgumentException("O campo {$campo} excede o limite permitido.");
+    }
+}
+
 function rel_normalizar_texto(?string $valor): string
 {
     $texto = trim((string)$valor);
     $texto = preg_replace('/\s+/u', ' ', $texto) ?? $texto;
+
+    if ($texto !== '') {
+        rel_validar_tamanho_texto($texto, REL_MAX_TEXTO_FILTRO, 'filtro');
+    }
+
     return $texto;
 }
 
@@ -34,6 +59,46 @@ function rel_data_valida(?string $data): bool
 
     $dt = DateTime::createFromFormat('Y-m-d', $valor);
     return $dt instanceof DateTime && $dt->format('Y-m-d') === $valor;
+}
+
+function rel_validar_intervalo_datas(?string $dataInicio, ?string $dataFim): void
+{
+    $ini = trim((string)$dataInicio);
+    $fim = trim((string)$dataFim);
+
+    if ($ini === '' || $fim === '') {
+        return;
+    }
+
+    $dtIni = DateTime::createFromFormat('Y-m-d', $ini);
+    $dtFim = DateTime::createFromFormat('Y-m-d', $fim);
+
+    if (!$dtIni || !$dtFim) {
+        throw new InvalidArgumentException('Intervalo de datas inválido.');
+    }
+
+    if ($dtIni > $dtFim) {
+        throw new InvalidArgumentException('A data inicial não pode ser maior que a data final.');
+    }
+
+    $dias = (int)$dtIni->diff($dtFim)->days;
+    if ($dias > REL_MAX_INTERVALO_DIAS) {
+        throw new InvalidArgumentException('O intervalo de datas excede o limite permitido.');
+    }
+}
+
+function rel_parse_positive_int($value, int $default = 0): int
+{
+    if ($value === null || $value === '') {
+        return $default;
+    }
+
+    if (is_string($value) && !preg_match('/^\d+$/', trim($value))) {
+        return $default;
+    }
+
+    $n = (int)$value;
+    return $n > 0 ? $n : $default;
 }
 
 function normalizaTipoMov(?string $tipo): string
@@ -116,13 +181,19 @@ function rel_montar_where(array $filtros): array
     $types  = '';
 
     $tipo         = normalizaTipoMov((string)($filtros['tipo'] ?? ''));
-    $produtoId    = (int)($filtros['produto_id'] ?? 0);
+    $produtoId    = rel_parse_positive_int($filtros['produto_id'] ?? null, 0);
     $produto      = rel_normalizar_texto((string)($filtros['produto'] ?? ''));
-    $fornecedorId = (int)($filtros['fornecedor_id'] ?? 0);
-    $usuarioId    = (int)($filtros['usuario_id'] ?? 0);
+    $fornecedorId = rel_parse_positive_int($filtros['fornecedor_id'] ?? null, 0);
+    $usuarioId    = rel_parse_positive_int($filtros['usuario_id'] ?? null, 0);
     $usuario      = rel_normalizar_texto((string)($filtros['usuario'] ?? ''));
     $dataInicio   = rel_normalizar_texto((string)($filtros['data_inicio'] ?? ''));
     $dataFim      = rel_normalizar_texto((string)($filtros['data_fim'] ?? ''));
+
+    rel_validar_intervalo_datas($dataInicio, $dataFim);
+
+    if ((string)($filtros['tipo'] ?? '') !== '' && $tipo === '') {
+        throw new InvalidArgumentException('Tipo de movimentação inválido.');
+    }
 
     if ($tipo !== '') {
         $where[]  = 'm.tipo = ?';
@@ -180,10 +251,6 @@ function rel_montar_where(array $filtros): array
         $types   .= 's';
     }
 
-    if ($dataInicio !== '' && $dataFim !== '' && strcmp($dataInicio, $dataFim) > 0) {
-        throw new InvalidArgumentException('A data inicial não pode ser maior que a data final.');
-    }
-
     return [
         'whereSql' => $where ? ' WHERE ' . implode(' AND ', $where) : '',
         'params'   => $params,
@@ -217,7 +284,12 @@ function rel_obter_quantidade_estoque_filtrado(mysqli $conn, string $whereSql, s
     $row = $stmt->get_result()->fetch_assoc() ?: [];
     $stmt->close();
 
-    return (int)($row['quantidade_atual'] ?? 0);
+    $quantidade = (int)($row['quantidade_atual'] ?? 0);
+    if ($quantidade < 0) {
+        throw new RuntimeException('Quantidade de estoque filtrado inconsistente.');
+    }
+
+    return $quantidade;
 }
 
 function relatorio_estoque_atual(mysqli $conn): array
@@ -250,12 +322,12 @@ function relatorio_estoque_atual(mysqli $conn): array
         $totalSemEstoque = 0;
 
         while ($row = $res->fetch_assoc()) {
-            $quantidade = (int)($row['quantidade'] ?? 0);
-            $estoqueMinimo = (int)($row['estoque_minimo'] ?? 0);
-            $precoCusto = (float)($row['preco_custo'] ?? 0);
-            $precoVenda = (float)($row['preco_venda'] ?? 0);
-            $valorCusto = (float)($row['valor_custo_estimado'] ?? 0);
-            $valorVenda = (float)($row['valor_venda_estimado'] ?? 0);
+            $quantidade = max(0, (int)($row['quantidade'] ?? 0));
+            $estoqueMinimo = max(0, (int)($row['estoque_minimo'] ?? 0));
+            $precoCusto = max(0.0, (float)($row['preco_custo'] ?? 0));
+            $precoVenda = max(0.0, (float)($row['preco_venda'] ?? 0));
+            $valorCusto = max(0.0, (float)($row['valor_custo_estimado'] ?? 0));
+            $valorVenda = max(0.0, (float)($row['valor_venda_estimado'] ?? 0));
 
             $status = 'normal';
             if ($quantidade <= 0) {
@@ -309,8 +381,8 @@ function relatorio_estoque_atual(mysqli $conn): array
 
 function relatorio(mysqli $conn, array $filtros): array
 {
-    $pagina = max(1, (int)($filtros['pagina'] ?? 1));
-    $limite = max(1, min(5000, (int)($filtros['limite'] ?? 50)));
+    $pagina = max(1, rel_parse_positive_int($filtros['pagina'] ?? null, 1));
+    $limite = max(1, min(REL_MAX_LIMITE, rel_parse_positive_int($filtros['limite'] ?? null, 50)));
     $offset = ($pagina - 1) * $limite;
 
     try {
@@ -364,26 +436,24 @@ function relatorio(mysqli $conn, array $filtros): array
         $quantidadeAtual = rel_obter_quantidade_estoque_filtrado($conn, $whereSql, $types, $params);
 
         $totais = [
-            'total_registros' => (int)($movRow['total_registros'] ?? 0),
+            'total_registros' => max(0, (int)($movRow['total_registros'] ?? 0)),
 
-            // topo: alinhado com a lógica da tela de movimentações
             'total_qtd'       => $quantidadeAtual,
-            'total_custo'     => (float)($movRow['entrada_custo'] ?? 0),
-            'total_valor'     => (float)($movRow['saida_valor'] ?? 0),
+            'total_custo'     => max(0.0, (float)($movRow['entrada_custo'] ?? 0)),
+            'total_valor'     => max(0.0, (float)($movRow['saida_valor'] ?? 0)),
             'total_lucro'     => (float)($movRow['saida_lucro'] ?? 0),
 
-            // resumo por tipo
-            'entrada_qtd'     => (int)($movRow['entrada_qtd'] ?? 0),
-            'entrada_custo'   => (float)($movRow['entrada_custo'] ?? 0),
-            'entrada_valor'   => (float)($movRow['entrada_valor'] ?? 0),
+            'entrada_qtd'     => max(0, (int)($movRow['entrada_qtd'] ?? 0)),
+            'entrada_custo'   => max(0.0, (float)($movRow['entrada_custo'] ?? 0)),
+            'entrada_valor'   => max(0.0, (float)($movRow['entrada_valor'] ?? 0)),
 
-            'saida_qtd'       => (int)($movRow['saida_qtd'] ?? 0),
-            'saida_custo'     => (float)($movRow['saida_custo'] ?? 0),
-            'saida_valor'     => (float)($movRow['saida_valor'] ?? 0),
+            'saida_qtd'       => max(0, (int)($movRow['saida_qtd'] ?? 0)),
+            'saida_custo'     => max(0.0, (float)($movRow['saida_custo'] ?? 0)),
+            'saida_valor'     => max(0.0, (float)($movRow['saida_valor'] ?? 0)),
             'saida_lucro'     => (float)($movRow['saida_lucro'] ?? 0),
 
-            'remocao_qtd'     => (int)($movRow['remocao_qtd'] ?? 0),
-            'remocao_custo'   => (float)($movRow['remocao_custo'] ?? 0),
+            'remocao_qtd'     => max(0, (int)($movRow['remocao_qtd'] ?? 0)),
+            'remocao_custo'   => max(0.0, (float)($movRow['remocao_custo'] ?? 0)),
         ];
 
         $sqlDados = "
@@ -436,7 +506,7 @@ function relatorio(mysqli $conn, array $filtros): array
                 'fornecedor_id'   => $r['fornecedor_id'] !== null ? (int)$r['fornecedor_id'] : null,
                 'fornecedor_nome' => (string)($r['fornecedor_nome'] ?? ''),
                 'tipo'            => (string)$r['tipo'],
-                'quantidade'      => (int)$r['quantidade'],
+                'quantidade'      => max(0, (int)$r['quantidade']),
                 'valor_unitario'  => $r['valor_unitario'] !== null ? (float)$r['valor_unitario'] : null,
                 'custo_unitario'  => $r['custo_unitario'] !== null ? (float)$r['custo_unitario'] : null,
                 'custo_total'     => $r['custo_total'] !== null ? (float)$r['custo_total'] : null,
@@ -476,9 +546,9 @@ function relatorio(mysqli $conn, array $filtros): array
 
         while ($row = $resGraf->fetch_assoc()) {
             $graficoLabels[]     = (string)$row['dia'];
-            $graficoQuantidade[] = (int)($row['quantidade'] ?? 0);
-            $graficoCusto[]      = (float)($row['custo_total'] ?? 0);
-            $graficoValor[]      = (float)($row['valor_total'] ?? 0);
+            $graficoQuantidade[] = max(0, (int)($row['quantidade'] ?? 0));
+            $graficoCusto[]      = max(0.0, (float)($row['custo_total'] ?? 0));
+            $graficoValor[]      = max(0.0, (float)($row['valor_total'] ?? 0));
             $graficoLucro[]      = (float)($row['lucro'] ?? 0);
         }
         $stmtGraf->close();
@@ -506,8 +576,7 @@ function relatorio(mysqli $conn, array $filtros): array
             $whereSqlSaida
             GROUP BY COALESCE(m.produto_nome, p.nome, '[Produto removido]')
             ORDER BY quantidade_total DESC, produto_nome ASC
-            LIMIT 10
-        ";
+            LIMIT " . REL_MAX_RANKING;
 
         $stmtRankProdutosQtd = $conn->prepare($sqlRankProdutosQtd);
         if (!$stmtRankProdutosQtd) {
@@ -521,8 +590,8 @@ function relatorio(mysqli $conn, array $filtros): array
         while ($row = $resRankProdutosQtd->fetch_assoc()) {
             $rankingProdutosQtd[] = [
                 'produto_nome'     => (string)$row['produto_nome'],
-                'quantidade_total' => (int)($row['quantidade_total'] ?? 0),
-                'valor_total'      => (float)($row['valor_total'] ?? 0),
+                'quantidade_total' => max(0, (int)($row['quantidade_total'] ?? 0)),
+                'valor_total'      => max(0.0, (float)($row['valor_total'] ?? 0)),
                 'lucro_total'      => (float)($row['lucro_total'] ?? 0),
             ];
         }
@@ -541,8 +610,7 @@ function relatorio(mysqli $conn, array $filtros): array
             $whereSqlSaida
             GROUP BY COALESCE(m.produto_nome, p.nome, '[Produto removido]')
             ORDER BY lucro_total DESC, produto_nome ASC
-            LIMIT 10
-        ";
+            LIMIT " . REL_MAX_RANKING;
 
         $stmtRankLucro = $conn->prepare($sqlRankLucro);
         if (!$stmtRankLucro) {
@@ -557,8 +625,8 @@ function relatorio(mysqli $conn, array $filtros): array
             $rankingProdutosLucro[] = [
                 'produto_nome'     => (string)$row['produto_nome'],
                 'lucro_total'      => (float)($row['lucro_total'] ?? 0),
-                'quantidade_total' => (int)($row['quantidade_total'] ?? 0),
-                'valor_total'      => (float)($row['valor_total'] ?? 0),
+                'quantidade_total' => max(0, (int)($row['quantidade_total'] ?? 0)),
+                'valor_total'      => max(0.0, (float)($row['valor_total'] ?? 0)),
             ];
         }
         $stmtRankLucro->close();
@@ -576,8 +644,7 @@ function relatorio(mysqli $conn, array $filtros): array
             $whereSql
             GROUP BY COALESCE(f.nome, '[Sem fornecedor]')
             ORDER BY quantidade_total DESC, fornecedor_nome ASC
-            LIMIT 10
-        ";
+            LIMIT " . REL_MAX_RANKING;
 
         $stmtRankFornecedor = $conn->prepare($sqlRankFornecedor);
         if (!$stmtRankFornecedor) {
@@ -591,9 +658,9 @@ function relatorio(mysqli $conn, array $filtros): array
         while ($row = $resRankFornecedor->fetch_assoc()) {
             $rankingFornecedores[] = [
                 'fornecedor_nome'     => (string)$row['fornecedor_nome'],
-                'quantidade_total'    => (int)($row['quantidade_total'] ?? 0),
-                'custo_total'         => (float)($row['custo_total'] ?? 0),
-                'total_movimentacoes' => (int)($row['total_movimentacoes'] ?? 0),
+                'quantidade_total'    => max(0, (int)($row['quantidade_total'] ?? 0)),
+                'custo_total'         => max(0.0, (float)($row['custo_total'] ?? 0)),
+                'total_movimentacoes' => max(0, (int)($row['total_movimentacoes'] ?? 0)),
             ];
         }
         $stmtRankFornecedor->close();
@@ -613,11 +680,11 @@ function relatorio(mysqli $conn, array $filtros): array
                 'data_fim'      => $filtros['data_fim'] ?? '',
             ],
             'totais_topo' => [
-                'total_registros' => $totais['total_registros'],
-                'quantidade_estoque' => $totais['total_qtd'],
+                'total_registros'      => $totais['total_registros'],
+                'quantidade_estoque'   => $totais['total_qtd'],
                 'custo_total_entradas' => $totais['total_custo'],
-                'valor_total_saidas' => $totais['total_valor'],
-                'lucro_total_saidas' => $totais['total_lucro'],
+                'valor_total_saidas'   => $totais['total_valor'],
+                'lucro_total_saidas'   => $totais['total_lucro'],
             ]
         ]);
 
